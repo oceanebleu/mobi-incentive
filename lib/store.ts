@@ -50,6 +50,6 @@ export const useIncentiveStore = create<IncentiveStore>()(
           members: state.members.filter((m) => m.id !== id),
         })),
     }),
-    { name: 'incentive-store-v1' }
+    { name: 'incentive-store-v2' }
   )
 );
