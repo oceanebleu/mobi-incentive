@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useIncentiveStore } from '@/lib/store';
 import { Project, ProjectStatus, STATUS_LABELS, STATUS_ORDER } from '@/lib/types';
-import { formatKRWFull, formatCommission, formatDate, calcIncentiveFund, generateId } from '@/lib/utils';
+import { formatKRWFull, formatCommission, formatDate, calcIncentiveFund, generateId, withCommas } from '@/lib/utils';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { Plus, Search, X, ExternalLink, ChevronDown } from 'lucide-react';
 import clsx from 'clsx';
@@ -215,7 +215,7 @@ function ProjectModal({ project, members, onClose, onSave }: ModalProps) {
               <Field label="R값 (원)"><input
                 type="text"
                 inputMode="numeric"
-                value={form.rValue ? form.rValue.toLocaleString() : ''}
+                value={form.rValue ? withCommas(form.rValue) : ''}
                 onChange={e => {
                   const digits = e.target.value.replace(/[^0-9]/g, '');
                   set('rValue', digits ? Number(digits) : 0);
