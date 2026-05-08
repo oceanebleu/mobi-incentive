@@ -212,7 +212,17 @@ function ProjectModal({ project, members, onClose, onSave }: ModalProps) {
           </Section>
           <Section title="인센티브 재원">
             <div className="grid grid-cols-3 gap-4">
-              <Field label="R값 (원)"><input type="number" value={form.rValue} onChange={e => set('rValue', Number(e.target.value))} className={inputCls} /></Field>
+              <Field label="R값 (원)"><input
+                type="text"
+                inputMode="numeric"
+                value={form.rValue ? form.rValue.toLocaleString() : ''}
+                onChange={e => {
+                  const digits = e.target.value.replace(/[^0-9]/g, '');
+                  set('rValue', digits ? Number(digits) : 0);
+                }}
+                placeholder="0"
+                className={inputCls}
+              /></Field>
               <Field label="수수료 (예: 0.15)"><input type="number" step="0.01" value={form.commission} onChange={e => set('commission', Number(e.target.value))} className={inputCls} /></Field>
               <Field label="인센티브율"><select value={form.incentiveRate} onChange={e => set('incentiveRate', Number(e.target.value))} className={inputCls}><option value={1}>1%</option><option value={2}>2%</option></select></Field>
             </div>

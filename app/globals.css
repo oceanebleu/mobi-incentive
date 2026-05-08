@@ -3,7 +3,10 @@
 @tailwind utilities;
 
 /* 폰트 */
-body { font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Malgun Gothic', sans-serif; }
+body {
+  font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont,
+    'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+}
 
 :root {
   --bg-base: #F0F2F5;

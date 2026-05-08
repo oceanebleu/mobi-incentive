@@ -9,7 +9,16 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['var(--font-noto)', 'sans-serif'],
+        sans: [
+          'Pretendard Variable',
+          'Pretendard',
+          '-apple-system',
+          'BlinkMacSystemFont',
+          'Apple SD Gothic Neo',
+          'Malgun Gothic',
+          'system-ui',
+          'sans-serif',
+        ],
       },
       colors: {
         brand: {

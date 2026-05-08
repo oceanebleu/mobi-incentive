@@ -31,9 +31,12 @@ export default function Sidebar() {
   const displayName = user?.name ?? user?.email?.split('@')[0] ?? '';
 
   return (
-    <aside className="w-56 h-screen bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
-      {/* 로고 */}
-      <div className="px-5 py-5 border-b border-gray-100">
+    <aside className="w-64 h-screen bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
+      {/* 로고 - 클릭 시 대시보드로 이동 */}
+      <Link
+        href="/"
+        className="block px-5 py-5 border-b border-gray-100 hover:bg-gray-50/70 transition-colors"
+      >
         <div className="flex items-center gap-2 mb-1">
           <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center">
             <TrendingUp size={14} className="text-white" />
@@ -41,7 +44,7 @@ export default function Sidebar() {
           <span className="text-sm font-bold text-gray-900">인센티브 관리</span>
         </div>
         <p className="text-[11px] text-gray-400 pl-9">수주인센티브 운영관리 시스템</p>
-      </div>
+      </Link>
 
       {/* 내비게이션 */}
       <nav className="flex-1 px-3 py-4 space-y-0.5">
