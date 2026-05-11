@@ -26,9 +26,9 @@ export default function UnauthorizedPage() {
           </p>
         )}
         <p className="text-xs text-gray-400 mb-8">
-          이 시스템은 HRBP 및 경영진만 접근할 수 있습니다.
+          이 시스템은 경영진 및 관리자만 접근할 수 있습니다.
           <br />
-          권한이 필요하면 담당자에게 문의해주세요.
+          권한이 필요하면 HRBP / C.O1그룹 담당자에게 문의해주세요.
         </p>
 
         <button
