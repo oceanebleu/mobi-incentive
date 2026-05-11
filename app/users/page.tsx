@@ -1,7 +1,15 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { RefreshCw, Search, X, ShieldCheck, AlertCircle, Undo2 } from 'lucide-react';
+import {
+  RefreshCw,
+  Search,
+  X,
+  ShieldCheck,
+  AlertCircle,
+  Undo2,
+  Save,
+} from 'lucide-react';
 import clsx from 'clsx';
 import { ROLE_LABELS, type UserRole } from '@/lib/roles';
 
@@ -34,8 +42,12 @@ export default function UsersPage() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<string | null>(null);
+
+  // 저장되지 않은 역할 변경 (employee_id → 새 role)
+  const [pending, setPending] = useState<Record<string, UserRole>>({});
 
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('ALL');
@@ -49,6 +61,7 @@ export default function UsersPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error ?? '조회 실패');
       setUsers(json.users as UserRow[]);
+      setPending({}); // 새로 불러왔으니 변경사항 초기화
     } catch (e: any) {
       setError(e?.message ?? '알 수 없는 오류');
     } finally {
@@ -58,6 +71,10 @@ export default function UsersPage() {
 
   async function sync() {
     if (syncing) return;
+    if (Object.keys(pending).length > 0) {
+      if (!confirm('저장되지 않은 변경사항이 있습니다. 동기화하면 변경사항이 사라집니다. 계속할까요?'))
+        return;
+    }
     setSyncing(true);
     setError(null);
     try {
@@ -75,29 +92,74 @@ export default function UsersPage() {
     }
   }
 
-  async function changeRole(empId: string, role: UserRole) {
-    // 낙관적 업데이트
-    setUsers(prev =>
-      prev.map(u =>
-        u.employee_id === empId ? { ...u, role, role_overridden: true } : u
+  // 셀렉트 변경 시 — DB는 아직 안 건드림, pending에만 누적
+  function stageRole(empId: string, newRole: UserRole) {
+    const original = users.find(u => u.employee_id === empId)?.role;
+    setPending(prev => {
+      const next = { ...prev };
+      if (original === newRole) {
+        // 원래 값으로 되돌렸으면 pending 제거
+        delete next[empId];
+      } else {
+        next[empId] = newRole;
+      }
+      return next;
+    });
+  }
+
+  // 전체저장: pending 전체를 직렬/병렬 PATCH (실패한 건만 별도 표기)
+  async function saveAll() {
+    const entries = Object.entries(pending);
+    if (entries.length === 0) return;
+    if (!confirm(`${entries.length}건의 권한 변경을 저장합니다. 진행할까요?`)) return;
+
+    setSaving(true);
+    setError(null);
+
+    const results = await Promise.allSettled(
+      entries.map(([empId, role]) =>
+        fetch(`/api/users/${encodeURIComponent(empId)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role }),
+        }).then(async res => {
+          if (!res.ok) {
+            const j = await res.json().catch(() => ({}));
+            throw new Error(j?.error ?? `${empId} 저장 실패`);
+          }
+          return empId;
+        })
       )
     );
-    try {
-      const res = await fetch(`/api/users/${encodeURIComponent(empId)}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error ?? '저장 실패');
-    } catch (e: any) {
-      setError(e?.message ?? '저장 중 오류');
-      await load(); // 롤백
+
+    const failed = results.filter(r => r.status === 'rejected') as PromiseRejectedResult[];
+    if (failed.length > 0) {
+      setError(
+        `${failed.length}건 저장 실패: ${failed
+          .slice(0, 3)
+          .map(f => f.reason?.message ?? f.reason)
+          .join(' · ')}`
+      );
     }
+
+    setSaving(false);
+    await load();
+  }
+
+  function discardAll() {
+    if (Object.keys(pending).length === 0) return;
+    if (!confirm('변경사항을 모두 취소할까요?')) return;
+    setPending({});
   }
 
   async function resetOverride(empId: string) {
-    if (!confirm('수동 설정을 해제하고 시트 기준으로 되돌릴까요?')) return;
+    // pending에 있는 경우 먼저 정리
+    if (pending[empId]) {
+      if (!confirm('이 사용자의 미저장 변경을 버리고 시트 기준으로 되돌립니다. 계속할까요?'))
+        return;
+    } else {
+      if (!confirm('수동 설정을 해제하고 시트 기준으로 되돌릴까요?')) return;
+    }
     try {
       const res = await fetch(`/api/users/${encodeURIComponent(empId)}`, {
         method: 'PATCH',
@@ -116,12 +178,26 @@ export default function UsersPage() {
     load();
   }, []);
 
+  // 미저장 변경 있을 때 페이지 이탈/새로고침 경고
+  useEffect(() => {
+    const dirty = Object.keys(pending).length > 0;
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [pending]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return users.filter(u => {
       if (statusFilter === 'ACTIVE' && u.status === '퇴사') return false;
       if (statusFilter === '퇴사' && u.status !== '퇴사') return false;
-      if (roleFilter !== 'ALL' && u.role !== roleFilter) return false;
+      // 필터는 "현재 보이는 역할"(pending 우선) 기준
+      const effRole = pending[u.employee_id] ?? u.role;
+      if (roleFilter !== 'ALL' && effRole !== roleFilter) return false;
       if (!q) return true;
       const hay = [
         u.name,
@@ -136,7 +212,7 @@ export default function UsersPage() {
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [users, search, roleFilter, statusFilter]);
+  }, [users, search, roleFilter, statusFilter, pending]);
 
   const counts = useMemo(() => {
     const active = users.filter(u => u.status !== '퇴사');
@@ -149,6 +225,8 @@ export default function UsersPage() {
     };
   }, [users]);
 
+  const pendingCount = Object.keys(pending).length;
+
   return (
     <div className="p-8 space-y-6 fade-in">
       {/* 헤더 */}
@@ -159,15 +237,44 @@ export default function UsersPage() {
             information_employees 시트와 동기화하여 시스템 권한을 관리합니다
           </p>
         </div>
-        <button
-          onClick={sync}
-          disabled={syncing}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
-        >
-          <RefreshCw size={15} className={clsx(syncing && 'animate-spin')} />
-          {syncing ? '동기화 중...' : '시트와 동기화'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={sync}
+            disabled={syncing || saving}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-60 transition-colors"
+          >
+            <RefreshCw size={15} className={clsx(syncing && 'animate-spin')} />
+            {syncing ? '동기화 중...' : '시트와 동기화'}
+          </button>
+          <button
+            onClick={saveAll}
+            disabled={saving || pendingCount === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            <Save size={15} className={clsx(saving && 'animate-pulse')} />
+            {saving ? '저장 중...' : `전체저장${pendingCount > 0 ? ` (${pendingCount})` : ''}`}
+          </button>
+        </div>
       </div>
+
+      {/* 미저장 변경 안내 바 */}
+      {pendingCount > 0 && (
+        <div className="flex items-center justify-between px-4 py-3 bg-amber-50 border border-amber-100 rounded-lg">
+          <div className="flex items-center gap-2 text-sm text-amber-800">
+            <AlertCircle size={15} />
+            <span>
+              <b>{pendingCount}건</b>의 권한 변경이 아직 저장되지 않았습니다. 우측 상단{' '}
+              <b>전체저장</b>을 눌러야 적용됩니다.
+            </span>
+          </div>
+          <button
+            onClick={discardAll}
+            className="text-xs font-medium text-amber-700 hover:text-amber-900 underline-offset-2 hover:underline"
+          >
+            변경취소
+          </button>
+        </div>
+      )}
 
       {/* 알림 */}
       {error && (
@@ -176,7 +283,7 @@ export default function UsersPage() {
           <span className="break-all">{error}</span>
         </div>
       )}
-      {lastSync && !error && (
+      {lastSync && !error && pendingCount === 0 && (
         <div className="flex items-center gap-2 px-4 py-3 bg-blue-50 border border-blue-100 rounded-lg text-sm text-blue-700">
           <ShieldCheck size={15} />
           동기화 완료 — {lastSync}
@@ -266,75 +373,89 @@ export default function UsersPage() {
                   </td>
                 </tr>
               ) : (
-                filtered.map(u => (
-                  <tr
-                    key={u.employee_id}
-                    className={clsx(
-                      'border-b border-gray-50 hover:bg-gray-50/70 transition-colors',
-                      u.status === '퇴사' && 'opacity-50'
-                    )}
-                  >
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900">{u.name}</div>
-                      <div className="text-[11px] text-gray-400">{u.employee_id}</div>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">{u.email ?? '-'}</td>
-                    <td className="px-4 py-3 text-gray-600">
-                      <div className="text-xs">
-                        {[u.corp_group, u.affiliation1, u.affiliation2]
-                          .filter(Boolean)
-                          .join(' / ') || '-'}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={clsx(
-                          'text-xs font-medium px-2 py-0.5 rounded-full',
-                          u.status === '퇴사'
-                            ? 'bg-gray-100 text-gray-500'
-                            : 'bg-emerald-50 text-emerald-700'
-                        )}
-                      >
-                        {u.status ?? '-'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <select
-                          value={u.role}
-                          disabled={u.status === '퇴사'}
-                          onChange={e =>
-                            changeRole(u.employee_id, e.target.value as UserRole)
-                          }
+                filtered.map(u => {
+                  const stagedRole = pending[u.employee_id];
+                  const effRole = stagedRole ?? u.role;
+                  const isDirty = stagedRole !== undefined;
+                  return (
+                    <tr
+                      key={u.employee_id}
+                      className={clsx(
+                        'border-b border-gray-50 transition-colors',
+                        isDirty ? 'bg-amber-50/40 hover:bg-amber-50/70' : 'hover:bg-gray-50/70',
+                        u.status === '퇴사' && 'opacity-50'
+                      )}
+                    >
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-gray-900">{u.name}</div>
+                        <div className="text-[11px] text-gray-400">{u.employee_id}</div>
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">{u.email ?? '-'}</td>
+                      <td className="px-4 py-3 text-gray-600">
+                        <div className="text-xs">
+                          {[u.corp_group, u.affiliation1, u.affiliation2]
+                            .filter(Boolean)
+                            .join(' / ') || '-'}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
                           className={clsx(
-                            'text-xs font-medium px-2 py-1 rounded-md border-0 cursor-pointer',
-                            ROLE_BADGE[u.role],
-                            u.status === '퇴사' && 'cursor-not-allowed'
+                            'text-xs font-medium px-2 py-0.5 rounded-full',
+                            u.status === '퇴사'
+                              ? 'bg-gray-100 text-gray-500'
+                              : 'bg-emerald-50 text-emerald-700'
                           )}
                         >
-                          <option value="EXEC">{ROLE_LABELS.EXEC}</option>
-                          <option value="ADMIN">{ROLE_LABELS.ADMIN}</option>
-                          <option value="NORMAL">{ROLE_LABELS.NORMAL}</option>
-                        </select>
-                        {u.role_overridden && (
-                          <button
-                            onClick={() => resetOverride(u.employee_id)}
-                            title="수동 설정 해제 (시트 기준으로 되돌림)"
-                            className="text-gray-300 hover:text-gray-600 transition-colors"
+                          {u.status ?? '-'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={effRole}
+                            disabled={u.status === '퇴사'}
+                            onChange={e =>
+                              stageRole(u.employee_id, e.target.value as UserRole)
+                            }
+                            className={clsx(
+                              'text-xs font-medium px-2 py-1 rounded-md border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+                              ROLE_BADGE[effRole],
+                              isDirty && 'ring-2 ring-amber-400/60',
+                              u.status === '퇴사' && 'cursor-not-allowed'
+                            )}
                           >
-                            <Undo2 size={13} />
-                          </button>
-                        )}
-                      </div>
-                      {u.role_overridden && (
-                        <div className="text-[10px] text-amber-600 mt-0.5">수동 설정</div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-[11px] text-gray-400">
-                      {u.synced_at ? new Date(u.synced_at).toLocaleString('ko-KR') : '-'}
-                    </td>
-                  </tr>
-                ))
+                            <option value="EXEC">{ROLE_LABELS.EXEC}</option>
+                            <option value="ADMIN">{ROLE_LABELS.ADMIN}</option>
+                            <option value="NORMAL">{ROLE_LABELS.NORMAL}</option>
+                          </select>
+                          {(u.role_overridden || isDirty) && (
+                            <button
+                              onClick={() => resetOverride(u.employee_id)}
+                              title="수동 설정 해제 (시트 기준으로 되돌림)"
+                              className="text-gray-300 hover:text-gray-600 transition-colors"
+                            >
+                              <Undo2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                        <div className="text-[10px] mt-0.5 space-x-1">
+                          {isDirty && (
+                            <span className="text-amber-700 font-medium">
+                              미저장: {ROLE_LABELS[u.role]} → {ROLE_LABELS[effRole]}
+                            </span>
+                          )}
+                          {!isDirty && u.role_overridden && (
+                            <span className="text-amber-600">수동 설정</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-[11px] text-gray-400">
+                        {u.synced_at ? new Date(u.synced_at).toLocaleString('ko-KR') : '-'}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

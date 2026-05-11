@@ -10,9 +10,6 @@ import { getSupabaseAdmin } from './supabase-server';
 
 async function resolveRole(email: string): Promise<UserRole> {
   const normalized = email.toLowerCase();
-  console.log('[resolveRole] email:', normalized);
-  console.log('[resolveRole] SUPER_ADMIN_EMAILS:', process.env.SUPER_ADMIN_EMAILS);
-  console.log('[resolveRole] isSuperAdmin:', isSuperAdmin(normalized));
   if (isSuperAdmin(normalized)) return 'ADMIN';
 
   try {
