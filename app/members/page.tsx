@@ -31,12 +31,19 @@ export default function MembersPage() {
     [projects, lastWorkDateByName, teamByName, employeeIdByName, statusByName]
   );
 
+  // 연도 목록 — 지급일(또는 예정일) 기준으로 수집
+  //   프로젝트 제출일과 지급일이 다른 케이스를 정확히 반영하기 위함
   const years = useMemo(() => {
     const ys = new Set<number>();
     for (const p of projects) {
-      if (p.submitted_at) ys.add(parseInt(p.submitted_at.slice(0, 4), 10));
+      for (const m of p.members) {
+        const f = m.first_paid_at ?? p.first_payment_date;
+        const s = m.second_paid_at ?? p.second_payment_date;
+        if (f) ys.add(parseInt(f.slice(0, 4), 10));
+        if (s) ys.add(parseInt(s.slice(0, 4), 10));
+      }
     }
-    return [...ys].sort((a, b) => b - a);
+    return [...ys].filter(y => y > 0).sort((a, b) => b - a);
   }, [projects]);
 
   // 필터 적용 + 정렬
@@ -52,7 +59,10 @@ export default function MembersPage() {
           ...m,
           total_paid: yb.paid,
           total_pending: yb.pending,
-          projects: m.projects.filter(p => p.year === filterYear),
+          // 회차 단위 연도(=지급일/예정일 기준)로 필터
+          projects: m.projects.filter(
+            p => p.first_year === filterYear || p.second_year === filterYear
+          ),
         };
       })
       .filter(m => {

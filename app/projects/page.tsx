@@ -201,6 +201,7 @@ export default function ProjectsPage() {
                   '연도',
                   '담당팀',
                   'PL',
+                  '구분',
                   '수주여부',
                   '지급 단계',
                   '인센티브 재원',
@@ -220,14 +221,14 @@ export default function ProjectsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={10} className="text-center py-12 text-sm text-gray-400">
+                  <td colSpan={11} className="text-center py-12 text-sm text-gray-400">
                     <Loader2 size={20} className="animate-spin mx-auto mb-2 opacity-50" />
                     데이터 불러오는 중...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="text-center py-12 text-sm text-gray-400">
+                  <td colSpan={11} className="text-center py-12 text-sm text-gray-400">
                     프로젝트가 없습니다
                   </td>
                 </tr>
@@ -320,6 +321,9 @@ function ProjectRow({
       <td className="px-4 py-3 text-gray-600">{year}년</td>
       <td className="px-4 py-3 text-gray-600">{p.team ?? '-'}</td>
       <td className="px-4 py-3 text-gray-700 font-medium">{p.pl ?? '-'}</td>
+      <td className="px-4 py-3">
+        <CategoryBadge category={p.category} />
+      </td>
       <td className="px-4 py-3">
         <span className={clsx('text-[11px] font-medium px-2 py-0.5 rounded-full', acqCls)}>
           {ACQUISITION_LABEL[acq]}
@@ -764,6 +768,23 @@ function ProjectModal({
 
 const inputCls =
   'w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white';
+
+function CategoryBadge({ category }: { category: string | null }) {
+  if (!category) return <span className="text-gray-300 text-xs">-</span>;
+  // 신규 / 연장 케이스를 색상 분리. 그 외 (신규(이전경험 X) 등)는 기본 색
+  const isNew = category.startsWith('신규');
+  const isExt = category.startsWith('연장');
+  const cls = isExt
+    ? 'bg-amber-50 text-amber-700'
+    : isNew
+    ? 'bg-blue-50 text-blue-700'
+    : 'bg-gray-100 text-gray-600';
+  return (
+    <span className={clsx('text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap', cls)}>
+      {category}
+    </span>
+  );
+}
 
 function ProjectTab({
   active,

@@ -134,15 +134,20 @@ function phaseStatus(
 export interface MemberProjectLine {
   project_id: string;
   campaign_name: string;
+  /** 프로젝트 제출일 기준 연도 (UI 표시용 컨텍스트) */
   year: number;
   contribution: number;
   acquisition_status: string | null; // 'WON' | 'LOST' | ... — UI 라벨링용
   first_amount: number;
   first_paid_at: string | null;
   first_status: PhaseStatus;
+  /** 1차 지급일(또는 예정일) 기준 연도 — 0 이면 미정 */
+  first_year: number;
   second_amount: number;
   second_paid_at: string | null;
   second_status: PhaseStatus;
+  /** 2차 지급일(또는 예정일) 기준 연도 — 0 이면 미정 */
+  second_year: number;
 }
 
 export interface MemberSummary {
@@ -240,15 +245,33 @@ export function calcMemberSummariesV2(
       addToBucket(m.first_amount, firstStatus);
       addToBucket(m.second_amount, secondStatus);
 
-      // 연도별 (제외 분은 제외)
-      if (year > 0) {
-        if (!s.yearly_breakdown[year]) {
-          s.yearly_breakdown[year] = { paid: 0, pending: 0 };
-        }
-        if (firstStatus === 'paid') s.yearly_breakdown[year].paid += m.first_amount;
-        else if (firstStatus === 'pending') s.yearly_breakdown[year].pending += m.first_amount;
-        if (secondStatus === 'paid') s.yearly_breakdown[year].paid += m.second_amount;
-        else if (secondStatus === 'pending') s.yearly_breakdown[year].pending += m.second_amount;
+      // 회차별 연도 — 실제 지급일 우선, 없으면 예정일
+      //   - 예전: 프로젝트 제출일 연도로 묶음 (2026년 지급도 2025로 잡힘)
+      //   - 변경: 각 회차의 paid_at(또는 planned_date) 기준
+      const yearOfPhase = (paidAt: string | null, plannedDate: string | null): number => {
+        const d = paidAt ?? plannedDate;
+        if (!d || d.length < 4) return 0;
+        const y = parseInt(d.slice(0, 4), 10);
+        return Number.isFinite(y) ? y : 0;
+      };
+      const firstYear = yearOfPhase(m.first_paid_at, p.first_payment_date);
+      const secondYear = yearOfPhase(m.second_paid_at, p.second_payment_date);
+
+      // 연도별 buckets — 회차별로 독립적인 연도에 누적
+      const bucket = (yr: number) => {
+        if (yr <= 0) return null;
+        if (!s.yearly_breakdown[yr]) s.yearly_breakdown[yr] = { paid: 0, pending: 0 };
+        return s.yearly_breakdown[yr];
+      };
+      const b1 = bucket(firstYear);
+      if (b1) {
+        if (firstStatus === 'paid') b1.paid += m.first_amount;
+        else if (firstStatus === 'pending') b1.pending += m.first_amount;
+      }
+      const b2 = bucket(secondYear);
+      if (b2) {
+        if (secondStatus === 'paid') b2.paid += m.second_amount;
+        else if (secondStatus === 'pending') b2.pending += m.second_amount;
       }
 
       // 프로젝트 단위 명세
@@ -261,9 +284,11 @@ export function calcMemberSummariesV2(
         first_amount: m.first_amount,
         first_paid_at: m.first_paid_at,
         first_status: firstStatus,
+        first_year: firstYear,
         second_amount: m.second_amount,
         second_paid_at: m.second_paid_at,
         second_status: secondStatus,
+        second_year: secondYear,
       });
     }
   }
@@ -353,7 +378,6 @@ export type PaymentStage =
   | 'PL_COMPLETED'
   | 'FUND_CONFIRMED'
   | 'FIRST_PAID'
-  | 'SECOND_PAID'
   | 'ALL_PAID';
 
 export const PAYMENT_STAGE_LABEL: Record<PaymentStage, string> = {
@@ -361,7 +385,6 @@ export const PAYMENT_STAGE_LABEL: Record<PaymentStage, string> = {
   PL_COMPLETED: 'PL 작성완료',
   FUND_CONFIRMED: '재원확정완료',
   FIRST_PAID: '1차지급완료',
-  SECOND_PAID: '2차지급완료',
   ALL_PAID: '전체지급완료',
 };
 
@@ -369,8 +392,8 @@ export function paymentStageOf(p: SupabaseProject): PaymentStage {
   // skipped 도 "해당 회차는 더 이상 발생하지 않음" 이라는 의미에서 done 취급
   const firstDone = p.first_payment_completed || p.first_payment_skipped;
   const secondDone = p.second_payment_completed || p.second_payment_skipped;
-  if (firstDone && secondDone) return 'ALL_PAID';
-  if (secondDone) return 'SECOND_PAID';
+  // 2차만 완료 = 사실상 전체완료(실무상 1차 없이 2차만 완료되는 케이스는 거의 없음)
+  if (secondDone) return 'ALL_PAID';
   if (firstDone) return 'FIRST_PAID';
   if (p.fund_confirmed) return 'FUND_CONFIRMED';
   if (p.pl_completed) return 'PL_COMPLETED';
