@@ -131,6 +131,27 @@ export async function POST(req: Request) {
     };
   });
 
+  // 4-b) (project_id, member_name) 중복 탐지 + 경고
+  //   - 시트에 같은 프로젝트·사원 조합이 여러 행에 나올 수 있음
+  //     (이름 표기 차이 'Creative.Lab' vs 'Creative. Lab' 등이 정규화로 합쳐지는 케이스 포함)
+  //   - 같은 키의 마지막 row 만 살린다고 표시 → commit 단계에서 실제 dedupe
+  let dupCount = 0;
+  const seen = new Map<string, number>(); // key → 첫 등장 index
+  for (let i = 0; i < memberValidations.length; i++) {
+    const m = memberValidations[i];
+    if (!m.project_id) continue;
+    const key = `${m.project_id}|${m.member_name}`;
+    if (seen.has(key)) {
+      const firstIdx = seen.get(key)!;
+      memberValidations[firstIdx].warnings.push(
+        `중복: 이후 행에서 같은 (프로젝트, 사원)이 다시 나옴 — 마지막 값으로 덮어씌움`
+      );
+      memberValidations[i].warnings.push(`중복 항목: 이 행이 최종 사용됨`);
+      dupCount++;
+    }
+    seen.set(key, i);
+  }
+
   // 5) 요약
   const summary = {
     proposals: {
@@ -148,6 +169,7 @@ export async function POST(req: Request) {
       teamAccounts: memberValidations.filter(m => m.is_team_account).length,
       unmatchedProject: memberValidations.filter(m => !m.project_id).length,
       unmatchedUser: memberValidations.filter(m => !m.is_team_account && !m.employee_id).length,
+      duplicates: dupCount,
       errors: membersParsed.errors,
     },
   };

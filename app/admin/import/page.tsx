@@ -35,6 +35,7 @@ interface PreviewResponse {
       teamAccounts: number;
       unmatchedProject: number;
       unmatchedUser: number;
+      duplicates: number;
       errors: any[];
     };
   };
@@ -151,7 +152,8 @@ export default function ImportPage() {
       if (!res.ok) throw new Error(json?.error ?? 'import 실패');
       setSuccess(
         `완료 — 제안서 ${json.proposals}건 / 프로젝트 ${json.projects}건 / 멤버 ${json.members}건` +
-          (json.memberSkipped > 0 ? ` (프로젝트 매칭 실패 ${json.memberSkipped}건 스킵)` : '')
+          (json.memberSkipped > 0 ? ` · 프로젝트 매칭 실패 ${json.memberSkipped}건 스킵` : '') +
+          (json.memberDeduped > 0 ? ` · 중복 ${json.memberDeduped}건 병합` : '')
       );
       setPreview(null);
       setFiles({ proposals: null, projects: null, members: null });
@@ -263,11 +265,13 @@ export default function ImportPage() {
               detail={
                 `팀계정 ${preview.summary.members.teamAccounts} · ` +
                 `프로젝트미매칭 ${preview.summary.members.unmatchedProject} · ` +
-                `사용자미매칭 ${preview.summary.members.unmatchedUser}`
+                `사용자미매칭 ${preview.summary.members.unmatchedUser} · ` +
+                `중복 ${preview.summary.members.duplicates}`
               }
               warn={
                 preview.summary.members.unmatchedProject > 0 ||
-                preview.summary.members.unmatchedUser > 0
+                preview.summary.members.unmatchedUser > 0 ||
+                preview.summary.members.duplicates > 0
               }
             />
           </div>

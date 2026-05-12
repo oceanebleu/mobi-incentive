@@ -80,28 +80,40 @@ export async function POST(req: Request) {
   }
 
   // 2) project_members — preview 결과의 project_id / employee_id / is_team_account 사용
+  //
+  // dedupe: (project_id, member_name) 같은 키가 batch 안에 두 번 이상 있으면
+  // PostgreSQL upsert가 거부함 ("ON CONFLICT DO UPDATE ... cannot affect row a second time").
+  // → Map 으로 마지막 값만 살린다 (preview 단계에서 경고로 표시됨).
   let memberSkipped = 0;
+  let memberDeduped = 0;
   if (members.length > 0) {
-    const rows = members
-      .filter(m => {
-        if (!m.project_id) {
-          memberSkipped++;
-          return false;
-        }
-        return true;
-      })
-      .map(m => ({
-        project_id: m.project_id,
-        member_name: m.member_name,
-        employee_id: m.employee_id,
-        is_team_account: m.is_team_account,
-        contribution: m.contribution,
-        incentive_amount: m.incentive_amount,
-        first_amount: m.first_amount,
-        first_paid_at: m.first_paid_at,
-        second_amount: m.second_amount,
-        second_paid_at: m.second_paid_at,
-      }));
+    const filtered = members.filter(m => {
+      if (!m.project_id) {
+        memberSkipped++;
+        return false;
+      }
+      return true;
+    });
+
+    const dedupeMap = new Map<string, any>();
+    for (const m of filtered) {
+      const key = `${m.project_id}|${m.member_name}`;
+      if (dedupeMap.has(key)) memberDeduped++;
+      dedupeMap.set(key, m);
+    }
+
+    const rows = Array.from(dedupeMap.values()).map(m => ({
+      project_id: m.project_id,
+      member_name: m.member_name,
+      employee_id: m.employee_id,
+      is_team_account: m.is_team_account,
+      contribution: m.contribution,
+      incentive_amount: m.incentive_amount,
+      first_amount: m.first_amount,
+      first_paid_at: m.first_paid_at,
+      second_amount: m.second_amount,
+      second_paid_at: m.second_paid_at,
+    }));
     const err = await chunkedUpsert(supabase, 'project_members', rows, 'project_id,member_name');
     if (err) return NextResponse.json({ error: err, stage: 'project_members' }, { status: 500 });
   }
@@ -151,7 +163,8 @@ export async function POST(req: Request) {
     ok: true,
     projects: projects.length,
     proposals: proposalsInserted,
-    members: members.length - memberSkipped,
+    members: members.length - memberSkipped - memberDeduped,
     memberSkipped,
+    memberDeduped,
   });
 }
