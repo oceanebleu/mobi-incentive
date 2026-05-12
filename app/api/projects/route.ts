@@ -136,8 +136,8 @@ export async function POST(req: Request) {
     'create',
     projectRow,
     {
-      email: (session.user as any)?.email ?? null,
-      name: (session.user as any)?.name ?? null,
+      email: (session?.user as any)?.email ?? null,
+      name: (session?.user as any)?.name ?? null,
     }
   );
 

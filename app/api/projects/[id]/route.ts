@@ -128,8 +128,8 @@ export async function PATCH(
         'update',
         diff,
         {
-          email: (session.user as any)?.email ?? null,
-          name: (session.user as any)?.name ?? null,
+          email: (session?.user as any)?.email ?? null,
+          name: (session?.user as any)?.name ?? null,
         }
       );
     }
@@ -175,8 +175,8 @@ export async function DELETE(
       'delete',
       beforeRow,
       {
-        email: (session.user as any)?.email ?? null,
-        name: (session.user as any)?.name ?? null,
+        email: (session?.user as any)?.email ?? null,
+        name: (session?.user as any)?.name ?? null,
       }
     );
   }
