@@ -38,10 +38,11 @@ export async function POST(req: Request) {
   const result: Record<string, number | string> = {};
   for (const t of order) {
     if (!tables.includes(t)) continue;
+    // 안전한 "모두 삭제": id IS NOT NULL — 컬럼 타입(bigint/text) 무관
     const { error, count } = await supabase
       .from(t)
       .delete({ count: 'exact' })
-      .neq('id', t === 'proposals' ? 0 : '__never_match__'); // delete-all 트릭
+      .not('id', 'is', null);
     if (error) {
       return NextResponse.json({ error: `${t}: ${error.message}` }, { status: 500 });
     }
