@@ -1,13 +1,13 @@
 // ─────────────────────────────────────────────────────────────
-// GET /api/projects
-// Supabase의 projects + project_members 를 한 번에 조회해 조인 형태로 반환.
-// 각 project 객체에 members[] 배열이 임베드됨.
+// /api/projects
+//   GET  — projects + project_members 조인 조회
+//   POST — 신규 프로젝트 추가 (관리자만)
 // ─────────────────────────────────────────────────────────────
 
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
-import { canAccessApp, type UserRole } from '@/lib/roles';
+import { canAccessApp, canManageUsers, type UserRole } from '@/lib/roles';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
 
 export const dynamic = 'force-dynamic';
@@ -48,4 +48,83 @@ export async function GET() {
   }));
 
   return NextResponse.json({ projects });
+}
+
+// ─── POST: 신규 프로젝트 ────────────────────────────────────────
+//
+// body: { id?, campaign_name, ...projectFields, members?: [...] }
+//   - id 가 비어있으면 'PROPJ' + 5자리 자동 채번 (기존 최대값 + 1)
+//   - members 가 있으면 함께 insert
+export async function POST(req: Request) {
+  const session = await getServerSession(authOptions);
+  const role = (session?.user as any)?.role as UserRole | undefined;
+  if (!canManageUsers(role)) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
+
+  const body = await req.json().catch(() => ({} as any));
+  const incomingMembers: any[] = Array.isArray(body?.members) ? body.members : [];
+  const { members: _m, ...projectFields } = body ?? {};
+
+  if (!projectFields.campaign_name) {
+    return NextResponse.json({ error: 'campaign_name 은 필수입니다.' }, { status: 400 });
+  }
+
+  const supabase = getSupabaseAdmin();
+
+  // id 자동 채번
+  let id: string = projectFields.id;
+  if (!id) {
+    const { data: maxRow } = await supabase
+      .from('projects')
+      .select('id')
+      .like('id', 'PROPJ%')
+      .order('id', { ascending: false })
+      .limit(1);
+    const last = (maxRow?.[0]?.id as string | undefined) ?? 'PROPJ00000';
+    const n = parseInt(last.replace('PROPJ', ''), 10) || 0;
+    id = 'PROPJ' + String(n + 1).padStart(5, '0');
+  }
+
+  const projectRow = {
+    ...projectFields,
+    id,
+    incentive_fund: projectFields.incentive_fund ?? 0,
+    distributed: !!projectFields.distributed,
+    pl_completed: !!projectFields.pl_completed,
+    fund_confirmed: !!projectFields.fund_confirmed,
+    first_payment_completed: !!projectFields.first_payment_completed,
+    second_payment_completed: !!projectFields.second_payment_completed,
+  };
+
+  const { error: insertErr } = await supabase.from('projects').insert(projectRow);
+  if (insertErr) {
+    return NextResponse.json({ error: insertErr.message, stage: 'projects' }, { status: 500 });
+  }
+
+  if (incomingMembers.length > 0) {
+    const rows = incomingMembers.map(m => ({
+      project_id: id,
+      member_name: m.member_name,
+      employee_id: m.employee_id ?? null,
+      is_team_account: !!m.is_team_account,
+      contribution: m.contribution ?? 0,
+      incentive_amount: m.incentive_amount ?? 0,
+      first_amount: m.first_amount ?? 0,
+      first_paid_at: m.first_paid_at ?? null,
+      second_amount: m.second_amount ?? 0,
+      second_paid_at: m.second_paid_at ?? null,
+    }));
+    const { error: memErr } = await supabase
+      .from('project_members')
+      .upsert(rows, { onConflict: 'project_id,member_name' });
+    if (memErr) {
+      return NextResponse.json(
+        { error: memErr.message, stage: 'project_members' },
+        { status: 500 }
+      );
+    }
+  }
+
+  return NextResponse.json({ ok: true, id });
 }

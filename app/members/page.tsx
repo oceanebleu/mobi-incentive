@@ -13,7 +13,8 @@ import {
 
 export default function MembersPage() {
   const { projects, loading, error } = useIncentiveData();
-  const { lastWorkDateByName, teamByName, employeeIdByName } = useUserDirectory();
+  const { lastWorkDateByName, teamByName, employeeIdByName, statusByName } =
+    useUserDirectory();
 
   const [filterYear, setFilterYear] = useState<number | 'ALL'>('ALL');
   const [filterScope, setFilterScope] = useState<'ALL' | 'INDIVIDUAL' | 'TEAM'>('ALL');
@@ -25,8 +26,9 @@ export default function MembersPage() {
         lastWorkDateByName,
         teamByName,
         employeeIdByName,
+        statusByName,
       }),
-    [projects, lastWorkDateByName, teamByName, employeeIdByName]
+    [projects, lastWorkDateByName, teamByName, employeeIdByName, statusByName]
   );
 
   const years = useMemo(() => {
@@ -38,8 +40,11 @@ export default function MembersPage() {
   }, [projects]);
 
   // 필터 적용 + 정렬
+  //   - 퇴사자(status==='퇴사')는 명시적으로 제외 (퇴사예정·휴직은 포함)
+  //   - 팀 계정은 status 가 없으므로 항상 포함
   const sorted = useMemo(() => {
     return summaries
+      .filter(m => m.status !== '퇴사') // 퇴사자 제외 (퇴사예정·휴직·재직은 통과)
       .map(m => {
         if (filterYear === 'ALL') return m;
         const yb = m.yearly_breakdown[filterYear] ?? { paid: 0, pending: 0 };
@@ -53,13 +58,13 @@ export default function MembersPage() {
       .filter(m => {
         if (filterScope === 'INDIVIDUAL' && m.is_team_account) return false;
         if (filterScope === 'TEAM' && !m.is_team_account) return false;
-        // 연도 필터 모드에서는 해당 연도에 데이터가 없으면 숨김
         if (filterYear !== 'ALL' && m.total_paid + m.total_pending === 0) return false;
         return true;
       })
       .sort((a, b) => b.total_paid + b.total_pending - (a.total_paid + a.total_pending));
   }, [summaries, filterYear, filterScope]);
 
+  // 제외 합계는 퇴사자(=화면에서 사라진 사람들)의 마지막근무일 이후 paid_at 분 — 사용자에게 컨텍스트 제공용
   const totalExcluded = useMemo(
     () => summaries.reduce((s, m) => s + m.total_excluded, 0),
     [summaries]
@@ -126,8 +131,8 @@ export default function MembersPage() {
         <div className="flex items-start gap-2 px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
           <Info size={14} className="mt-0.5 text-gray-400" />
           <span>
-            마지막 근무일 이후 paid_at 인 지급분 <b>{formatKRWFull(totalExcluded)}</b> 가
-            지급 집계에서 제외되었습니다. (퇴사자에게 실제로는 지급되지 않은 금액)
+            퇴사자에게 실제로 지급되지 않은 금액 <b>{formatKRWFull(totalExcluded)}</b> 가
+            지급 집계에서 제외되었습니다.
           </span>
         </div>
       )}

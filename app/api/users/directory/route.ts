@@ -37,6 +37,7 @@ export async function GET() {
     const lastWorkDateByName: Record<string, string> = {};
     const teamByName: Record<string, string> = {};
     const employeeIdByName: Record<string, string> = {};
+    const statusByName: Record<string, string> = {};
 
     for (const row of data ?? []) {
       const name = (row as any).name as string | null;
@@ -44,21 +45,24 @@ export async function GET() {
       const team = (row as any).affiliation2 as string | null;
       const empId = (row as any).employee_id as string;
       const lwd = (row as any).last_work_date as string | null;
+      const status = (row as any).status as string | null;
 
       // last_work_date 는 가장 늦은 일자만 채택 (안전한 쪽으로 — 동명이인 over-exclusion 방지)
       if (lwd) {
         const existing = lastWorkDateByName[name];
         if (!existing || lwd > existing) lastWorkDateByName[name] = lwd;
       }
-      // team / employee_id 는 최신 updated_at 우선이므로 처음 만나는 값(이미 desc로 정렬됨) 채택
+      // team / employee_id / status 는 최신 updated_at 우선 (이미 desc 정렬), 처음 만나는 값 채택
       if (team && !teamByName[name]) teamByName[name] = team;
       if (empId && !employeeIdByName[name]) employeeIdByName[name] = empId;
+      if (status && !statusByName[name]) statusByName[name] = status;
     }
 
     return NextResponse.json({
       lastWorkDateByName,
       teamByName,
       employeeIdByName,
+      statusByName,
     });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? 'unknown' }, { status: 500 });

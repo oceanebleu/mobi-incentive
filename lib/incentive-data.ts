@@ -145,6 +145,7 @@ export interface MemberSummary {
   employee_id: string | null;
   team: string | null; // users.affiliation2 (소속2)
   last_work_date: string | null;
+  status: string | null; // users.status — '재직' | '퇴사' | '휴직' | '퇴사예정' ...
   total_paid: number;
   total_pending: number;
   total_excluded: number;
@@ -159,6 +160,8 @@ export interface MemberSummariesOptions {
   teamByName?: Record<string, string>;
   /** 이름 → employee_id — 사용자 매칭이 안 된 case 판별용 */
   employeeIdByName?: Record<string, string>;
+  /** 이름 → 재직상태 ('재직'/'퇴사'/'휴직'/'퇴사예정' …) */
+  statusByName?: Record<string, string>;
 }
 
 export function calcMemberSummariesV2(
@@ -169,6 +172,7 @@ export function calcMemberSummariesV2(
   const byName = opts.lastWorkDateByName ?? {};
   const teamByName = opts.teamByName ?? {};
   const empIdByName = opts.employeeIdByName ?? {};
+  const statusByName = opts.statusByName ?? {};
   const map = new Map<string, MemberSummary>();
 
   for (const p of projects) {
@@ -190,6 +194,7 @@ export function calcMemberSummariesV2(
           employee_id: m.employee_id ?? empIdByName[m.member_name] ?? null,
           team: teamByName[m.member_name] ?? null,
           last_work_date: m.is_team_account ? null : (byName[m.member_name] ?? null),
+          status: m.is_team_account ? null : (statusByName[m.member_name] ?? null),
           total_paid: 0,
           total_pending: 0,
           total_excluded: 0,
@@ -352,6 +357,7 @@ export interface UserDirectory {
   lastWorkDateByName: Record<string, string>;
   teamByName: Record<string, string>;
   employeeIdByName: Record<string, string>;
+  statusByName: Record<string, string>; // '재직', '퇴사', '휴직', '퇴사예정' 등
   loading: boolean;
 }
 
@@ -360,6 +366,7 @@ export function useUserDirectory(): UserDirectory {
     lastWorkDateByName: {},
     teamByName: {},
     employeeIdByName: {},
+    statusByName: {},
   });
   const [loading, setLoading] = useState(true);
 
@@ -373,6 +380,7 @@ export function useUserDirectory(): UserDirectory {
           lastWorkDateByName: j.lastWorkDateByName ?? {},
           teamByName: j.teamByName ?? {},
           employeeIdByName: j.employeeIdByName ?? {},
+          statusByName: j.statusByName ?? {},
         });
       })
       .catch(() => {
