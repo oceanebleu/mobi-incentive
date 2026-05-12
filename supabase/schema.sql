@@ -110,9 +110,11 @@ create table if not exists public.projects (
   first_payment_date          date,                            -- O
   first_payment_ratio         int,                             -- P (60 = 60%)
   first_payment_completed     boolean not null default false,  -- Q
+  first_payment_skipped       boolean not null default false,  -- 1차 미지급(= 영영 지급되지 않을 회차)
   second_payment_date         date,                            -- R
   second_payment_ratio        int,                             -- S
   second_payment_completed    boolean not null default false,  -- T
+  second_payment_skipped      boolean not null default false,  -- 2차 미지급(= 영영 지급되지 않을 회차)
   campaign_end_date           date,                            -- U: 캠페인 종료예정일
   category                    text,                            -- V: 연장/신규
   note                        text,                            -- W: 지급 특이사항

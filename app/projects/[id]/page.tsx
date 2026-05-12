@@ -128,16 +128,10 @@ export default function ProjectDetailPage() {
         <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-gray-700">1차 지급</h2>
-            <span
-              className={clsx(
-                'text-xs font-medium px-2 py-0.5 rounded-full',
-                project.first_payment_completed
-                  ? 'bg-emerald-100 text-emerald-700'
-                  : 'bg-amber-100 text-amber-700'
-              )}
-            >
-              {project.first_payment_completed ? '완료' : '대기'}
-            </span>
+            <PaymentStateBadge
+              completed={project.first_payment_completed}
+              skipped={project.first_payment_skipped}
+            />
           </div>
           <div className="space-y-2.5">
             <InfoRow
@@ -152,16 +146,10 @@ export default function ProjectDetailPage() {
         <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-gray-700">2차 지급</h2>
-            <span
-              className={clsx(
-                'text-xs font-medium px-2 py-0.5 rounded-full',
-                project.second_payment_completed
-                  ? 'bg-emerald-100 text-emerald-700'
-                  : 'bg-amber-100 text-amber-700'
-              )}
-            >
-              {project.second_payment_completed ? '완료' : '대기'}
-            </span>
+            <PaymentStateBadge
+              completed={project.second_payment_completed}
+              skipped={project.second_payment_skipped}
+            />
           </div>
           <div className="space-y-2.5">
             <InfoRow
@@ -272,6 +260,34 @@ export default function ProjectDetailPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function PaymentStateBadge({
+  completed,
+  skipped,
+}: {
+  completed: boolean;
+  skipped: boolean;
+}) {
+  if (skipped) {
+    return (
+      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+        미지급
+      </span>
+    );
+  }
+  if (completed) {
+    return (
+      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+        완료
+      </span>
+    );
+  }
+  return (
+    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+      대기
+    </span>
   );
 }
 

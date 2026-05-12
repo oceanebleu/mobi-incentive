@@ -45,9 +45,11 @@ export interface SupabaseProject {
   first_payment_date: string | null;
   first_payment_ratio: number | null;
   first_payment_completed: boolean;
+  first_payment_skipped: boolean;
   second_payment_date: string | null;
   second_payment_ratio: number | null;
   second_payment_completed: boolean;
+  second_payment_skipped: boolean;
   campaign_end_date: string | null;
   category: string | null;
   note: string | null;
@@ -99,13 +101,14 @@ export function useIncentiveData(): UseIncentiveData {
 // ─── 회차 상태 도출 ────────────────────────────────────────────
 //
 // 한 회차(1차 또는 2차)의 상태를 결정:
-//   - excluded : paid_at 이 marker(여기선 last_work_date) 이후라 카운트 제외
+//   - skipped  : 프로젝트 자체에서 미지급으로 표시된 회차 (영영 안 지급)
+//   - excluded : paid_at 이 마지막 근무일 이후라 카운트 제외 (퇴직 후 예정된 지급)
 //   - paid     : paid_at ≤ today
 //   - pending  : paid_at > today, 또는 paid_at 이 NULL (지급일 미정)
 //
 // amount=0 인 경우는 신경 안 써도 결과적으로 합계에 0이 더해질 뿐.
 
-export type PhaseStatus = 'paid' | 'pending' | 'excluded';
+export type PhaseStatus = 'paid' | 'pending' | 'excluded' | 'skipped';
 
 function todayIso(): string {
   // 한국 시간 기준 YYYY-MM-DD
@@ -117,8 +120,10 @@ function todayIso(): string {
 function phaseStatus(
   paidAt: string | null,
   lastWorkDate: string | null | undefined,
-  today: string
+  today: string,
+  skipped: boolean
 ): PhaseStatus {
+  if (skipped) return 'skipped';
   if (lastWorkDate && paidAt && paidAt > lastWorkDate) return 'excluded';
   if (paidAt && paidAt <= today) return 'paid';
   return 'pending';
@@ -149,6 +154,7 @@ export interface MemberSummary {
   total_paid: number;
   total_pending: number;
   total_excluded: number;
+  total_skipped: number; // 프로젝트 단위로 미지급 처리된 회차들의 합
   yearly_breakdown: Record<number, { paid: number; pending: number }>;
   projects: MemberProjectLine[];
 }
@@ -198,22 +204,34 @@ export function calcMemberSummariesV2(
           total_paid: 0,
           total_pending: 0,
           total_excluded: 0,
+          total_skipped: 0,
           yearly_breakdown: {},
           projects: [],
         });
       }
       const s = map.get(key)!;
 
-      // 회차 상태 결정
-      const firstStatus = phaseStatus(m.first_paid_at, s.last_work_date, today);
-      const secondStatus = phaseStatus(m.second_paid_at, s.last_work_date, today);
+      // 회차 상태 결정 (프로젝트 단위 skipped 우선 반영)
+      const firstStatus = phaseStatus(
+        m.first_paid_at,
+        s.last_work_date,
+        today,
+        !!p.first_payment_skipped
+      );
+      const secondStatus = phaseStatus(
+        m.second_paid_at,
+        s.last_work_date,
+        today,
+        !!p.second_payment_skipped
+      );
 
       // 합계 누적
       const addToBucket = (amt: number, status: PhaseStatus) => {
         if (amt === 0) return;
         if (status === 'paid') s.total_paid += amt;
         else if (status === 'pending') s.total_pending += amt;
-        else s.total_excluded += amt;
+        else if (status === 'excluded') s.total_excluded += amt;
+        else if (status === 'skipped') s.total_skipped += amt;
       };
       addToBucket(m.first_amount, firstStatus);
       addToBucket(m.second_amount, secondStatus);
@@ -274,11 +292,21 @@ export function getDashboardStatsV2(projects: SupabaseProject[]): DashboardStats
   for (const p of projects) {
     for (const m of p.members) {
       // 1차
-      if (m.first_paid_at && m.first_paid_at <= today) totalFirstPaid += m.first_amount;
-      else if (m.first_amount > 0) totalPending += m.first_amount;
+      if (p.first_payment_skipped) {
+        // 미지급 회차는 paid/pending 어디에도 안 더해짐 — 사실상 없는 회차로 취급
+      } else if (m.first_paid_at && m.first_paid_at <= today) {
+        totalFirstPaid += m.first_amount;
+      } else if (m.first_amount > 0) {
+        totalPending += m.first_amount;
+      }
       // 2차
-      if (m.second_paid_at && m.second_paid_at <= today) totalSecondPaid += m.second_amount;
-      else if (m.second_amount > 0) totalPending += m.second_amount;
+      if (p.second_payment_skipped) {
+        // skipped — 합계 무시
+      } else if (m.second_paid_at && m.second_paid_at <= today) {
+        totalSecondPaid += m.second_amount;
+      } else if (m.second_amount > 0) {
+        totalPending += m.second_amount;
+      }
     }
   }
   const totalPaid = totalFirstPaid + totalSecondPaid;
@@ -332,9 +360,12 @@ export const PAYMENT_STAGE_LABEL: Record<PaymentStage, string> = {
 };
 
 export function paymentStageOf(p: SupabaseProject): PaymentStage {
-  if (p.first_payment_completed && p.second_payment_completed) return 'ALL_PAID';
-  if (p.second_payment_completed) return 'SECOND_PAID';
-  if (p.first_payment_completed) return 'FIRST_PAID';
+  // skipped 도 "해당 회차는 더 이상 발생하지 않음" 이라는 의미에서 done 취급
+  const firstDone = p.first_payment_completed || p.first_payment_skipped;
+  const secondDone = p.second_payment_completed || p.second_payment_skipped;
+  if (firstDone && secondDone) return 'ALL_PAID';
+  if (secondDone) return 'SECOND_PAID';
+  if (firstDone) return 'FIRST_PAID';
   if (p.fund_confirmed) return 'FUND_CONFIRMED';
   if (p.pl_completed) return 'PL_COMPLETED';
   return 'PL_PENDING';

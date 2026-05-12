@@ -94,7 +94,9 @@ export async function POST(req: Request) {
     pl_completed: !!projectFields.pl_completed,
     fund_confirmed: !!projectFields.fund_confirmed,
     first_payment_completed: !!projectFields.first_payment_completed,
+    first_payment_skipped: !!projectFields.first_payment_skipped,
     second_payment_completed: !!projectFields.second_payment_completed,
+    second_payment_skipped: !!projectFields.second_payment_skipped,
   };
 
   const { error: insertErr } = await supabase.from('projects').insert(projectRow);

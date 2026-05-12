@@ -70,6 +70,12 @@ export default function MembersPage() {
     [summaries]
   );
 
+  // 미지급 합계 — 프로젝트 단위로 "미지급"으로 표시된 회차의 합계
+  const totalSkipped = useMemo(
+    () => sorted.reduce((s, m) => s + m.total_skipped, 0),
+    [sorted]
+  );
+
   const aggTotals = useMemo(() => {
     return {
       paid: sorted.reduce((s, m) => s + m.total_paid, 0),
@@ -126,13 +132,22 @@ export default function MembersPage() {
         </div>
       )}
 
-      {/* 제외 안내 배너 */}
+      {/* 제외/미지급 안내 배너 */}
       {totalExcluded > 0 && (
         <div className="flex items-start gap-2 px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
           <Info size={14} className="mt-0.5 text-gray-400" />
           <span>
             퇴사자에게 실제로 지급되지 않은 금액 <b>{formatKRWFull(totalExcluded)}</b> 가
             지급 집계에서 제외되었습니다.
+          </span>
+        </div>
+      )}
+      {totalSkipped > 0 && (
+        <div className="flex items-start gap-2 px-4 py-3 bg-amber-50/60 border border-amber-100 rounded-lg text-xs text-amber-800">
+          <Info size={14} className="mt-0.5 text-amber-500" />
+          <span>
+            프로젝트에서 <b>미지급</b>으로 표시된 회차의 합계 <b>{formatKRWFull(totalSkipped)}</b> 가
+            지급 집계에서 제외되었습니다. (영영 지급되지 않을 예정)
           </span>
         </div>
       )}
@@ -326,36 +341,61 @@ function MemberRow({
               </tr>
             </thead>
             <tbody>
-              {summary.projects.map(p => (
-                <tr key={p.project_id} className="border-t border-gray-100/80">
-                  <td className="py-2 text-gray-700 font-medium">
-                    {p.campaign_name}
-                    {(p.first_status === 'excluded' || p.second_status === 'excluded') && (
-                      <span
-                        title="paid_at 이 마지막 근무일 이후 → 제외"
-                        className="ml-2 text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded"
-                      >
-                        퇴직 제외
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-2 text-right text-blue-600 font-semibold">
-                    {p.contribution}%
-                  </td>
-                  <td className="py-2 text-right">
-                    <PhaseCell amount={p.first_amount} paidAt={p.first_paid_at} status={p.first_status} />
-                  </td>
-                  <td className="py-2 text-right">
-                    <PhaseCell amount={p.second_amount} paidAt={p.second_paid_at} status={p.second_status} />
-                  </td>
-                  <td className="py-2 text-right font-bold text-gray-800">
-                    {formatKRWFull(
-                      (p.first_status === 'excluded' ? 0 : p.first_amount) +
-                        (p.second_status === 'excluded' ? 0 : p.second_amount)
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {summary.projects.map(p => {
+                const firstCounts = p.first_status !== 'excluded' && p.first_status !== 'skipped';
+                const secondCounts =
+                  p.second_status !== 'excluded' && p.second_status !== 'skipped';
+                return (
+                  <tr key={p.project_id} className="border-t border-gray-100/80">
+                    <td className="py-2 text-gray-700 font-medium">
+                      {p.campaign_name}
+                      {(p.first_status === 'excluded' || p.second_status === 'excluded') && (
+                        <span
+                          title="paid_at 이 마지막 근무일 이후 → 제외"
+                          className="ml-2 text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded"
+                        >
+                          퇴직 제외
+                        </span>
+                      )}
+                      {(p.first_status === 'skipped' || p.second_status === 'skipped') && (
+                        <span
+                          title="프로젝트에서 미지급으로 표시"
+                          className="ml-2 text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded"
+                        >
+                          {p.first_status === 'skipped' && p.second_status === 'skipped'
+                            ? '1·2차 미지급'
+                            : p.first_status === 'skipped'
+                            ? '1차 미지급'
+                            : '2차 미지급'}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 text-right text-blue-600 font-semibold">
+                      {p.contribution}%
+                    </td>
+                    <td className="py-2 text-right">
+                      <PhaseCell
+                        amount={p.first_amount}
+                        paidAt={p.first_paid_at}
+                        status={p.first_status}
+                      />
+                    </td>
+                    <td className="py-2 text-right">
+                      <PhaseCell
+                        amount={p.second_amount}
+                        paidAt={p.second_paid_at}
+                        status={p.second_status}
+                      />
+                    </td>
+                    <td className="py-2 text-right font-bold text-gray-800">
+                      {formatKRWFull(
+                        (firstCounts ? p.first_amount : 0) +
+                          (secondCounts ? p.second_amount : 0)
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -371,8 +411,19 @@ function PhaseCell({
 }: {
   amount: number;
   paidAt: string | null;
-  status: 'paid' | 'pending' | 'excluded';
+  status: 'paid' | 'pending' | 'excluded' | 'skipped';
 }) {
+  if (status === 'skipped') {
+    return (
+      <span
+        className="text-amber-600 line-through"
+        title="프로젝트에서 미지급으로 표시됨"
+      >
+        {formatKRWFull(amount)}
+        <span className="ml-1 text-[10px] no-underline">미지급</span>
+      </span>
+    );
+  }
   if (status === 'excluded') {
     return (
       <span className="text-gray-300 line-through" title={`지급예정: ${paidAt}`}>

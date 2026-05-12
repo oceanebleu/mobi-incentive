@@ -311,44 +311,20 @@ function ProjectRow({
         </div>
       </td>
       <td className="px-4 py-3">
-        {p.first_payment_date ? (
-          <div>
-            <div
-              className={clsx(
-                'text-xs font-medium',
-                p.first_payment_completed ? 'text-emerald-600' : 'text-amber-600'
-              )}
-            >
-              {formatDate(p.first_payment_date)}
-            </div>
-            <div className="text-[11px] text-gray-400">
-              {p.first_payment_ratio != null && `${p.first_payment_ratio}%`}{' '}
-              · {p.first_payment_completed ? '✓ 완료' : '대기'}
-            </div>
-          </div>
-        ) : (
-          <span className="text-gray-300 text-xs">미정</span>
-        )}
+        <PaymentCell
+          date={p.first_payment_date}
+          ratio={p.first_payment_ratio}
+          completed={p.first_payment_completed}
+          skipped={p.first_payment_skipped}
+        />
       </td>
       <td className="px-4 py-3">
-        {p.second_payment_date ? (
-          <div>
-            <div
-              className={clsx(
-                'text-xs font-medium',
-                p.second_payment_completed ? 'text-emerald-600' : 'text-amber-600'
-              )}
-            >
-              {formatDate(p.second_payment_date)}
-            </div>
-            <div className="text-[11px] text-gray-400">
-              {p.second_payment_ratio != null && `${p.second_payment_ratio}%`}{' '}
-              · {p.second_payment_completed ? '✓ 완료' : '대기'}
-            </div>
-          </div>
-        ) : (
-          <span className="text-gray-300 text-xs">미정</span>
-        )}
+        <PaymentCell
+          date={p.second_payment_date}
+          ratio={p.second_payment_ratio}
+          completed={p.second_payment_completed}
+          skipped={p.second_payment_skipped}
+        />
       </td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-1">
@@ -404,9 +380,11 @@ function ProjectModal({
     first_payment_date: project?.first_payment_date ?? '',
     first_payment_ratio: project?.first_payment_ratio ?? 60,
     first_payment_completed: project?.first_payment_completed ?? false,
+    first_payment_skipped: project?.first_payment_skipped ?? false,
     second_payment_date: project?.second_payment_date ?? '',
     second_payment_ratio: project?.second_payment_ratio ?? 40,
     second_payment_completed: project?.second_payment_completed ?? false,
+    second_payment_skipped: project?.second_payment_skipped ?? false,
     campaign_end_date: project?.campaign_end_date ?? '',
     category: project?.category ?? '',
     note: project?.note ?? '',
@@ -645,11 +623,14 @@ function ProjectModal({
                   className={inputCls}
                 />
               </Field>
-              <Field label="지급 완료">
-                <CheckboxField
-                  checked={form.first_payment_completed}
-                  onChange={v => set('first_payment_completed', v)}
-                  label="완료"
+              <Field label="지급 상태">
+                <PaymentStatusField
+                  completed={form.first_payment_completed}
+                  skipped={form.first_payment_skipped}
+                  onChange={(c, s) => {
+                    set('first_payment_completed', c);
+                    set('first_payment_skipped', s);
+                  }}
                 />
               </Field>
             </div>
@@ -679,11 +660,14 @@ function ProjectModal({
                   className={inputCls}
                 />
               </Field>
-              <Field label="지급 완료">
-                <CheckboxField
-                  checked={form.second_payment_completed}
-                  onChange={v => set('second_payment_completed', v)}
-                  label="완료"
+              <Field label="지급 상태">
+                <PaymentStatusField
+                  completed={form.second_payment_completed}
+                  skipped={form.second_payment_skipped}
+                  onChange={(c, s) => {
+                    set('second_payment_completed', c);
+                    set('second_payment_skipped', s);
+                  }}
                 />
               </Field>
             </div>
@@ -752,6 +736,47 @@ function ProjectModal({
 const inputCls =
   'w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white';
 
+function PaymentCell({
+  date,
+  ratio,
+  completed,
+  skipped,
+}: {
+  date: string | null;
+  ratio: number | null;
+  completed: boolean;
+  skipped: boolean;
+}) {
+  if (skipped) {
+    return (
+      <div>
+        <div className="text-xs font-medium text-amber-700">미지급</div>
+        <div className="text-[11px] text-gray-400">
+          {ratio != null && `${ratio}%`} · 영영 안지급
+        </div>
+      </div>
+    );
+  }
+  if (!date) {
+    return <span className="text-gray-300 text-xs">미정</span>;
+  }
+  return (
+    <div>
+      <div
+        className={clsx(
+          'text-xs font-medium',
+          completed ? 'text-emerald-600' : 'text-amber-600'
+        )}
+      >
+        {formatDate(date)}
+      </div>
+      <div className="text-[11px] text-gray-400">
+        {ratio != null && `${ratio}%`} · {completed ? '✓ 완료' : '대기'}
+      </div>
+    </div>
+  );
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
@@ -799,5 +824,42 @@ function CheckboxField({
       />
       <span className="text-sm text-gray-600">{label}</span>
     </label>
+  );
+}
+
+// 회차 지급 상태 (예정 / 완료 / 미지급) — 두 boolean(completed, skipped)을 단일 셀렉트로 통합
+//   - completed와 skipped 는 상호 배타. 셀렉트 변경 시 자동으로 한 쪽만 true.
+function PaymentStatusField({
+  completed,
+  skipped,
+  onChange,
+}: {
+  completed: boolean;
+  skipped: boolean;
+  onChange: (completed: boolean, skipped: boolean) => void;
+}) {
+  const value: 'pending' | 'completed' | 'skipped' = completed
+    ? 'completed'
+    : skipped
+    ? 'skipped'
+    : 'pending';
+
+  return (
+    <select
+      value={value}
+      onChange={e => {
+        const v = e.target.value as 'pending' | 'completed' | 'skipped';
+        onChange(v === 'completed', v === 'skipped');
+      }}
+      className={clsx(
+        inputCls,
+        value === 'completed' && 'text-emerald-700',
+        value === 'skipped' && 'text-gray-500'
+      )}
+    >
+      <option value="pending">⏳ 예정 / 대기</option>
+      <option value="completed">✓ 지급 완료</option>
+      <option value="skipped">✗ 미지급 (영영 안지급)</option>
+    </select>
   );
 }
