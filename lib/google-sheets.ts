@@ -25,6 +25,26 @@ function b64url(input: Buffer | string): string {
 
 let cachedToken: { value: string; exp: number } | null = null;
 
+// 환경변수에 들어간 private_key 를 안전하게 PEM 으로 정규화
+//   - 양 끝 따옴표 제거 (JSON 파일에서 그대로 복붙한 경우)
+//   - "\n" 리터럴 → 실제 개행
+//   - \r 제거 (Windows 줄바꿈 잔재)
+//   - BOM/공백 trim
+//   - 끝에 개행 보장
+function normalizePrivateKey(raw: string): string {
+  let key = raw;
+  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
+    key = key.slice(1, -1);
+  }
+  key = key
+    .replace(/^﻿/, '')   // BOM
+    .replace(/\\n/g, '\n')    // literal \n → newline
+    .replace(/\r/g, '')       // strip CR
+    .trim();
+  if (!key.endsWith('\n')) key += '\n';
+  return key;
+}
+
 async function getAccessToken(): Promise<string> {
   if (cachedToken && cachedToken.exp - 60 > Math.floor(Date.now() / 1000)) {
     return cachedToken.value;
@@ -37,7 +57,29 @@ async function getAccessToken(): Promise<string> {
       'Google 서비스계정 환경변수가 없습니다 (GOOGLE_SERVICE_ACCOUNT_EMAIL / GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY).'
     );
   }
-  const privateKey = rawKey.replace(/\\n/g, '\n');
+
+  const privateKeyPem = normalizePrivateKey(rawKey);
+
+  // PEM 형식 사전 검증 — 에러 메시지를 더 명확하게
+  if (!privateKeyPem.includes('-----BEGIN') || !privateKeyPem.includes('PRIVATE KEY-----')) {
+    throw new Error(
+      'GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY 가 PEM 형식이 아닙니다. ' +
+      '값이 "-----BEGIN PRIVATE KEY-----"로 시작하고 "-----END PRIVATE KEY-----"로 끝나야 합니다. ' +
+      '(JSON 파일에서 복붙했다면 따옴표·줄바꿈 처리를 확인하세요)'
+    );
+  }
+
+  // KeyObject 로 먼저 파싱해서 진단 가능한 에러로 변환
+  let keyObject: crypto.KeyObject;
+  try {
+    keyObject = crypto.createPrivateKey({ key: privateKeyPem, format: 'pem' });
+  } catch (e: any) {
+    throw new Error(
+      `private_key 파싱 실패: ${e?.message ?? e}. ` +
+      '환경변수에 따옴표·이스케이프(\\n)·CR(\\r)이 잘못 들어갔을 가능성이 큽니다. ' +
+      '값을 다시 확인해주세요 (key 길이=' + privateKeyPem.length + ' chars).'
+    );
+  }
 
   const now = Math.floor(Date.now() / 1000);
   const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
@@ -52,7 +94,7 @@ async function getAccessToken(): Promise<string> {
   );
   const unsigned = `${header}.${claim}`;
   const signature = b64url(
-    crypto.sign('RSA-SHA256', Buffer.from(unsigned), privateKey)
+    crypto.sign('RSA-SHA256', Buffer.from(unsigned), keyObject)
   );
   const assertion = `${unsigned}.${signature}`;
 
