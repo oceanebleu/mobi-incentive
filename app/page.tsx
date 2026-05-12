@@ -57,7 +57,6 @@ export default function DashboardPage() {
       PL_COMPLETED: 0,
       FUND_CONFIRMED: 0,
       FIRST_PAID: 0,
-      SECOND_PAID: 0,
       ALL_PAID: 0,
     };
     for (const p of projects) {
