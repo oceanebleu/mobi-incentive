@@ -284,7 +284,8 @@ function mapAcquisitionStatus(raw: string | null): ProjectInput['acquisition_sta
   const t = raw.replace(/\s/g, '');
   if (t.includes('수주성공')) return 'WON';
   if (t.includes('수주실패')) return 'LOST';
-  if (t.includes('대화종료') || t.includes('대화종결')) return 'CANCELLED';
+  // 대행종료(정식 표기) / 대화종료(과거 오타 표기) / 대화종결 모두 허용
+  if (t.includes('대행종료') || t.includes('대화종료') || t.includes('대화종결') || t.includes('대행종결')) return 'CANCELLED';
   if (t.includes('결과대기') || t.includes('결과반영')) return 'RESULT_PENDING';
   if (t.includes('검토대기') || t.includes('제안진행') || t.includes('제안작성') || t.includes('제안대기')) {
     return 'REVIEWING';

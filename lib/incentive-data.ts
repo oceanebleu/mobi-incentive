@@ -375,7 +375,7 @@ export function paymentStageOf(p: SupabaseProject): PaymentStage {
 export const ACQUISITION_LABEL: Record<string, string> = {
   WON: '수주성공',
   LOST: '수주실패',
-  CANCELLED: '대화종료',
+  CANCELLED: '대행종료',
   PENDING: '진행중',
   REVIEWING: '제안진행',
   RESULT_PENDING: '결과대기',
