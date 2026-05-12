@@ -28,8 +28,13 @@ export default withAuth(
       return NextResponse.redirect(new URL('/unauthorized', req.url));
     }
 
-    // 사용자관리 페이지 / API는 관리자/경영진만 접근
-    if (pathname.startsWith('/users') || pathname.startsWith('/api/users')) {
+    // 사용자관리/Import 페이지 + API는 관리자/경영진만 접근
+    const isAdminPath =
+      pathname.startsWith('/users') ||
+      pathname.startsWith('/api/users') ||
+      pathname.startsWith('/admin') ||
+      pathname.startsWith('/api/import');
+    if (isAdminPath) {
       if (!canManageUsers(role)) {
         return NextResponse.redirect(new URL('/unauthorized', req.url));
       }

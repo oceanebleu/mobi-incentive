@@ -11,6 +11,7 @@ import {
   TrendingUp,
   LogOut,
   ShieldCheck,
+  Upload,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { ROLE_LABELS, canManageUsers } from '@/lib/roles';
@@ -28,6 +29,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/projects', label: '프로젝트 관리', icon: FolderKanban },
   { href: '/members', label: '개인별 지급 관리', icon: Users },
   { href: '/users', label: '사용자관리', icon: ShieldCheck, adminOnly: true },
+  { href: '/admin/import', label: '데이터 Import', icon: Upload, adminOnly: true },
 ];
 
 export default function Sidebar() {
