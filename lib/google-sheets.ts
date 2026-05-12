@@ -8,6 +8,7 @@
 // ─────────────────────────────────────────────────────────────
 
 import crypto from 'crypto';
+import { normalizeCategory } from './csv';
 
 const SCOPES = 'https://www.googleapis.com/auth/spreadsheets.readonly';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -302,7 +303,7 @@ export async function fetchProposalArchive(): Promise<ProposalArchiveRow[]> {
     out.push({
       needs_committee:   asBool(r[0]),                  // A
       bidding_status:    nullableText(r[1]),            // B
-      category:          nullableText(r[2]),            // C — 신규/연장
+      category:          normalizeCategory(nullableText(r[2])), // C — '신규(운영경험 X)' 등 변형 → '신규'/'연장'으로 통일
       industry:          nullableText(r[3]),            // D
       proposal_types:    asMulti(r[4]),                 // E
       client_name:       clientName,                    // F
