@@ -9,6 +9,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { canAccessApp, canManageUsers, type UserRole } from '@/lib/roles';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
+import { logProjectChange } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -127,6 +128,18 @@ export async function POST(req: Request) {
       );
     }
   }
+
+  // 감사 로그
+  await logProjectChange(
+    id,
+    projectRow.campaign_name,
+    'create',
+    projectRow,
+    {
+      email: (session.user as any)?.email ?? null,
+      name: (session.user as any)?.name ?? null,
+    }
+  );
 
   return NextResponse.json({ ok: true, id });
 }

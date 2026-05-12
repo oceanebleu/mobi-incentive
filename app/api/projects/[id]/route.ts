@@ -9,6 +9,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { canManageUsers, type UserRole } from '@/lib/roles';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
+import { logProjectChange, computeDiff } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,6 +69,13 @@ export async function PATCH(
 
   const supabase = getSupabaseAdmin();
 
+  // 변경 전 스냅샷 (감사용 + campaign_name 라벨링용)
+  const { data: beforeRow } = await supabase
+    .from('projects')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+
   if (Object.keys(patch).length > 0) {
     const { error } = await supabase.from('projects').update(patch).eq('id', id);
     if (error) {
@@ -107,6 +115,26 @@ export async function PATCH(
     }
   }
 
+  // 감사 로그 — 변경된 필드만 (members 통째 교체는 별도 표기)
+  if (beforeRow) {
+    const diff: any = computeDiff(beforeRow, patch);
+    if (replaceMembers) {
+      diff._members_replaced = { count: replaceMembers.length };
+    }
+    if (Object.keys(diff).length > 0) {
+      await logProjectChange(
+        id,
+        (beforeRow as any).campaign_name ?? '',
+        'update',
+        diff,
+        {
+          email: (session.user as any)?.email ?? null,
+          name: (session.user as any)?.name ?? null,
+        }
+      );
+    }
+  }
+
   return NextResponse.json({ ok: true, id });
 }
 
@@ -126,10 +154,32 @@ export async function DELETE(
   }
 
   const supabase = getSupabaseAdmin();
+
+  // 삭제 전 스냅샷 — 감사 로그에 풀 레코드 보존
+  const { data: beforeRow } = await supabase
+    .from('projects')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+
   // project_members 는 ON DELETE CASCADE 로 자동 삭제됨
   const { error } = await supabase.from('projects').delete().eq('id', id);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  if (beforeRow) {
+    await logProjectChange(
+      id,
+      (beforeRow as any).campaign_name ?? '',
+      'delete',
+      beforeRow,
+      {
+        email: (session.user as any)?.email ?? null,
+        name: (session.user as any)?.name ?? null,
+      }
+    );
+  }
+
   return NextResponse.json({ ok: true, id });
 }

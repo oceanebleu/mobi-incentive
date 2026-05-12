@@ -31,6 +31,7 @@ type StageFilter = PaymentStage | 'ALL';
 export default function ProjectsPage() {
   const { projects, loading, error, refresh } = useIncentiveData();
 
+  const [activeTab, setActiveTab] = useState<'WON' | 'ALL'>('WON');
   const [search, setSearch] = useState('');
   const [filterAcq, setFilterAcq] = useState<AcqFilter>('ALL');
   const [filterStage, setFilterStage] = useState<StageFilter>('ALL');
@@ -49,6 +50,9 @@ export default function ProjectsPage() {
 
   const filtered = useMemo(() => {
     return projects.filter(p => {
+      // 탭 필터 우선
+      if (activeTab === 'WON' && p.acquisition_status !== 'WON') return false;
+
       const q = search.trim().toLowerCase();
       if (q) {
         const hay = [p.campaign_name, p.pl, p.team, p.id]
@@ -65,7 +69,12 @@ export default function ProjectsPage() {
       }
       return true;
     });
-  }, [projects, search, filterAcq, filterStage, filterYear]);
+  }, [projects, activeTab, search, filterAcq, filterStage, filterYear]);
+
+  const tabCounts = useMemo(() => {
+    const won = projects.filter(p => p.acquisition_status === 'WON').length;
+    return { won, all: projects.length };
+  }, [projects]);
 
   async function handleDelete(p: SupabaseProject) {
     if (!confirm(`"${p.campaign_name}" (${p.id}) 프로젝트를 삭제할까요?\n참여 멤버 ${p.members.length}명의 지급 기록도 함께 삭제됩니다.`))
@@ -101,6 +110,25 @@ export default function ProjectsPage() {
           <span>조회 실패: {error}</span>
         </div>
       )}
+
+      {/* 상단 탭 — 수주성공 / 전체 프로젝트 */}
+      <div className="flex items-end gap-1 border-b border-gray-200">
+        <ProjectTab
+          active={activeTab === 'WON'}
+          onClick={() => setActiveTab('WON')}
+          label="수주성공"
+          count={tabCounts.won}
+          tone="emerald"
+        />
+        <ProjectTab
+          active={activeTab === 'ALL'}
+          onClick={() => setActiveTab('ALL')}
+          label="전체 프로젝트"
+          hint="수주실패·제안진행·결과대기 등 모든 상태"
+          count={tabCounts.all}
+          tone="blue"
+        />
+      </div>
 
       {/* 필터 바 */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-3 flex-wrap">
@@ -316,6 +344,7 @@ function ProjectRow({
           ratio={p.first_payment_ratio}
           completed={p.first_payment_completed}
           skipped={p.first_payment_skipped}
+          acquisitionLost={p.acquisition_status === 'LOST'}
         />
       </td>
       <td className="px-4 py-3">
@@ -324,6 +353,7 @@ function ProjectRow({
           ratio={p.second_payment_ratio}
           completed={p.second_payment_completed}
           skipped={p.second_payment_skipped}
+          acquisitionLost={p.acquisition_status === 'LOST'}
         />
       </td>
       <td className="px-4 py-3">
@@ -736,17 +766,66 @@ function ProjectModal({
 const inputCls =
   'w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white';
 
+function ProjectTab({
+  active,
+  onClick,
+  label,
+  hint,
+  count,
+  tone,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  hint?: string;
+  count: number;
+  tone: 'emerald' | 'blue';
+}) {
+  const activeColor =
+    tone === 'emerald' ? 'border-emerald-600 text-emerald-700' : 'border-blue-600 text-blue-700';
+  const badgeColor = active
+    ? tone === 'emerald'
+      ? 'bg-emerald-100 text-emerald-700'
+      : 'bg-blue-100 text-blue-700'
+    : 'bg-gray-100 text-gray-500';
+  return (
+    <button
+      onClick={onClick}
+      className={clsx(
+        'px-4 py-2.5 -mb-px border-b-2 transition-colors flex items-center gap-2',
+        active ? activeColor : 'border-transparent text-gray-500 hover:text-gray-800'
+      )}
+    >
+      <span className="text-sm font-semibold">{label}</span>
+      <span className={clsx('text-[11px] px-1.5 py-0.5 rounded-full font-medium', badgeColor)}>
+        {count}
+      </span>
+      {hint && <span className="text-[10px] text-gray-400">· {hint}</span>}
+    </button>
+  );
+}
+
 function PaymentCell({
   date,
   ratio,
   completed,
   skipped,
+  acquisitionLost,
 }: {
   date: string | null;
   ratio: number | null;
   completed: boolean;
   skipped: boolean;
+  acquisitionLost?: boolean;
 }) {
+  if (acquisitionLost) {
+    return (
+      <div>
+        <div className="text-xs font-medium text-red-600">수주실패 미지급</div>
+        <div className="text-[11px] text-gray-400">자동 처리</div>
+      </div>
+    );
+  }
   if (skipped) {
     return (
       <div>

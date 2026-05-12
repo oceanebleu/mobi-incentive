@@ -136,6 +136,7 @@ export interface MemberProjectLine {
   campaign_name: string;
   year: number;
   contribution: number;
+  acquisition_status: string | null; // 'WON' | 'LOST' | ... — UI 라벨링용
   first_amount: number;
   first_paid_at: string | null;
   first_status: PhaseStatus;
@@ -211,18 +212,21 @@ export function calcMemberSummariesV2(
       }
       const s = map.get(key)!;
 
-      // 회차 상태 결정 (프로젝트 단위 skipped 우선 반영)
+      // 회차 상태 결정
+      //   - 프로젝트가 LOST(수주실패) 면 두 회차 모두 자동으로 skipped 취급
+      //   - 또는 명시적인 first/second_payment_skipped 플래그
+      const projectLost = p.acquisition_status === 'LOST';
       const firstStatus = phaseStatus(
         m.first_paid_at,
         s.last_work_date,
         today,
-        !!p.first_payment_skipped
+        projectLost || !!p.first_payment_skipped
       );
       const secondStatus = phaseStatus(
         m.second_paid_at,
         s.last_work_date,
         today,
-        !!p.second_payment_skipped
+        projectLost || !!p.second_payment_skipped
       );
 
       // 합계 누적
@@ -253,6 +257,7 @@ export function calcMemberSummariesV2(
         campaign_name: p.campaign_name,
         year,
         contribution: m.contribution,
+        acquisition_status: p.acquisition_status,
         first_amount: m.first_amount,
         first_paid_at: m.first_paid_at,
         first_status: firstStatus,
@@ -290,18 +295,19 @@ export function getDashboardStatsV2(projects: SupabaseProject[]): DashboardStats
   let totalPending = 0;
 
   for (const p of projects) {
+    const projectLost = p.acquisition_status === 'LOST';
     for (const m of p.members) {
       // 1차
-      if (p.first_payment_skipped) {
-        // 미지급 회차는 paid/pending 어디에도 안 더해짐 — 사실상 없는 회차로 취급
+      if (projectLost || p.first_payment_skipped) {
+        // 수주실패 또는 명시적 미지급 → paid/pending 어디에도 안 더해짐
       } else if (m.first_paid_at && m.first_paid_at <= today) {
         totalFirstPaid += m.first_amount;
       } else if (m.first_amount > 0) {
         totalPending += m.first_amount;
       }
       // 2차
-      if (p.second_payment_skipped) {
-        // skipped — 합계 무시
+      if (projectLost || p.second_payment_skipped) {
+        // 수주실패 또는 명시적 미지급 → 합계 무시
       } else if (m.second_paid_at && m.second_paid_at <= today) {
         totalSecondPaid += m.second_amount;
       } else if (m.second_amount > 0) {

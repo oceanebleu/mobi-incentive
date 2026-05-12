@@ -165,3 +165,28 @@ drop trigger if exists project_members_set_updated_at on public.project_members;
 create trigger project_members_set_updated_at
 before update on public.project_members
 for each row execute function public.set_updated_at();
+
+
+-- ─────────────────────────────────────────────────────────────
+-- 프로젝트 변경 이력 (project_changes)
+--   * action: create | update | delete
+--   * diff: jsonb — update면 { field: { old, new } }, create/delete면 full record
+--   * project_id 는 nullable (프로젝트 삭제 후에도 이력 보존)
+-- ─────────────────────────────────────────────────────────────
+
+create table if not exists public.project_changes (
+  id                  bigserial primary key,
+  project_id          text,                            -- 삭제 후에도 텍스트로 보존
+  campaign_name       text,                            -- 삭제 후에도 식별 가능하도록 스냅샷
+  action              text not null
+                        check (action in ('create','update','delete')),
+  changed_by_email    text,
+  changed_by_name     text,
+  diff                jsonb,
+  created_at          timestamptz not null default now()
+);
+
+create index if not exists project_changes_project_idx
+  on public.project_changes (project_id);
+create index if not exists project_changes_created_idx
+  on public.project_changes (created_at desc);

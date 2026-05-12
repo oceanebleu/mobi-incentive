@@ -1,7 +1,8 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, ExternalLink, Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ArrowLeft, ExternalLink, Loader2, History, ChevronDown, ChevronRight } from 'lucide-react';
 import clsx from 'clsx';
 import { formatKRWFull, formatCommission, formatDate } from '@/lib/utils';
 import {
@@ -131,6 +132,7 @@ export default function ProjectDetailPage() {
             <PaymentStateBadge
               completed={project.first_payment_completed}
               skipped={project.first_payment_skipped}
+              acquisitionLost={project.acquisition_status === 'LOST'}
             />
           </div>
           <div className="space-y-2.5">
@@ -149,6 +151,7 @@ export default function ProjectDetailPage() {
             <PaymentStateBadge
               completed={project.second_payment_completed}
               skipped={project.second_payment_skipped}
+              acquisitionLost={project.acquisition_status === 'LOST'}
             />
           </div>
           <div className="space-y-2.5">
@@ -259,17 +262,227 @@ export default function ProjectDetailPage() {
           <p className="text-sm text-gray-600 whitespace-pre-wrap">{project.note}</p>
         </div>
       )}
+
+      <ChangeHistory projectId={project.id} />
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// 변경 이력 (audit log)
+// ─────────────────────────────────────────────
+interface ChangeRow {
+  id: number;
+  project_id: string;
+  campaign_name: string | null;
+  action: 'create' | 'update' | 'delete';
+  changed_by_email: string | null;
+  changed_by_name: string | null;
+  diff: any;
+  created_at: string;
+}
+
+// 사용자 친화적 한글 라벨 — diff 화면 표시용
+const FIELD_LABELS: Record<string, string> = {
+  campaign_name: '캠페인명',
+  committee_sheet_link: '운영위 시트',
+  r_value: 'R값',
+  commission: '수수료',
+  team: '담당팀',
+  pl: 'PL',
+  submitted_at: '제출일',
+  distributed: '배포 여부',
+  distributed_at: '배포일',
+  acquisition_status: '수주여부',
+  pl_completed: 'PL 작성완료',
+  fund_confirmed: '재원 확정',
+  incentive_fund: '인센티브 재원',
+  first_payment_date: '1차 지급예정일',
+  first_payment_ratio: '1차 지급비율',
+  first_payment_completed: '1차 지급완료',
+  first_payment_skipped: '1차 미지급',
+  second_payment_date: '2차 지급예정일',
+  second_payment_ratio: '2차 지급비율',
+  second_payment_completed: '2차 지급완료',
+  second_payment_skipped: '2차 미지급',
+  campaign_end_date: '캠페인 종료예정일',
+  category: '구분',
+  note: '비고',
+  _members_replaced: '멤버 일괄 교체',
+};
+
+function formatFieldValue(field: string, v: any): string {
+  if (v == null) return '∅';
+  if (typeof v === 'boolean') return v ? 'O' : 'X';
+  if (field === 'acquisition_status' && typeof v === 'string') {
+    return ACQUISITION_LABEL[v] ?? v;
+  }
+  if (field === 'r_value' || field === 'incentive_fund') {
+    return formatKRWFull(Number(v));
+  }
+  if (field === 'commission' && typeof v === 'number') {
+    return `${(v * 100).toFixed(1)}%`;
+  }
+  if (typeof v === 'object') return JSON.stringify(v);
+  return String(v);
+}
+
+function ChangeHistory({ projectId }: { projectId: string }) {
+  const [open, setOpen] = useState(false);
+  const [changes, setChanges] = useState<ChangeRow[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open || changes !== null) return;
+    setLoading(true);
+    fetch(`/api/projects/${encodeURIComponent(projectId)}/changes`, { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : Promise.reject(`${r.status}`)))
+      .then(j => setChanges(j.changes ?? []))
+      .catch(e => setError(String(e)))
+      .finally(() => setLoading(false));
+  }, [open, changes, projectId]);
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <History size={15} className="text-gray-500" />
+          <h2 className="text-sm font-semibold text-gray-700">변경 이력</h2>
+          {changes && (
+            <span className="text-xs text-gray-400 ml-1">{changes.length}건</span>
+          )}
+        </div>
+        {open ? (
+          <ChevronDown size={15} className="text-gray-400" />
+        ) : (
+          <ChevronRight size={15} className="text-gray-400" />
+        )}
+      </button>
+
+      {open && (
+        <div className="border-t border-gray-100 px-5 py-4">
+          {loading && (
+            <div className="flex items-center gap-2 text-sm text-gray-400">
+              <Loader2 size={14} className="animate-spin" /> 불러오는 중...
+            </div>
+          )}
+          {error && <div className="text-sm text-red-700">조회 실패: {error}</div>}
+          {!loading && changes && changes.length === 0 && (
+            <div className="text-xs text-gray-400">변경 이력이 없습니다.</div>
+          )}
+          {!loading && changes && changes.length > 0 && (
+            <ol className="space-y-3">
+              {changes.map(c => (
+                <ChangeRow key={c.id} change={c} />
+              ))}
+            </ol>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChangeRow({ change: c }: { change: ChangeRow }) {
+  const actionLabel =
+    c.action === 'create' ? '생성' : c.action === 'update' ? '수정' : '삭제';
+  const actionCls =
+    c.action === 'create'
+      ? 'bg-emerald-50 text-emerald-700'
+      : c.action === 'delete'
+      ? 'bg-red-50 text-red-700'
+      : 'bg-blue-50 text-blue-700';
+
+  const when = new Date(c.created_at).toLocaleString('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const who = c.changed_by_name || c.changed_by_email || '시스템';
+
+  // diff 표시: update 면 field 단위, create/delete 는 요약
+  let body: React.ReactNode = null;
+  if (c.action === 'update' && c.diff && typeof c.diff === 'object') {
+    const entries = Object.entries(c.diff as Record<string, any>);
+    if (entries.length === 0) {
+      body = <p className="text-xs text-gray-400">변경된 필드 없음</p>;
+    } else {
+      body = (
+        <ul className="space-y-0.5 text-xs">
+          {entries.map(([field, val]: [string, any]) => {
+            if (field === '_members_replaced') {
+              return (
+                <li key={field} className="text-gray-600">
+                  · 참여 멤버 일괄 교체 ({val?.count}건)
+                </li>
+              );
+            }
+            const label = FIELD_LABELS[field] ?? field;
+            return (
+              <li key={field} className="text-gray-600">
+                · <b className="text-gray-800">{label}</b>:{' '}
+                <span className="text-gray-400">{formatFieldValue(field, val.old)}</span>{' '}
+                → <span className="text-gray-800">{formatFieldValue(field, val.new)}</span>
+              </li>
+            );
+          })}
+        </ul>
+      );
+    }
+  } else if (c.action === 'create') {
+    body = (
+      <p className="text-xs text-gray-500">
+        새 프로젝트로 생성됨{c.diff?.campaign_name && ` (${c.diff.campaign_name})`}
+      </p>
+    );
+  } else if (c.action === 'delete') {
+    body = <p className="text-xs text-gray-500">프로젝트 삭제됨</p>;
+  }
+
+  return (
+    <li className="flex gap-3 text-sm">
+      <div className="flex flex-col items-center pt-0.5">
+        <span
+          className={clsx(
+            'text-[10px] font-semibold px-1.5 py-0.5 rounded',
+            actionCls
+          )}
+        >
+          {actionLabel}
+        </span>
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[11px] text-gray-400">
+          {when} · <b className="text-gray-600">{who}</b>
+        </p>
+        <div className="mt-1">{body}</div>
+      </div>
+    </li>
   );
 }
 
 function PaymentStateBadge({
   completed,
   skipped,
+  acquisitionLost,
 }: {
   completed: boolean;
   skipped: boolean;
+  acquisitionLost?: boolean;
 }) {
+  if (acquisitionLost) {
+    return (
+      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+        수주실패 미지급
+      </span>
+    );
+  }
   if (skipped) {
     return (
       <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">

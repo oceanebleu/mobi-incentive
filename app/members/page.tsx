@@ -345,6 +345,8 @@ function MemberRow({
                 const firstCounts = p.first_status !== 'excluded' && p.first_status !== 'skipped';
                 const secondCounts =
                   p.second_status !== 'excluded' && p.second_status !== 'skipped';
+                const isLost = p.acquisition_status === 'LOST';
+                const bothSkipped = p.first_status === 'skipped' && p.second_status === 'skipped';
                 return (
                   <tr key={p.project_id} className="border-t border-gray-100/80">
                     <td className="py-2 text-gray-700 font-medium">
@@ -357,18 +359,27 @@ function MemberRow({
                           퇴직 제외
                         </span>
                       )}
-                      {(p.first_status === 'skipped' || p.second_status === 'skipped') && (
+                      {isLost && bothSkipped && (
                         <span
-                          title="프로젝트에서 미지급으로 표시"
-                          className="ml-2 text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded"
+                          title="수주실패로 인한 미지급"
+                          className="ml-2 text-[10px] px-1.5 py-0.5 bg-red-100 text-red-700 rounded"
                         >
-                          {p.first_status === 'skipped' && p.second_status === 'skipped'
-                            ? '1·2차 미지급'
-                            : p.first_status === 'skipped'
-                            ? '1차 미지급'
-                            : '2차 미지급'}
+                          수주실패 미지급
                         </span>
                       )}
+                      {!isLost &&
+                        (p.first_status === 'skipped' || p.second_status === 'skipped') && (
+                          <span
+                            title="프로젝트에서 미지급으로 표시"
+                            className="ml-2 text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded"
+                          >
+                            {bothSkipped
+                              ? '1·2차 미지급'
+                              : p.first_status === 'skipped'
+                              ? '1차 미지급'
+                              : '2차 미지급'}
+                          </span>
+                        )}
                     </td>
                     <td className="py-2 text-right text-blue-600 font-semibold">
                       {p.contribution}%
@@ -378,6 +389,7 @@ function MemberRow({
                         amount={p.first_amount}
                         paidAt={p.first_paid_at}
                         status={p.first_status}
+                        acquisitionStatus={p.acquisition_status}
                       />
                     </td>
                     <td className="py-2 text-right">
@@ -385,6 +397,7 @@ function MemberRow({
                         amount={p.second_amount}
                         paidAt={p.second_paid_at}
                         status={p.second_status}
+                        acquisitionStatus={p.acquisition_status}
                       />
                     </td>
                     <td className="py-2 text-right font-bold text-gray-800">
@@ -408,19 +421,24 @@ function PhaseCell({
   amount,
   paidAt,
   status,
+  acquisitionStatus,
 }: {
   amount: number;
   paidAt: string | null;
   status: 'paid' | 'pending' | 'excluded' | 'skipped';
+  acquisitionStatus?: string | null;
 }) {
   if (status === 'skipped') {
+    const isLost = acquisitionStatus === 'LOST';
     return (
       <span
-        className="text-amber-600 line-through"
-        title="프로젝트에서 미지급으로 표시됨"
+        className={isLost ? 'text-red-500 line-through' : 'text-amber-600 line-through'}
+        title={isLost ? '수주실패로 인한 미지급' : '프로젝트에서 미지급으로 표시됨'}
       >
         {formatKRWFull(amount)}
-        <span className="ml-1 text-[10px] no-underline">미지급</span>
+        <span className="ml-1 text-[10px] no-underline">
+          {isLost ? '수주실패' : '미지급'}
+        </span>
       </span>
     );
   }
