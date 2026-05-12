@@ -14,17 +14,22 @@ async function resolveRole(email: string): Promise<UserRole> {
 
   try {
     const supabase = getSupabaseAdmin();
+    // 같은 이메일이 (재직 + 퇴사 이력) 여러 row 에 존재할 수 있다.
+    // 퇴사가 아닌 row(=재직/휴직/퇴사예정 등)만 매칭 대상으로 좁힌다.
+    // - 매칭 결과 없음 → NONE (미등록 또는 퇴사자만 존재)
+    // - 매칭된 row 가 둘 이상이면 updated_at 최신 1건 사용
     const { data, error } = await supabase
       .from('users')
       .select('role, status')
       .ilike('email', normalized)
-      .maybeSingle();
+      .neq('status', '퇴사')
+      .order('updated_at', { ascending: false })
+      .limit(1);
 
     console.log('[resolveRole] supabase data:', data, 'error:', error);
 
-    if (error || !data) return 'NONE';
-    if (data.status === '퇴사') return 'NONE';
-    return (data.role as UserRole) ?? 'NONE';
+    if (error || !data || data.length === 0) return 'NONE';
+    return ((data[0].role as UserRole) ?? 'NONE');
   } catch (e) {
     console.log('[resolveRole] catch error:', e);
     return 'NONE';

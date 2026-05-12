@@ -21,9 +21,15 @@ create table if not exists public.users (
   updated_at         timestamptz not null default now()
 );
 
-create unique index if not exists users_email_lower_uidx
+-- 과거 strict 유일 인덱스가 있던 환경이면 먼저 제거 (퇴사자 동기화 충돌 원인)
+drop index if exists public.users_email_lower_uidx;
+
+-- 이메일 유일성은 "퇴사 아닌" 사람들 사이에서만 강제
+-- (퇴사자 ↔ 재직자, 또는 퇴사자 ↔ 퇴사자 사이에 같은 이메일이 있어도 동기화 통과)
+-- 재직자끼리 진짜 중복이면 시트에서 수정 필요
+create unique index if not exists users_email_lower_active_uidx
   on public.users (lower(email))
-  where email is not null;
+  where email is not null and status is distinct from '퇴사';
 
 create index if not exists users_status_idx        on public.users (status);
 create index if not exists users_role_idx          on public.users (role);
