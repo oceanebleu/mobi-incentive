@@ -282,12 +282,14 @@ export default function ArchivePage() {
               <tr className="border-b border-gray-100 bg-gray-50/50">
                 {[
                   '광고주',
-                  '구분 / 산업',
-                  '팀 / PL',
-                  '제안일 / PT일',
-                  '예상매출',
+                  '구분',
+                  '산업',
+                  '팀',
+                  'PL',
+                  '제출일',
+                  'R값',
+                  '수수료',
                   '입찰상태',
-                  '자료',
                   '액션',
                 ].map(h => (
                   <th
@@ -302,13 +304,13 @@ export default function ArchivePage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-12 text-sm text-gray-400">
+                  <td colSpan={10} className="text-center py-12 text-sm text-gray-400">
                     불러오는 중...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-16">
+                  <td colSpan={10} className="text-center py-16">
                     <Inbox size={28} className="mx-auto text-gray-300 mb-2" />
                     <p className="text-sm text-gray-400">
                       {items.length === 0
@@ -332,49 +334,30 @@ export default function ArchivePage() {
                       >
                         {r.client_name}
                       </button>
-                      {r.proposal_types && r.proposal_types.length > 0 && (
-                        <div className="text-[11px] text-gray-400 mt-0.5">
-                          {r.proposal_types.join(' · ')}
-                        </div>
-                      )}
                     </td>
                     <td className="px-4 py-3 align-top">
-                      {r.category && (
-                        <span className="inline-block text-[10px] font-medium px-1.5 py-0.5 rounded bg-violet-50 text-violet-700">
-                          {r.category}
-                        </span>
-                      )}
-                      <div className="text-xs text-gray-600 mt-0.5">{r.industry ?? '-'}</div>
-                    </td>
-                    <td className="px-4 py-3 align-top">
-                      <div className="text-xs text-gray-700">
-                        {(r.teams ?? []).join(' / ') || '-'}
-                      </div>
-                      <div className="text-[11px] text-gray-400 mt-0.5">PL · {r.pl ?? '-'}</div>
-                    </td>
-                    <td className="px-4 py-3 align-top text-xs text-gray-600">
-                      <div>제안 · {r.proposal_at ?? '-'}</div>
-                      <div className="text-[11px] text-gray-400 mt-0.5">
-                        PT · {r.pt_at ?? '-'}
-                      </div>
+                      <CategoryBadge category={r.category} />
                     </td>
                     <td className="px-4 py-3 align-top text-xs text-gray-700">
-                      {r.expected_revenue != null ? `${withCommas(r.expected_revenue)}원` : '-'}
-                      {r.commission != null && (
-                        <div className="text-[11px] text-gray-400 mt-0.5">
-                          수수료 {(r.commission * 100).toFixed(1)}%
-                        </div>
-                      )}
+                      {r.industry ?? '-'}
+                    </td>
+                    <td className="px-4 py-3 align-top text-xs text-gray-700">
+                      {(r.teams ?? []).join(' / ') || '-'}
+                    </td>
+                    <td className="px-4 py-3 align-top text-xs text-gray-700">
+                      {r.pl ?? '-'}
+                    </td>
+                    <td className="px-4 py-3 align-top text-xs text-gray-700 whitespace-nowrap">
+                      {r.building_due_at ?? '-'}
+                    </td>
+                    <td className="px-4 py-3 align-top text-xs text-gray-700 whitespace-nowrap">
+                      {r.r_value != null ? `${withCommas(r.r_value)}원` : '-'}
+                    </td>
+                    <td className="px-4 py-3 align-top text-xs text-gray-700 whitespace-nowrap">
+                      {r.commission != null ? `${(r.commission * 100).toFixed(1)}%` : '-'}
                     </td>
                     <td className="px-4 py-3 align-top">
                       <BiddingBadge status={r.bidding_status} />
-                    </td>
-                    <td className="px-4 py-3 align-top">
-                      <div className="flex flex-wrap gap-1">
-                        <LinkBtn href={r.ppt_url} label="PPT" />
-                        <LinkBtn href={r.pdf_url} label="PDF" />
-                        <LinkBtn href={r.workflow_folder} label="폴더" />
-                      </div>
                     </td>
                     <td className="px-4 py-3 align-top">
                       {r.promoted_project_id ? (
@@ -497,18 +480,22 @@ function BiddingBadge({ status }: { status: string | null }) {
   );
 }
 
-function LinkBtn({ href, label }: { href: string | null; label: string }) {
-  if (!href) return null;
+// 신규/연장/그 외 — 색상 구분 배지
+function CategoryBadge({ category }: { category: string | null }) {
+  if (!category) return <span className="text-xs text-gray-400">-</span>;
+  const t = category.replace(/\s/g, '');
+  let cls = 'bg-gray-100 text-gray-600';
+  if (t.includes('신규')) cls = 'bg-emerald-100 text-emerald-700';
+  else if (t.includes('연장')) cls = 'bg-blue-100 text-blue-700';
   return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded transition-colors"
+    <span
+      className={clsx(
+        'inline-block text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap',
+        cls
+      )}
     >
-      <ExternalLink size={9} />
-      {label}
-    </a>
+      {category}
+    </span>
   );
 }
 
