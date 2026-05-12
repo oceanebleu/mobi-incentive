@@ -149,6 +149,16 @@ export function isTeamAccountName(name: string): boolean {
   return TEAM_ACCOUNT_PATTERNS.some(re => re.test(name));
 }
 
+// 구분(category) 정규화 — '신규(이전경험 X)', '신규(운영경험 X)' 같은 변형 모두 '신규'로 통일
+//   '연장(...)' 도 마찬가지로 '연장'으로 통일
+export function normalizeCategory(v: string | null): string | null {
+  if (!v) return v;
+  const t = v.trim();
+  if (t.startsWith('신규')) return '신규';
+  if (t.startsWith('연장')) return '연장';
+  return t;
+}
+
 // ─────────────────────────────────────────────────────────────
 // 시트별 row 변환기
 // ─────────────────────────────────────────────────────────────
@@ -231,7 +241,7 @@ export function parseProposalRows(rows: string[][]): {
         submitted_at: parseDate(r[6]),
         pt_at: parseDate(r[7]),
         result_at: parseDate(r[8]),
-        category: cleanCell(r[9]),
+        category: normalizeCategory(cleanCell(r[9])),
         team: cleanCell(r[10]),
         pl: cleanCell(r[11]),
         r_value: parseMoney(r[12]),
@@ -339,7 +349,7 @@ export function parseProjectRows(rows: string[][]): {
         second_payment_ratio: parsePercentAsInt(r[18]),
         second_payment_completed: parseBoolean(r[19]),
         campaign_end_date: parseDate(r[20]),
-        category: cleanCell(r[21]),
+        category: normalizeCategory(cleanCell(r[21])),
         note: cleanCell(r[22]),
       });
     } catch (e: any) {

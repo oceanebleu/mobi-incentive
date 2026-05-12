@@ -179,3 +179,164 @@ export async function fetchEmployees(): Promise<EmployeeRow[]> {
       email: norm(r[9])?.toLowerCase() ?? null,
     }));
 }
+
+// ─── 제안 자료 아카이브 (제안서.2025 Ver) ──────────────────────
+//
+// 35열 (A~AI) 구조. 자세한 매핑은 schema.sql 의 proposal_archive 테이블 정의 참조.
+// A열(체크박스)이 TRUE 인 행만 의미가 있음 — caller 측에서 필터.
+
+export interface ProposalArchiveRow {
+  needs_committee: boolean;
+  bidding_status: string | null;
+  category: string | null;
+  industry: string | null;
+  proposal_types: string[];
+  client_name: string;
+  workflow_note: string | null;
+  proposal_at: string | null;
+  building_due_at: string | null;
+  pt_at: string | null;
+  result_at: string | null;
+  agency: string | null;
+  pl: string | null;
+  teams: string[];
+  participants: string[];
+  r_value: number | null;
+  commission: number | null;
+  region: string | null;
+  kpis: string[];
+  kpi_detail: string | null;
+  media_scope: string[];
+  workflow_folder: string | null;
+  ppt_url: string | null;
+  pdf_url: string | null;
+  presentation_url: string | null;
+  factbook_folder: string | null;
+  rfp_folder: string | null;
+  mix_folder: string | null;
+  expected_revenue: number | null;
+  pre_review_marked: boolean | null;
+  strategy_note: string | null;
+  planning_note: string | null;
+  coaching_done: boolean | null;
+  coaching_at: string | null;
+  coaching_note: string | null;
+}
+
+function asBool(v: string | undefined): boolean {
+  const t = (v ?? '').trim().toUpperCase();
+  return t === 'TRUE' || t === 'V' || t === 'Y' || t === '1';
+}
+
+function asBoolNullable(v: string | undefined): boolean | null {
+  const t = (v ?? '').trim();
+  if (t === '') return null;
+  const u = t.toUpperCase();
+  if (u === 'TRUE' || u === 'V' || u === 'Y' || u === '1') return true;
+  if (u === 'FALSE' || u === 'N' || u === '0') return false;
+  // '진행완료', '미진행' 같은 한국어도 처리
+  if (t.includes('진행완료') || t.includes('완료')) return true;
+  if (t.includes('미진행') || t.includes('미')) return false;
+  return null;
+}
+
+function asMoney(v: string | undefined): number | null {
+  const t = (v ?? '').trim();
+  if (!t) return null;
+  const digits = t.replace(/[^0-9\-]/g, '');
+  if (!digits || digits === '-') return null;
+  const n = Number(digits);
+  return Number.isFinite(n) ? n : null;
+}
+
+function asPercent(v: string | undefined): number | null {
+  const t = (v ?? '').trim();
+  if (!t) return null;
+  const hasPct = t.includes('%');
+  const n = Number(t.replace(/[%\s,]/g, ''));
+  if (!Number.isFinite(n)) return null;
+  return hasPct ? n / 100 : n / 100; // "15.00%" → 0.15; "15"도 0.15로 가정
+}
+
+function asDate(v: string | undefined): string | null {
+  const t = (v ?? '').trim();
+  if (!t || t === '미정' || t === '미지급' || t === '미진행') return null;
+  // "2026-04-24" 또는 "2026. 4. 24" / "2026.4.24" 식
+  const m = t.match(/^(\d{4})[.\-\/](\s*\d{1,2})[.\-\/](\s*\d{1,2})/);
+  if (!m) return null;
+  const y = m[1];
+  const mo = String(parseInt(m[2], 10)).padStart(2, '0');
+  const d = String(parseInt(m[3], 10)).padStart(2, '0');
+  return `${y}-${mo}-${d}`;
+}
+
+function asMulti(v: string | undefined): string[] {
+  const t = (v ?? '').trim();
+  if (!t) return [];
+  // 콤마/슬래시/세미콜론으로 split
+  return t
+    .split(/[,/;]/)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+function nullableText(v: string | undefined): string | null {
+  const t = (v ?? '').trim();
+  return t === '' ? null : t;
+}
+
+export async function fetchProposalArchive(): Promise<ProposalArchiveRow[]> {
+  const sheetId = process.env.GOOGLE_SHEETS_ARCHIVE_SHEET_ID;
+  if (!sheetId) {
+    throw new Error('GOOGLE_SHEETS_ARCHIVE_SHEET_ID 환경변수가 필요합니다.');
+  }
+  // 헤더 행(1행) 제외, 2행부터 35열 (A~AI)
+  // 탭 이름: '제안서.2025 Ver' (공백·점·년도 포함 — Sheets API는 따옴표로 감싸야 함)
+  const rows = await fetchSheetValues(sheetId, "'제안서.2025 Ver'!A2:AI");
+
+  const out: ProposalArchiveRow[] = [];
+  for (const r of rows) {
+    const clientName = (r[5] ?? '').trim();
+    if (!clientName) continue; // 광고주 없는 행 스킵
+
+    out.push({
+      needs_committee:   asBool(r[0]),                  // A
+      bidding_status:    nullableText(r[1]),            // B
+      category:          nullableText(r[2]),            // C — 신규/연장
+      industry:          nullableText(r[3]),            // D
+      proposal_types:    asMulti(r[4]),                 // E
+      client_name:       clientName,                    // F
+      workflow_note:     nullableText(r[6]),            // G
+      proposal_at:       asDate(r[7]),                  // H
+      building_due_at:   asDate(r[8]),                  // I
+      pt_at:             asDate(r[9]),                  // J
+      result_at:         asDate(r[10]),                 // K
+      agency:            nullableText(r[11]),           // L
+      pl:                nullableText(r[12]),           // M
+      teams:             asMulti(r[13]),                // N
+      participants:      asMulti(r[14]),                // O
+      r_value:           asMoney(r[15]),                // P
+      commission:        asPercent(r[16]),              // Q
+      region:            nullableText(r[17]),           // R
+      kpis:              asMulti(r[18]),                // S
+      kpi_detail:        nullableText(r[19]),           // T
+      media_scope:       asMulti(r[20]),                // U
+      workflow_folder:   nullableText(r[21]),           // V
+      ppt_url:           nullableText(r[22]),           // W
+      pdf_url:           nullableText(r[23]),           // X
+      presentation_url:  nullableText(r[24]),           // Y
+      factbook_folder:   nullableText(r[25]),           // Z
+      rfp_folder:        nullableText(r[26]),           // AA
+      mix_folder:        nullableText(r[27]),           // AB
+      expected_revenue:  asMoney(r[28]),                // AC
+      pre_review_marked: asBoolNullable(r[29]),         // AD
+      strategy_note:     nullableText(r[30]),           // AE
+      planning_note:     nullableText(r[31]),           // AF
+      coaching_done:     asBoolNullable(r[32]),         // AG
+      coaching_at:       nullableText(r[33]),           // AH (자유형식 그대로)
+      coaching_note:     nullableText(r[34]),           // AI
+    });
+  }
+  return out;
+}
+

@@ -337,9 +337,16 @@ function ChangeHistory({ projectId }: { projectId: string }) {
     if (!open || changes !== null) return;
     setLoading(true);
     fetch(`/api/projects/${encodeURIComponent(projectId)}/changes`, { cache: 'no-store' })
-      .then(r => (r.ok ? r.json() : Promise.reject(`${r.status}`)))
+      .then(async r => {
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          // 본문에 error 메시지가 있으면 그걸 사용 (예: 테이블 미존재)
+          throw new Error(j?.error ?? `HTTP ${r.status}`);
+        }
+        return j;
+      })
       .then(j => setChanges(j.changes ?? []))
-      .catch(e => setError(String(e)))
+      .catch(e => setError(e?.message ?? String(e)))
       .finally(() => setLoading(false));
   }, [open, changes, projectId]);
 

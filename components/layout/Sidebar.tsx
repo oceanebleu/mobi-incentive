@@ -12,6 +12,7 @@ import {
   LogOut,
   ShieldCheck,
   Upload,
+  Archive,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { ROLE_LABELS, canManageUsers } from '@/lib/roles';
@@ -28,6 +29,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/', label: '대시보드', icon: LayoutDashboard },
   { href: '/projects', label: '프로젝트 관리', icon: FolderKanban },
   { href: '/members', label: '개인별 지급 관리', icon: Users },
+  { href: '/archive', label: '제안 자료 아카이브', icon: Archive, adminOnly: true },
   { href: '/users', label: '사용자관리', icon: ShieldCheck, adminOnly: true },
   { href: '/admin/import', label: '데이터 Import', icon: Upload, adminOnly: true },
 ];

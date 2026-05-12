@@ -190,3 +190,78 @@ create index if not exists project_changes_project_idx
   on public.project_changes (project_id);
 create index if not exists project_changes_created_idx
   on public.project_changes (created_at desc);
+
+
+-- ─────────────────────────────────────────────────────────────
+-- 제안 자료 아카이브 (proposal_archive)
+--   '제안서.2025 Ver' 시트 (sheet_id: 1LscohDN8...) 와 동기화.
+--   A열(needs_committee)=TRUE 인 행만 동기화 대상.
+--   광고주 1행 원칙 — client_name UNIQUE.
+--   '운영위로 보내기' 버튼으로 projects 테이블에 신규 row 생성 (승격).
+-- ─────────────────────────────────────────────────────────────
+
+create table if not exists public.proposal_archive (
+  id                   bigserial primary key,
+
+  -- 시트 컬럼 매핑 (A ~ AI)
+  needs_committee      boolean not null default false,    -- A: 운영위원회 진행여부
+  bidding_status       text,                              -- B: 빌딩현황
+  category             text,                              -- C: 연장/신규
+  industry             text,                              -- D: 산업군
+  proposal_types       text[],                            -- E: 제안형태 (다중)
+  client_name          text not null,                     -- F: 광고주
+  workflow_note        text,                              -- G: 업무플로우
+  proposal_at          date,                              -- H: 제안 일정
+  building_due_at      date,                              -- I: 빌딩 제출 일정
+  pt_at                date,                              -- J: PT일
+  result_at            date,                              -- K: 결과 발행일
+  agency               text,                              -- L: 인사이즈
+  pl                   text,                              -- M: PL
+  teams                text[],                            -- N: 담당팀 (다중)
+  participants         text[],                            -- O: 참여인원 (다중)
+  r_value              bigint,                            -- P: R값(연취급고)
+  commission           numeric,                           -- Q: 수수료
+  region               text,                              -- R: 권역
+  kpis                 text[],                            -- S: KPI (다중)
+  kpi_detail           text,                              -- T: KPI 참고용
+  media_scope          text[],                            -- U: 매체범위 (다중)
+  workflow_folder      text,                              -- V: 업무 플로우 폴더
+  ppt_url              text,                              -- W: 제안서 ppt
+  pdf_url              text,                              -- X: 제안서 pdf
+  presentation_url     text,                              -- Y: 제안서 발표본
+  factbook_folder      text,                              -- Z: 팩트북 폴더
+  rfp_folder           text,                              -- AA: RFP 폴더
+  mix_folder           text,                              -- AB: 믹스 폴더
+  expected_revenue     bigint,                            -- AC: 예상매출
+  pre_review_marked    boolean,                           -- AD: 주가공제 (V)
+  strategy_note        text,                              -- AE: 수주전략 & 진행사항
+  planning_note        text,                              -- AF: 기획 내용
+  coaching_done        boolean,                           -- AG: PT 코칭 진행 여부
+  coaching_at          text,                              -- AH: 코칭 일정 (자유형식)
+  coaching_note        text,                              -- AI: 코칭 미진행 사유 & 비고
+
+  -- 승격 트래킹
+  promoted_project_id  text references public.projects(id) on delete set null,
+  promoted_at          timestamptz,
+  promoted_by_email    text,
+  promoted_by_name     text,
+
+  -- 시스템
+  synced_at            timestamptz not null default now(),
+  created_at           timestamptz not null default now(),
+  updated_at           timestamptz not null default now(),
+
+  unique (client_name)
+);
+
+create index if not exists proposal_archive_needs_committee_idx
+  on public.proposal_archive (needs_committee);
+create index if not exists proposal_archive_bidding_status_idx
+  on public.proposal_archive (bidding_status);
+create index if not exists proposal_archive_promoted_idx
+  on public.proposal_archive (promoted_project_id);
+
+drop trigger if exists proposal_archive_set_updated_at on public.proposal_archive;
+create trigger proposal_archive_set_updated_at
+before update on public.proposal_archive
+for each row execute function public.set_updated_at();

@@ -547,8 +547,6 @@ function ProjectModal({
                   <option value="">선택</option>
                   <option value="신규">신규</option>
                   <option value="연장">연장</option>
-                  <option value="신규(이전경험 X)">신규(이전경험 X)</option>
-                  <option value="신규(이전경험 0)">신규(이전경험 0)</option>
                 </select>
               </Field>
             </div>
