@@ -20,6 +20,17 @@ export const STATUS_LABELS: Record<ProjectStatus, string> = {
   ALL_PAID: '전체지급완료',
 };
 
+// 수주여부
+export type AcquisitionStatus = 'PENDING' | 'WON' | 'LOST';
+
+export const ACQUISITION_LABELS: Record<AcquisitionStatus, string> = {
+  PENDING: '진행중',
+  WON: '수주성공',
+  LOST: '수주실패',
+};
+
+export const ACQUISITION_ORDER: AcquisitionStatus[] = ['PENDING', 'WON', 'LOST'];
+
 export const STATUS_ORDER: ProjectStatus[] = [
   'PL_PENDING',
   'PL_COMPLETED',
@@ -50,6 +61,7 @@ export interface Project {
   submittedAt: string;           // 제출일 (ISO 날짜 문자열)
   year: number;                  // 연도
   status: ProjectStatus;
+  acquisitionStatus?: AcquisitionStatus; // 수주여부 (수주성공/수주실패/진행중)
   incentiveRate: number;         // 인센티브율 (1 또는 2)
   incentiveFund: number;         // 인센티브 재원 (계산값, 원 단위)
   firstPaymentDate?: string;     // 1차 지급예정일
@@ -68,6 +80,7 @@ export interface Member {
   id: string;
   name: string;
   team: string;
+  lastWorkDate?: string; // YYYY-MM-DD — 마지막 근무일 (퇴사자만, 시트에서 보강)
 }
 
 // 개인별 인센티브 집계
@@ -89,7 +102,12 @@ export interface MemberPaymentSummary {
     secondPayment: number;
     firstPaid: boolean;
     secondPaid: boolean;
+    /** 마지막 근무일 이후 지급예정 → 카운트 제외됨 */
+    firstExcluded?: boolean;
+    secondExcluded?: boolean;
   }[];
+  /** 마지막 근무일 이후 지급분 제외 카운트 (UI 안내용) */
+  excludedCount?: number;
 }
 
 // 대시보드 통계

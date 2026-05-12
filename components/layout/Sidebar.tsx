@@ -122,7 +122,7 @@ export default function Sidebar() {
             </button>
           </div>
         ) : (
-          <p className="text-[11px] text-gray-400">© 2025 인센티브운영팀</p>
+          <p className="text-[11px] text-gray-400">모비데이즈 인센티브 운영위원회</p>
         )}
       </div>
     </aside>

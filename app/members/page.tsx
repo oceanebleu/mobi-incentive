@@ -4,17 +4,25 @@ import { useState, useMemo } from 'react';
 import { useIncentiveStore } from '@/lib/store';
 import { calcMemberSummaries, formatKRWFull, formatDate } from '@/lib/utils';
 import { MemberPaymentSummary } from '@/lib/types';
-import { Users, ChevronDown, ChevronRight } from 'lucide-react';
+import { useLastWorkDates } from '@/lib/useLastWorkDates';
+import { Users, ChevronDown, ChevronRight, Info } from 'lucide-react';
 import clsx from 'clsx';
 
 export default function MembersPage() {
   const { projects, members } = useIncentiveStore();
+  const { byName: lastWorkDateByName } = useLastWorkDates();
   const [filterYear, setFilterYear] = useState<number | 'ALL'>('ALL');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const summaries = useMemo(
-    () => calcMemberSummaries(projects, members),
-    [projects, members]
+    () => calcMemberSummaries(projects, members, { lastWorkDateByName }),
+    [projects, members, lastWorkDateByName]
+  );
+
+  // 제외된 지급 건수 합계 (안내 배너에 표시)
+  const totalExcluded = useMemo(
+    () => summaries.reduce((s, m) => s + (m.excludedCount ?? 0), 0),
+    [summaries]
   );
 
   const years = useMemo(() => {
@@ -68,6 +76,17 @@ export default function MembersPage() {
           ))}
         </select>
       </div>
+
+      {/* 제외 안내 배너 */}
+      {totalExcluded > 0 && (
+        <div className="flex items-start gap-2 px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
+          <Info size={14} className="mt-0.5 flex-shrink-0 text-gray-400" />
+          <span>
+            마지막 근무일 이후로 예정된 <b>{totalExcluded}건</b>의 지급 회차는
+            지급액 집계에서 제외되었습니다. (Supabase 사용자 데이터의 마지막 근무일 기준)
+          </span>
+        </div>
+      )}
 
       {/* 요약 카드 */}
       <div className="grid grid-cols-3 gap-4">
@@ -268,22 +287,44 @@ function MemberRow({
             <tbody>
               {summary.projects.map((p) => (
                 <tr key={p.projectId} className="border-t border-gray-100/80">
-                  <td className="py-2 text-gray-700 font-medium">{p.campaignName}</td>
+                  <td className="py-2 text-gray-700 font-medium">
+                    {p.campaignName}
+                    {(p.firstExcluded || p.secondExcluded) && (
+                      <span
+                        title="마지막 근무일 이후 지급 예정 → 카운트 제외"
+                        className="ml-2 text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded"
+                      >
+                        퇴직 제외
+                      </span>
+                    )}
+                  </td>
                   <td className="py-2 text-right text-gray-500">{p.year}년</td>
                   <td className="py-2 text-right">
                     <span className="text-blue-600 font-semibold">{p.contribution}%</span>
                   </td>
                   <td className="py-2 text-right">
-                    <span className={p.firstPaid ? 'text-emerald-600 font-medium' : 'text-gray-500'}>
-                      {formatKRWFull(p.firstPayment)}
-                      {p.firstPaid && ' ✓'}
-                    </span>
+                    {p.firstExcluded ? (
+                      <span className="text-gray-300 line-through">
+                        {formatKRWFull(0)}
+                      </span>
+                    ) : (
+                      <span className={p.firstPaid ? 'text-emerald-600 font-medium' : 'text-gray-500'}>
+                        {formatKRWFull(p.firstPayment)}
+                        {p.firstPaid && ' ✓'}
+                      </span>
+                    )}
                   </td>
                   <td className="py-2 text-right">
-                    <span className={p.secondPaid ? 'text-emerald-600 font-medium' : 'text-gray-500'}>
-                      {formatKRWFull(p.secondPayment)}
-                      {p.secondPaid && ' ✓'}
-                    </span>
+                    {p.secondExcluded ? (
+                      <span className="text-gray-300 line-through">
+                        {formatKRWFull(0)}
+                      </span>
+                    ) : (
+                      <span className={p.secondPaid ? 'text-emerald-600 font-medium' : 'text-gray-500'}>
+                        {formatKRWFull(p.secondPayment)}
+                        {p.secondPaid && ' ✓'}
+                      </span>
+                    )}
                   </td>
                   <td className="py-2 text-right font-bold text-gray-800">
                     {formatKRWFull(p.firstPayment + p.secondPayment)}

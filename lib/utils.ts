@@ -57,12 +57,40 @@ export function formatCommission(commission: number): string {
   return `${(commission * 100).toFixed(1)}%`;
 }
 
+// 한 회차 지급이 멤버에게 카운트되어야 하는지 판단
+// — 멤버의 마지막 근무일(lastWorkDate) 이후 지급일이면 제외
+// — 멤버가 재직중(lastWorkDate 없음)이거나 지급일이 미지정이면 포함
+function isPayableForMember(paymentDate?: string, lastWorkDate?: string): boolean {
+  if (!lastWorkDate) return true;
+  if (!paymentDate) return true;
+  return paymentDate <= lastWorkDate;
+}
+
+export interface MemberSummaryOptions {
+  /** 이름 → 마지막 근무일(YYYY-MM-DD). Supabase users 테이블에서 보강 */
+  lastWorkDateByName?: Record<string, string>;
+}
+
 // 개인별 인센티브 집계 계산
+//
+// 규칙
+//   - project.status가 재원확정 이상인 프로젝트만 집계
+//   - 각 회차(1차/2차)는 멤버의 마지막 근무일 이후로 예정된 경우 제외
+//     (member.lastWorkDate 또는 lastWorkDateByName[memberName] 에서 결정)
 export function calcMemberSummaries(
   projects: Project[],
-  members: Member[]
+  members: Member[],
+  opts: MemberSummaryOptions = {}
 ): MemberPaymentSummary[] {
   const summaryMap = new Map<string, MemberPaymentSummary>();
+  const byName = opts.lastWorkDateByName ?? {};
+
+  // 멤버 이름 → lastWorkDate 조회 (Member.lastWorkDate 우선, 없으면 외부 맵)
+  const lastWorkOf = (member?: { name?: string; lastWorkDate?: string }) => {
+    if (member?.lastWorkDate) return member.lastWorkDate;
+    if (member?.name && byName[member.name]) return byName[member.name];
+    return undefined;
+  };
 
   // 등록된 멤버 초기화
   for (const m of members) {
@@ -76,6 +104,7 @@ export function calcMemberSummaries(
       secondPaymentTotal: 0,
       yearlyBreakdown: {},
       projects: [],
+      excludedCount: 0,
     });
   }
 
@@ -100,12 +129,28 @@ export function calcMemberSummaries(
           secondPaymentTotal: 0,
           yearlyBreakdown: {},
           projects: [],
+          excludedCount: 0,
         });
       }
 
       const summary = summaryMap.get(pm.memberId)!;
-      const firstPayment = calcMemberFirstPayment(project, pm.contribution);
-      const secondPayment = calcMemberSecondPayment(project, pm.contribution);
+      const memberRecord = members.find(m => m.id === pm.memberId);
+      const lastWork = lastWorkOf({
+        name: memberRecord?.name ?? pm.memberName,
+        lastWorkDate: memberRecord?.lastWorkDate,
+      });
+
+      const firstPaymentRaw = calcMemberFirstPayment(project, pm.contribution);
+      const secondPaymentRaw = calcMemberSecondPayment(project, pm.contribution);
+
+      // 마지막 근무일 이후 지급 예정이면 제외
+      const firstExcluded = !isPayableForMember(project.firstPaymentDate, lastWork);
+      const secondExcluded = !isPayableForMember(project.secondPaymentDate, lastWork);
+      const firstPayment = firstExcluded ? 0 : firstPaymentRaw;
+      const secondPayment = secondExcluded ? 0 : secondPaymentRaw;
+      if (firstExcluded || secondExcluded) {
+        summary.excludedCount = (summary.excludedCount ?? 0) + 1;
+      }
 
       const paid =
         (project.firstPaymentCompleted ? firstPayment : 0) +
@@ -134,6 +179,8 @@ export function calcMemberSummaries(
         secondPayment,
         firstPaid: project.firstPaymentCompleted,
         secondPaid: project.secondPaymentCompleted,
+        firstExcluded,
+        secondExcluded,
       });
     }
   }

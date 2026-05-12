@@ -7,6 +7,7 @@ import {
   formatKRW,
   formatKRWFull,
 } from '@/lib/utils';
+import { useLastWorkDates } from '@/lib/useLastWorkDates';
 import { ProjectStatus, STATUS_LABELS } from '@/lib/types';
 import { Wallet, CreditCard, TrendingUp, CheckCircle, BarChart3, Users } from 'lucide-react';
 import clsx from 'clsx';
@@ -22,8 +23,11 @@ const PAY_STAGES: ProjectStatus[] = [
 
 export default function DashboardPage() {
   const { projects, members } = useIncentiveStore();
+  const { byName: lastWorkDateByName } = useLastWorkDates();
   const stats = getDashboardStats(projects);
-  const memberSummaries = calcMemberSummaries(projects, members);
+  const memberSummaries = calcMemberSummaries(projects, members, {
+    lastWorkDateByName,
+  });
 
   const sortedMembers = [...memberSummaries]
     .filter((m) => m.totalPaid + m.totalPending > 0)

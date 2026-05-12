@@ -2,7 +2,15 @@
 
 import { useState, useMemo } from 'react';
 import { useIncentiveStore } from '@/lib/store';
-import { Project, ProjectStatus, STATUS_LABELS, STATUS_ORDER } from '@/lib/types';
+import {
+  Project,
+  ProjectStatus,
+  STATUS_LABELS,
+  STATUS_ORDER,
+  AcquisitionStatus,
+  ACQUISITION_LABELS,
+  ACQUISITION_ORDER,
+} from '@/lib/types';
 import { formatKRWFull, formatCommission, formatDate, calcIncentiveFund, generateId, withCommas } from '@/lib/utils';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { Plus, Search, X, ExternalLink, ChevronDown } from 'lucide-react';
@@ -15,6 +23,7 @@ export default function ProjectsPage() {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<ProjectStatus | 'ALL'>('ALL');
   const [filterYear, setFilterYear] = useState<number | 'ALL'>('ALL');
+  const [filterAcq, setFilterAcq] = useState<AcquisitionStatus | 'ALL'>('ALL');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
 
@@ -31,9 +40,12 @@ export default function ProjectsPage() {
         p.team.includes(search);
       const matchStatus = filterStatus === 'ALL' || p.status === filterStatus;
       const matchYear = filterYear === 'ALL' || p.year === filterYear;
-      return matchSearch && matchStatus && matchYear;
+      const matchAcq =
+        filterAcq === 'ALL' ||
+        (p.acquisitionStatus ?? 'PENDING') === filterAcq;
+      return matchSearch && matchStatus && matchYear && matchAcq;
     });
-  }, [projects, search, filterStatus, filterYear]);
+  }, [projects, search, filterStatus, filterYear, filterAcq]);
 
   function openAdd() { setEditingProject(null); setModalOpen(true); }
   function openEdit(p: Project) { setEditingProject(p); setModalOpen(true); }
@@ -71,6 +83,11 @@ export default function ProjectsPage() {
           <option value="ALL">전체 상태</option>
           {STATUS_ORDER.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
         </select>
+        <select value={filterAcq} onChange={e => setFilterAcq(e.target.value as AcquisitionStatus | 'ALL')}
+          className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white text-gray-600">
+          <option value="ALL">전체 수주여부</option>
+          {ACQUISITION_ORDER.map(a => <option key={a} value={a}>{ACQUISITION_LABELS[a]}</option>)}
+        </select>
         <span className="ml-auto text-xs text-gray-400">{filtered.length}건</span>
       </div>
 
@@ -79,15 +96,21 @@ export default function ProjectsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/50">
-                {['캠페인명','연도','담당팀','PL','상태','인센티브 재원','1차 지급예정일','2차 지급예정일','관리'].map(h => (
+                {['캠페인명','연도','담당팀','PL','수주여부','상태','인센티브 재원','1차 지급예정일','2차 지급예정일','관리'].map(h => (
                   <th key={h} className="text-left text-[11px] font-semibold text-gray-400 uppercase tracking-wide px-4 py-3">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={9} className="text-center py-12 text-sm text-gray-400">프로젝트가 없습니다</td></tr>
-              ) : filtered.map(p => (
+                <tr><td colSpan={10} className="text-center py-12 text-sm text-gray-400">프로젝트가 없습니다</td></tr>
+              ) : filtered.map(p => {
+                const acq = p.acquisitionStatus ?? 'PENDING';
+                const acqCls =
+                  acq === 'WON' ? 'bg-emerald-50 text-emerald-700' :
+                  acq === 'LOST' ? 'bg-red-50 text-red-700' :
+                  'bg-gray-100 text-gray-500';
+                return (
                 <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50/70 transition-colors">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5">
@@ -103,6 +126,11 @@ export default function ProjectsPage() {
                   <td className="px-4 py-3 text-gray-600">{p.year}년</td>
                   <td className="px-4 py-3 text-gray-600">{p.team}</td>
                   <td className="px-4 py-3 text-gray-700 font-medium">{p.pl}</td>
+                  <td className="px-4 py-3">
+                    <span className={clsx('text-[11px] font-medium px-2 py-0.5 rounded-full', acqCls)}>
+                      {ACQUISITION_LABELS[acq]}
+                    </span>
+                  </td>
                   <td className="px-4 py-3"><StatusBadge status={p.status} size="sm" /></td>
                   <td className="px-4 py-3">
                     <div className="font-medium text-gray-900">{formatKRWFull(p.incentiveFund)}</div>
@@ -132,7 +160,8 @@ export default function ProjectsPage() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -170,6 +199,7 @@ function ProjectModal({ project, members, onClose, onSave }: ModalProps) {
     submittedAt: project?.submittedAt ?? new Date().toISOString().slice(0, 10),
     year: project?.year ?? new Date().getFullYear(),
     status: project?.status ?? ('PL_PENDING' as ProjectStatus),
+    acquisitionStatus: project?.acquisitionStatus ?? ('PENDING' as AcquisitionStatus),
     incentiveRate: project?.incentiveRate ?? 2,
     firstPaymentDate: project?.firstPaymentDate ?? '',
     firstPaymentRatio: project?.firstPaymentRatio ?? 60,
@@ -203,9 +233,14 @@ function ProjectModal({ project, members, onClose, onSave }: ModalProps) {
               <Field label="PL"><input value={form.pl} onChange={e => set('pl', e.target.value)} placeholder="PL 담당자명" className={inputCls} /></Field>
               <Field label="제출일"><input type="date" value={form.submittedAt} onChange={e => set('submittedAt', e.target.value)} className={inputCls} /></Field>
               <Field label="연도"><input type="number" value={form.year} onChange={e => set('year', Number(e.target.value))} className={inputCls} /></Field>
-              <Field label="진행 상태" className="col-span-2">
+              <Field label="진행 상태">
                 <select value={form.status} onChange={e => set('status', e.target.value as ProjectStatus)} className={inputCls}>
                   {STATUS_ORDER.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+                </select>
+              </Field>
+              <Field label="수주여부">
+                <select value={form.acquisitionStatus} onChange={e => set('acquisitionStatus', e.target.value as AcquisitionStatus)} className={inputCls}>
+                  {ACQUISITION_ORDER.map(a => <option key={a} value={a}>{ACQUISITION_LABELS[a]}</option>)}
                 </select>
               </Field>
             </div>
