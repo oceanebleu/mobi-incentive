@@ -17,6 +17,7 @@ import {
   ExternalLink,
   CheckCircle2,
   Inbox,
+  FileSpreadsheet,
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -72,6 +73,10 @@ const withCommas = (n: number) => {
   return s.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 };
 
+// 운영팀이 직접 편집하는 시트로 바로 이동시키는 외부 링크
+const ARCHIVE_SHEET_URL =
+  'https://docs.google.com/spreadsheets/d/1LscohDN8Di-RRz1UJyjFx7xVmgbJrPc6cgD8iQW7Fp8/edit';
+
 export default function ArchivePage() {
   const [items, setItems] = useState<ArchiveRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,6 +117,7 @@ export default function ArchivePage() {
       if (!res.ok) throw new Error(json?.error ?? '동기화 실패');
       setLastSync(
         `시트 ${json.fetched}행 / A=FALSE 제외 ${json.skippedFalse}행 / ` +
+          `수주실패 제외 ${json.skippedLost ?? 0}행 / ` +
           `중복정리 ${json.deduped}건 / 신규 ${json.new}건 / 갱신 ${json.updated}건`
       );
       await load();
@@ -192,18 +198,29 @@ export default function ArchivePage() {
         <div>
           <h1 className="text-xl font-bold text-gray-900">제안 자료 아카이브</h1>
           <p className="text-sm text-gray-400 mt-0.5">
-            '제안서.2025 Ver' 시트의 운영위 대상(A=TRUE) 행을 동기화하고, 검토 후 운영위 프로젝트로
-            등록합니다
+            제안 자료 아카이브 시트와 연동되어 있습니다
           </p>
         </div>
-        <button
-          onClick={sync}
-          disabled={syncing}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-60 transition-colors"
-        >
-          <RefreshCw size={15} className={clsx(syncing && 'animate-spin')} />
-          {syncing ? '동기화 중...' : '시트와 동기화'}
-        </button>
+        <div className="flex items-center gap-2">
+          <a
+            href={ARCHIVE_SHEET_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <FileSpreadsheet size={15} className="text-emerald-600" />
+            아카이브 시트 열기
+            <ExternalLink size={12} className="text-gray-400" />
+          </a>
+          <button
+            onClick={sync}
+            disabled={syncing}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-60 transition-colors"
+          >
+            <RefreshCw size={15} className={clsx(syncing && 'animate-spin')} />
+            {syncing ? '동기화 중...' : '시트와 동기화'}
+          </button>
+        </div>
       </div>
 
       {/* 알림 */}

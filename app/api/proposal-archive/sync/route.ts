@@ -3,6 +3,7 @@
 // '제안서.2025 Ver' 시트 → proposal_archive 테이블 동기화.
 // 규칙:
 //   - A열(needs_committee) = TRUE 인 행만 upsert
+//   - 단, 입찰상태가 '수주실패'인 행은 운영위 대상에서 제외
 //   - 광고주(client_name) 기준 upsert. 같은 client_name이면 덮어쓰기.
 //   - 시트에서 false로 바뀌었거나 사라진 행은 DB에서 자동 제거하지 않음
 //     (이력 보존; UI에서 수동 삭제 가능하도록 별도 엔드포인트로)
@@ -36,9 +37,13 @@ export async function POST() {
     );
   }
 
-  // 2) A=TRUE 만 필터
-  const candidates = allRows.filter(r => r.needs_committee === true);
-  const skippedFalse = allRows.length - candidates.length;
+  // 2) A=TRUE 만 필터 + 수주실패 행 제외
+  const aTrueRows = allRows.filter(r => r.needs_committee === true);
+  const skippedFalse = allRows.length - aTrueRows.length;
+  const isLost = (s: string | null) =>
+    !!s && s.replace(/\s/g, '').includes('수주실패');
+  const candidates = aTrueRows.filter(r => !isLost(r.bidding_status));
+  const skippedLost = aTrueRows.length - candidates.length;
 
   // 3) client_name 중복 처리 — 같은 광고주가 시트에 2번 이상 나오면 마지막 행 채택
   const dedupedByName = new Map<string, typeof candidates[number]>();
@@ -83,6 +88,7 @@ export async function POST() {
     ok: true,
     fetched: allRows.length,
     skippedFalse,
+    skippedLost,
     deduped: candidates.length - toUpsert.length,
     new: newCount,
     updated: updatedCount,
