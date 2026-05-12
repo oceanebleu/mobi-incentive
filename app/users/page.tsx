@@ -29,7 +29,8 @@ interface UserRow {
 }
 
 type RoleFilter = 'ALL' | UserRole;
-type StatusFilter = 'ACTIVE' | 'ALL' | '퇴사';
+// 상단 탭: 재직(퇴사예정·휴직 포함) / 퇴사자
+type StatusTab = 'ACTIVE' | 'RESIGNED';
 
 const ROLE_BADGE: Record<UserRole, string> = {
   EXEC: 'bg-violet-100 text-violet-700',
@@ -51,7 +52,7 @@ export default function UsersPage() {
 
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('ALL');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ACTIVE');
+  const [statusTab, setStatusTab] = useState<StatusTab>('ACTIVE');
 
   async function load() {
     setLoading(true);
@@ -193,9 +194,11 @@ export default function UsersPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return users.filter(u => {
-      if (statusFilter === 'ACTIVE' && u.status === '퇴사') return false;
-      if (statusFilter === '퇴사' && u.status !== '퇴사') return false;
-      // 필터는 "현재 보이는 역할"(pending 우선) 기준
+      // 탭 필터: 재직(퇴사아닌 모두) vs 퇴사자
+      const isResigned = u.status === '퇴사';
+      if (statusTab === 'ACTIVE' && isResigned) return false;
+      if (statusTab === 'RESIGNED' && !isResigned) return false;
+      // 역할 필터는 "현재 보이는 역할"(pending 우선) 기준
       const effRole = pending[u.employee_id] ?? u.role;
       if (roleFilter !== 'ALL' && effRole !== roleFilter) return false;
       if (!q) return true;
@@ -212,15 +215,15 @@ export default function UsersPage() {
         .toLowerCase();
       return hay.includes(q);
     });
-  }, [users, search, roleFilter, statusFilter, pending]);
+  }, [users, search, roleFilter, statusTab, pending]);
 
   const counts = useMemo(() => {
     const active = users.filter(u => u.status !== '퇴사');
     return {
-      total: active.length,
-      exec: active.filter(u => u.role === 'EXEC').length,
-      admin: active.filter(u => u.role === 'ADMIN').length,
-      normal: active.filter(u => u.role === 'NORMAL').length,
+      active: active.length,
+      activeExec: active.filter(u => u.role === 'EXEC').length,
+      activeAdmin: active.filter(u => u.role === 'ADMIN').length,
+      activeNormal: active.filter(u => u.role === 'NORMAL').length,
       resigned: users.length - active.length,
     };
   }, [users]);
@@ -290,13 +293,36 @@ export default function UsersPage() {
         </div>
       )}
 
-      {/* 통계 */}
-      <div className="grid grid-cols-5 gap-3">
-        <Stat label="재직 인원" value={counts.total} />
-        <Stat label="경영진" value={counts.exec} tone="violet" />
-        <Stat label="관리자" value={counts.admin} tone="blue" />
-        <Stat label="일반" value={counts.normal} tone="gray" />
-        <Stat label="퇴사 (이력 보존)" value={counts.resigned} tone="muted" />
+      {/* 통계 — 현재 탭에 맞춰 다르게 표시 */}
+      {statusTab === 'ACTIVE' ? (
+        <div className="grid grid-cols-4 gap-3">
+          <Stat label="재직 인원 (휴직·퇴사예정 포함)" value={counts.active} />
+          <Stat label="경영진" value={counts.activeExec} tone="violet" />
+          <Stat label="관리자" value={counts.activeAdmin} tone="blue" />
+          <Stat label="일반" value={counts.activeNormal} tone="gray" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-3">
+          <Stat label="퇴사자 (이력 보존)" value={counts.resigned} tone="muted" />
+          <Stat label="재직 인원" value={counts.active} tone="default" />
+        </div>
+      )}
+
+      {/* 상단 탭 — 재직 / 퇴사자 */}
+      <div className="flex items-end gap-1 border-b border-gray-200">
+        <TabButton
+          active={statusTab === 'ACTIVE'}
+          onClick={() => setStatusTab('ACTIVE')}
+          label="재직"
+          hint="휴직·퇴사예정 포함"
+          count={counts.active}
+        />
+        <TabButton
+          active={statusTab === 'RESIGNED'}
+          onClick={() => setStatusTab('RESIGNED')}
+          label="퇴사자"
+          count={counts.resigned}
+        />
       </div>
 
       {/* 필터 바 */}
@@ -328,15 +354,6 @@ export default function UsersPage() {
           <option value="EXEC">경영진</option>
           <option value="ADMIN">관리자</option>
           <option value="NORMAL">일반</option>
-        </select>
-        <select
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value as StatusFilter)}
-          className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700"
-        >
-          <option value="ACTIVE">재직만</option>
-          <option value="ALL">전체</option>
-          <option value="퇴사">퇴사자만</option>
         </select>
         <span className="ml-auto text-xs text-gray-400">{filtered.length}명</span>
       </div>
@@ -486,5 +503,42 @@ function Stat({
       <p className="text-[11px] text-gray-400">{label}</p>
       <p className={clsx('text-lg font-bold mt-0.5', toneCls[tone])}>{value}</p>
     </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  label,
+  hint,
+  count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  hint?: string;
+  count: number;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={clsx(
+        'px-4 py-2.5 -mb-px border-b-2 transition-colors flex items-center gap-2',
+        active
+          ? 'border-blue-600 text-blue-700'
+          : 'border-transparent text-gray-500 hover:text-gray-800'
+      )}
+    >
+      <span className="text-sm font-semibold">{label}</span>
+      <span
+        className={clsx(
+          'text-[11px] px-1.5 py-0.5 rounded-full font-medium',
+          active ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
+        )}
+      >
+        {count}
+      </span>
+      {hint && <span className="text-[10px] text-gray-400">· {hint}</span>}
+    </button>
   );
 }
