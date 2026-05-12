@@ -83,7 +83,8 @@ export default function UsersPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error ?? '동기화 실패');
       setLastSync(
-        `신규 ${json.new} · 갱신 ${json.updated} · 퇴사자 추가 스킵 ${json.skippedResigned}`
+        `신규 ${json.new}명 (재직 ${json.newActive} / 퇴사 ${json.newResigned}) · ` +
+          `갱신 ${json.updated}명 (재직 ${json.updatedActive} / 퇴사 ${json.updatedResigned})`
       );
       await load();
     } catch (e: any) {

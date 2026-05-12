@@ -3,8 +3,11 @@
 // information_employees 시트 → Supabase users 테이블 동기화
 //
 // 규칙
-//   - F열(재직상태)이 '퇴사'인 행은 신규로 추가하지 않음
-//     (이미 존재하는 행은 status='퇴사'로 갱신 → 로그인 차단)
+//   - 모든 사원(재직/휴직/퇴사예정/퇴사 등)을 전부 동기화
+//     · 퇴사자도 사용자관리에 표시되어야 하고,
+//     · 개인별 지급관리 계산에서 퇴사자의 last_work_date 가 필요함
+//     · 퇴사자는 authOptions.resolveRole 에서 role=NONE 으로 처리되어
+//       로그인이 차단되므로 보안상 문제 없음
 //   - role_overridden=true 인 사용자는 sync 시 role 보존 (수동 설정 유지)
 //   - 그 외에는 D/E 소속 패턴(HRBP / C.O1)에 따라 기본 역할 재계산
 // ─────────────────────────────────────────────────────────────
@@ -51,22 +54,22 @@ export async function POST() {
 
   const now = new Date().toISOString();
   const upserts: any[] = [];
-  let countNew = 0;
-  let countUpdated = 0;
-  let countSkippedResigned = 0;
-  let countResignedMarked = 0;
+  let countNewActive = 0;
+  let countNewResigned = 0;
+  let countUpdatedActive = 0;
+  let countUpdatedResigned = 0;
 
+  // 재직/퇴사 구분 없이 전부 동기화한다.
+  // 이유:
+  //   1) 사용자관리 탭에서 퇴사자 목록도 보여야 함
+  //   2) 개인별 지급관리의 "마지막 근무일 이후 지급분 제외" 로직이
+  //      퇴사자의 last_work_date 를 참조하기 때문
+  //   3) 퇴사자는 authOptions.resolveRole 에서 role=NONE 으로 처리되어
+  //      로그인이 차단되므로 보안상 문제 없음
   for (const emp of employees) {
     const isResigned = emp.status === '퇴사';
     const existed = existingMap.get(emp.employee_id);
 
-    if (isResigned && !existed) {
-      // 퇴사자 + 신규 → 추가하지 않음
-      countSkippedResigned++;
-      continue;
-    }
-
-    // 역할 결정
     const defaultRole = defaultRoleFromAffiliation(emp.affiliation1, emp.affiliation2);
     const finalRole: UserRole = existed?.role_overridden
       ? (existed.role as UserRole)        // 수동 설정 보존
@@ -89,10 +92,11 @@ export async function POST() {
     });
 
     if (existed) {
-      countUpdated++;
-      if (isResigned) countResignedMarked++;
+      if (isResigned) countUpdatedResigned++;
+      else countUpdatedActive++;
     } else {
-      countNew++;
+      if (isResigned) countNewResigned++;
+      else countNewActive++;
     }
   }
 
@@ -116,9 +120,11 @@ export async function POST() {
   return NextResponse.json({
     ok: true,
     total: employees.length,
-    new: countNew,
-    updated: countUpdated,
-    skippedResigned: countSkippedResigned,
-    resignedMarked: countResignedMarked,
+    new: countNewActive + countNewResigned,
+    newActive: countNewActive,
+    newResigned: countNewResigned,
+    updated: countUpdatedActive + countUpdatedResigned,
+    updatedActive: countUpdatedActive,
+    updatedResigned: countUpdatedResigned,
   });
 }
