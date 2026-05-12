@@ -147,7 +147,7 @@ export default function MembersPage() {
           <Info size={14} className="mt-0.5 text-amber-500" />
           <span>
             프로젝트에서 <b>미지급</b>으로 표시된 회차의 합계 <b>{formatKRWFull(totalSkipped)}</b> 가
-            지급 집계에서 제외되었습니다. (영영 지급되지 않을 예정)
+            지급 집계에서 제외되었습니다.
           </span>
         </div>
       )}

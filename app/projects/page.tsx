@@ -93,7 +93,7 @@ export default function ProjectsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">프로젝트 관리</h1>
-          <p className="text-sm text-gray-400 mt-0.5">수주인센티브 운영위원회 프로젝트 — 웹에서 직접 편집 가능</p>
+          <p className="text-sm text-gray-400 mt-0.5">수주인센티브 프로젝트 관리</p>
         </div>
         <button
           onClick={() => setEditing('new')}
@@ -124,7 +124,6 @@ export default function ProjectsPage() {
           active={activeTab === 'ALL'}
           onClick={() => setActiveTab('ALL')}
           label="전체 프로젝트"
-          hint="수주실패·제안진행·결과대기 등 모든 상태"
           count={tabCounts.all}
           tone="blue"
         />
@@ -831,7 +830,7 @@ function PaymentCell({
       <div>
         <div className="text-xs font-medium text-amber-700">미지급</div>
         <div className="text-[11px] text-gray-400">
-          {ratio != null && `${ratio}%`} · 영영 안지급
+          {ratio != null && `${ratio}%`}
         </div>
       </div>
     );
@@ -938,7 +937,7 @@ function PaymentStatusField({
     >
       <option value="pending">⏳ 예정 / 대기</option>
       <option value="completed">✓ 지급 완료</option>
-      <option value="skipped">✗ 미지급 (영영 안지급)</option>
+      <option value="skipped">✗ 미지급</option>
     </select>
   );
 }
