@@ -37,28 +37,36 @@ const COMMITTEE_DIVISION_HEAD = '이광수';
 const COMMITTEE_CO1 = '안민혁';
 
 interface FormState {
+  // 위원회 구성
+  pl_name: string;            // projects.pl — 자동 파싱, 수정 가능
+  // 캠페인 운영 일정
+  won_date: string;           // 수주 확정 일자 = projects.first_payment_date
+  campaign_end_date: string;  // 캠페인 운영 종료 예상일 = projects.second_payment_date
   // 총 예산 및 수수료
-  r_value: string;         // 숫자만 (원 단위) — 문자열로 보관해 입력 UX 자연스럽게
-  commission_pct: string;  // 0~100 (%), 소숫점 2자리까지
-  budget_note: string;     // 위원회 참고 메모
+  r_value: string;            // 콤마 표시용 — 내부적으로 숫자 문자열 (콤마 제거)
+  commission_pct: string;     // 0~100 (%), 소숫점 2자리
+  budget_note: string;
   // 케이스 + 의견 페어
-  client_importance_case: string;     // '1' | '2'
+  client_importance_case: string;
   client_importance: string;
-  rfp_route_case: string;             // '1' ~ '5'
+  rfp_route_case: string;
   rfp_route: string;
-  prep_effort_case: string;           // '1' ~ '3'
+  prep_effort_case: string;
   prep_effort: string;
-  bidding_difficulty_case: string;    // '1' ~ '3'
+  bidding_difficulty_case: string;
   bidding_difficulty: string;
-  proposal_resource_case: string;     // '1' ~ '3'
+  proposal_resource_case: string;
   proposal_resource: string;
-  external_expert_case: string;       // '해당없음' | '해당됨'
+  external_expert_case: string;
   external_expert: string;
-  stop_risk_case: string;             // '1' ~ '3'
+  stop_risk_case: string;
   stop_risk: string;
 }
 
 const EMPTY_FORM: FormState = {
+  pl_name: '',
+  won_date: '',
+  campaign_end_date: '',
   r_value: '',
   commission_pct: '',
   budget_note: '',
@@ -78,6 +86,13 @@ const EMPTY_FORM: FormState = {
   stop_risk: '',
 };
 
+// 천단위 콤마 표시 ↔ 숫자 문자열 변환 헬퍼
+const onlyDigits = (s: string) => s.replace(/[^\d]/g, '');
+const withCommas = (digits: string) => {
+  if (!digits) return '';
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+};
+
 // 판단 사유 7개 — 케이스 선택 + 정성적 의견 입력
 type JudgmentField = {
   caseKey: keyof FormState;
@@ -93,10 +108,14 @@ const JUDGMENT_FIELDS: JudgmentField[] = [
     noteKey: 'client_importance',
     label: '고객 중요도',
     cases: [
-      { value: '1', label: '1. 대형·우선군 내 신규 고객사' },
-      { value: '2', label: '2. 당장 수주 수익은 적지만 레퍼런스로 확장 기회' },
+      { value: '1', label: '1. 높음. 산업군 내 상위 고객사임' },
+      {
+        value: '2',
+        label:
+          '2. 높음. 예상 수익은 적지만 이 고객사를 레퍼런스 삼아 더 큰 기업 영업해볼 수 있음',
+      },
     ],
-    guide: '회사적 의미있는 고객사 / 레퍼런스 가치 여부.',
+    guide: '자사에 의미있는 고객사 / 레퍼런스 가치.',
   },
   {
     caseKey: 'rfp_route_case',
@@ -104,32 +123,34 @@ const JUDGMENT_FIELDS: JudgmentField[] = [
     label: '세일즈 케이스 (RFP 수취 루트)',
     cases: [
       { value: '1', label: '1. PL이 직접 RFP 수취' },
-      { value: '2', label: '2. 인센종TF에서 RFP 수취' },
-      { value: '3', label: '3. 기존 고객사 연장 빌딩 (운영팀에서 수취)' },
-      { value: '4', label: '4. 경영진이 별도 수단 통해 수취 — PL 역할 미미' },
-      { value: '5', label: '5. 인바운드로 인지' },
+      { value: '2', label: '2. 세일즈TF에서 RFP 수취' },
+      { value: '3', label: '3. 기존 고객사 연장 비딩 (기존 고객사 운영팀에서 수취)' },
+      { value: '4', label: '4. 경영진이 별도 영업 통해 수취, 수주과정에서 PL의 역할은 미미함' },
+      { value: '5', label: '5. 인바운드로 인입' },
     ],
     guide: 'RFP 수취 과정에서 수주PJ팀의 기여도.',
   },
   {
     caseKey: 'prep_effort_case',
     noteKey: 'prep_effort',
-    label: '사전 작업 정도',
+    label: '사전 영업 정도',
     cases: [
-      { value: '1', label: '1. PL/인센종TF가 지속적으로 사전 작업을 해옴' },
-      { value: '2', label: '2. 일부 사전 작업이 있었음' },
-      { value: '3', label: '3. 사전 작업이 거의 없었음' },
+      { value: '1', label: '1. PL/세일즈TF가 지속적으로 사전 영업을 해왔음' },
+      { value: '2', label: '2. 사전영업이 이뤄졌다고 보기 어려움' },
     ],
-    guide: '사전 작업이 얼마나 누적되어 있었는가.',
+    guide: '사전 영업이 얼마나 되어있는가.',
   },
   {
     caseKey: 'bidding_difficulty_case',
     noteKey: 'bidding_difficulty',
     label: '비딩 난이도',
     cases: [
-      { value: '1', label: '1. 경쟁 비딩 — 관계도 낮은 고객사, 기존 대행사 대비 어려움' },
-      { value: '2', label: '2. 경쟁 비딩 — 우선 후보로 선정, 수주 가능성 높음' },
-      { value: '3', label: '3. 단독 비딩 / 간단한 제안서로 종결 가능성' },
+      {
+        value: '1',
+        label: '1. 경쟁 비딩 — 우리와 관계도가 적은 고객사이고 기존 대행사와의 경쟁에서 이겨야 함',
+      },
+      { value: '2', label: '2. 경쟁 비딩 — 우선협상 대상자로 선정되어 수주 가능성 높은 편' },
+      { value: '3', label: '3. 단독 비딩, 간단한 제안서로 종결 가능성 있음' },
     ],
     guide: '비딩 경쟁 측면에서 우리에게 유리(용이)한 상황인지.',
   },
@@ -138,9 +159,16 @@ const JUDGMENT_FIELDS: JudgmentField[] = [
     noteKey: 'proposal_resource',
     label: '제안 리소스',
     cases: [
-      { value: '1', label: '1. 컨텐츠가 중요 — 리서치/수수료 결정까지 철저한 준비 필요' },
-      { value: '2', label: '2. 회사(임원) 다양한 관여가 중요' },
-      { value: '3', label: '3. 수수료율에 민감 — 수수료 수준에 따라 결정' },
+      {
+        value: '1',
+        label: '1. 제안 컨텐츠가 중요하고, 리서치부터 수수료율 결정까지 철저한 준비가 필요',
+      },
+      { value: '2', label: '2. 회사(자사)의 네임밸류가 중요함' },
+      {
+        value: '3',
+        label:
+          '3. (제안 내용 보다는) 수수료율에 민감히 반응하는 건이라 수수료율 수준에 따라 수주여부가 결정됨',
+      },
     ],
     guide: '제안 리소스가 어느 만큼 들어가는가.',
   },
@@ -159,11 +187,15 @@ const JUDGMENT_FIELDS: JudgmentField[] = [
     noteKey: 'stop_risk',
     label: '실집행 가능성',
     cases: [
-      { value: '1', label: '1. 특이사항 없음 — 전체 매출이 중지될 가능성 높음' },
-      { value: '2', label: '2. 2개 이상 대행사 선정 후 중지될 가능성 있음' },
-      { value: '3', label: '3. 2년 계약 / 연속 중지 예정' },
+      { value: '1', label: '1. 특이사항 없음. 전체 총 예산이 실집행 될 가능성 높음' },
+      {
+        value: '2',
+        label:
+          '2. 업계 특성상 2개 이상의 대행사를 선정하는 등의 사유로 이후에 실집행이 안될 가능성이 높음',
+      },
+      { value: '3', label: '3. 2년 계약건으로 내년에도 비딩없이 연속해서 실집행 될 예정임' },
     ],
-    guide: '진행될 확률이 낮은(이력이 있는) 광고주인지 + 산업 특성 고려.',
+    guide: '진행될 확률이 낮은(이력이 있는) 광고주인지 + 제안/산업 특성 고려.',
   },
 ];
 
@@ -257,14 +289,17 @@ function PLProjectFormPageInner() {
           }))
         );
         const f = j.form ?? {};
-        // R값/수수료는 projects 테이블이 진실의 원천 — form 안엔 별도 저장 안 함.
+        // projects 테이블이 진실의 원천 — 양식 진입 시 그 값을 기본으로 채움.
         const p = j.project ?? {};
-        const rValueStr = p.r_value != null ? String(p.r_value) : '';
+        const rValueStr = p.r_value != null ? withCommas(String(p.r_value)) : '';
         const commissionPctStr =
           typeof p.commission === 'number'
             ? (Math.round(p.commission * 10000) / 100).toString()
             : '';
         setForm({
+          pl_name: p.pl ?? '',
+          won_date: p.first_payment_date ?? '',
+          campaign_end_date: p.second_payment_date ?? '',
           r_value: rValueStr,
           commission_pct: commissionPctStr,
           budget_note: f.budget_note ?? '',
@@ -337,8 +372,9 @@ function PLProjectFormPageInner() {
       return;
     }
 
-    // R값 / 수수료 % 검증 — 빈값 허용
-    const rValueNum = form.r_value === '' ? null : Number(form.r_value);
+    // R값 (콤마 제거 후 숫자) / 수수료 % 검증 — 빈값 허용
+    const rValueDigits = onlyDigits(form.r_value);
+    const rValueNum = rValueDigits === '' ? null : Number(rValueDigits);
     if (rValueNum !== null && (!Number.isFinite(rValueNum) || rValueNum < 0)) {
       setError('R값은 0 이상의 숫자만 입력 가능합니다.');
       return;
@@ -350,11 +386,27 @@ function PLProjectFormPageInner() {
       return;
     }
 
+    // 캠페인 일정 — 빈값 허용하지만 형식 검사
+    const isYmd = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+    if (form.won_date && !isYmd(form.won_date)) {
+      setError('수주 확정 일자 형식이 올바르지 않습니다.');
+      return;
+    }
+    if (form.campaign_end_date && !isYmd(form.campaign_end_date)) {
+      setError('캠페인 운영 종료 예상일 형식이 올바르지 않습니다.');
+      return;
+    }
+
     setSaving(true);
     try {
       const payload = {
         members: cleaned,
         form: {
+          // 위원회 구성 — PL 이름
+          pl_name: form.pl_name.trim(),
+          // 캠페인 일정
+          won_date: form.won_date || null,
+          campaign_end_date: form.campaign_end_date || null,
           // 총 예산/수수료
           r_value: rValueNum,
           commission_pct: commissionNum,
@@ -477,9 +529,27 @@ function PLProjectFormPageInner() {
               </p>
             </div>
 
-            {/* 1) 참여 멤버 및 기여도 */}
+            {/* ① 위원회 구성 — 부문대표/C.O1 고정, PL 자동 파싱(수정 가능) */}
             <Card>
-              <CardHeader title="① 참여 멤버 및 기여도" />
+              <CardHeader
+                title="① 위원회 구성"
+                subtitle="부문대표·C.O1은 고정값입니다. 프로젝트 리더는 자동으로 채워지며 필요 시 수정할 수 있습니다."
+              />
+              <div className="grid grid-cols-3 gap-4">
+                <FixedField label="부문대표" value={COMMITTEE_DIVISION_HEAD} />
+                <FixedField label="C.O1" value={COMMITTEE_CO1} />
+                <Field
+                  label="프로젝트 리더 (PL)"
+                  value={form.pl_name}
+                  onChange={v => setForm(f => ({ ...f, pl_name: v }))}
+                  placeholder="이름"
+                />
+              </div>
+            </Card>
+
+            {/* ② 참여 멤버 및 기여도 */}
+            <Card>
+              <CardHeader title="② 참여 멤버 및 기여도" />
               <div className="grid grid-cols-4 gap-3 text-xs mb-3">
                 <Stat label="멤버" value={`${members.length}명`} />
                 <Stat
@@ -599,27 +669,36 @@ function PLProjectFormPageInner() {
               </p>
             </Card>
 
-            {/* 2) 위원회 구성 — 고정값 */}
+            {/* ③ 캠페인 운영 일정 */}
             <Card>
-              <CardHeader title="② 위원회 구성" subtitle="현재 정책상 고정 — 변경 시 운영팀 확인 필요" />
+              <CardHeader
+                title="③ 캠페인 운영 일정"
+                subtitle="반드시 작성해주시기 바랍니다. (수주 확정 일자 = 1차 지급일 / 캠페인 운영 종료 예상일 = 2차 지급일)"
+              />
               <div className="grid grid-cols-2 gap-4">
-                <FixedField label="부문대표" value={COMMITTEE_DIVISION_HEAD} />
-                <FixedField label="C.O1" value={COMMITTEE_CO1} />
+                <DateField
+                  label="수주 확정 일자"
+                  value={form.won_date}
+                  onChange={v => setForm(f => ({ ...f, won_date: v }))}
+                />
+                <DateField
+                  label="캠페인 운영 종료 예상일"
+                  value={form.campaign_end_date}
+                  onChange={v => setForm(f => ({ ...f, campaign_end_date: v }))}
+                />
               </div>
             </Card>
 
-            {/* 3) 총 예산 및 수수료 */}
+            {/* ④ 총 예산 및 수수료 */}
             <Card>
-              <CardHeader title="③ 총 예산 및 수수료" subtitle="R값과 수수료율은 위원회 판단의 기초 자료가 됩니다." />
+              <CardHeader title="④ 총 예산 및 수수료" subtitle="R값과 수수료율은 위원회 판단의 기초 자료가 됩니다." />
               <div className="grid grid-cols-2 gap-4">
-                <NumberField
+                <CommaNumberField
                   label="R값"
                   value={form.r_value}
                   onChange={v => setForm(f => ({ ...f, r_value: v }))}
                   suffix="원"
-                  step="1"
-                  min={0}
-                  placeholder="예: 50000000"
+                  placeholder="예: 6,000,000"
                 />
                 <NumberField
                   label="수수료"
@@ -642,10 +721,10 @@ function PLProjectFormPageInner() {
               </div>
             </Card>
 
-            {/* 4) 판단 사유 7개 — 케이스 선택 + 정성적 의견 */}
+            {/* ⑤ 인센티브 지급 판단 사유 */}
             <Card>
               <CardHeader
-                title="④ 인센티브 이송 및 지급 시기 판단 사유"
+                title="⑤ 인센티브 지급 판단 사유"
                 subtitle="각 항목에 해당하는 케이스를 선택하고 정성적 의견을 자유롭게 입력해 주세요."
               />
               <div className="space-y-5">
@@ -728,6 +807,94 @@ function Stat({
     </div>
   );
 }
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      <label className="text-[11px] font-semibold text-gray-500 mb-1 block">{label}</label>
+      <input
+        type="text"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+      />
+    </div>
+  );
+}
+
+function DateField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div>
+      <label className="text-[11px] font-semibold text-gray-500 mb-1 block">
+        {label} <span className="text-[10px] text-gray-400 font-normal">(yyyy. mm. dd)</span>
+      </label>
+      <input
+        type="date"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 tabular-nums"
+      />
+    </div>
+  );
+}
+
+// 천단위 콤마 표시 입력 — 사용자가 보는 동안 자동으로 콤마 추가
+function CommaNumberField({
+  label,
+  value,
+  onChange,
+  suffix,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  suffix?: string;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      <label className="text-[11px] font-semibold text-gray-500 mb-1 block">{label}</label>
+      <div className="relative">
+        <input
+          type="text"
+          inputMode="numeric"
+          value={value}
+          onChange={e => {
+            const digits = onlyDigits(e.target.value);
+            onChange(withCommas(digits));
+          }}
+          placeholder={placeholder}
+          className="w-full px-3 py-2 pr-10 text-sm border border-gray-200 rounded-md tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+        />
+        {suffix && (
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
+            {suffix}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function FixedField({ label, value }: { label: string; value: string }) {
   return (
     <div>

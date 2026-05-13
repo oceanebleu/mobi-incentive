@@ -90,7 +90,9 @@ export async function GET(
   const [projRes, memRes, formRes] = await Promise.all([
     supabase
       .from('projects')
-      .select('id, campaign_name, submitted_at, r_value, commission, team, pl, category, pl_completed')
+      .select(
+        'id, campaign_name, submitted_at, r_value, commission, team, pl, category, pl_completed, first_payment_date, second_payment_date'
+      )
       .eq('id', params.id)
       .single(),
     supabase
@@ -203,16 +205,36 @@ export async function PUT(
     .upsert(formRow, { onConflict: 'project_id' });
   if (formErr) return NextResponse.json({ error: formErr.message, stage: 'pl-form' }, { status: 500 });
 
-  // 3) projects 업데이트 — r_value/commission 동기화 + pl_completed=true
-  //    PL이 양식에서 수정한 값이 진실의 원천. (수수료는 UI에서 % 단위로 받지만 저장은 fraction)
+  // 3) projects 업데이트 — PL 이름·일정·R값·수수료 동기화 + pl_completed=true
+  //    PL이 양식에서 수정한 값이 진실의 원천.
   const projectsPatch: any = { pl_completed: true };
-  if (formInput?.r_value !== undefined && formInput.r_value !== '') {
+
+  // PL 이름 — 비어있지 않을 때만 반영
+  if (typeof formInput?.pl_name === 'string' && formInput.pl_name.trim() !== '') {
+    projectsPatch.pl = formInput.pl_name.trim();
+  }
+  // 수주 확정 일자 → first_payment_date / 캠페인 운영 종료 예상일 → second_payment_date
+  //   빈 문자열 또는 null 이면 NULL 로 클리어
+  if ('won_date' in (formInput ?? {})) {
+    projectsPatch.first_payment_date = formInput.won_date || null;
+  }
+  if ('campaign_end_date' in (formInput ?? {})) {
+    projectsPatch.second_payment_date = formInput.campaign_end_date || null;
+  }
+  // R값 — 숫자
+  if (formInput?.r_value !== undefined && formInput.r_value !== null && formInput.r_value !== '') {
     const rv = Number(formInput.r_value);
     if (Number.isFinite(rv) && rv >= 0) projectsPatch.r_value = Math.round(rv);
   }
-  if (formInput?.commission_pct !== undefined && formInput.commission_pct !== '') {
+  // 수수료 (% → fraction)
+  if (
+    formInput?.commission_pct !== undefined &&
+    formInput.commission_pct !== null &&
+    formInput.commission_pct !== ''
+  ) {
     const cp = Number(formInput.commission_pct);
-    if (Number.isFinite(cp) && cp >= 0) projectsPatch.commission = Math.round(cp * 100) / 10000; // 5.25% → 0.0525
+    if (Number.isFinite(cp) && cp >= 0)
+      projectsPatch.commission = Math.round(cp * 100) / 10000; // 5.25% → 0.0525
   }
   const { error: updErr } = await supabase
     .from('projects')
