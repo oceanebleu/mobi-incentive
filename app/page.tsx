@@ -62,7 +62,7 @@ export default function DashboardPage() {
     [memberSummaries]
   );
 
-  // 단계별 카운트 + 프로젝트 분류 (PL 작성대기 / 재원확정 필요 리스트용)
+  // 단계별 카운트 + 프로젝트 분류 (PL 작성대기 / 재원확정 필요 리스트용 + 단계 박스 드릴다운용)
   //   · PL 작성대기 : 수주실패·대행종료 제외 (PL 기여도 더 받을 이유 없음)
   //   · 재원확정 필요: 수주성공(WON) 한정 — 재원은 수주가 확정돼야 의미가 있으므로
   const stageGroups = useMemo(() => {
@@ -73,6 +73,14 @@ export default function DashboardPage() {
       FIRST_PAID: 0,
       ALL_PAID: 0,
     };
+    // 단계별 전체 프로젝트 — 박스 클릭 시 노출용 (분포 그대로 보여줘야 함, 필터 X)
+    const byStage: Record<PaymentStage, SupabaseProject[]> = {
+      PL_PENDING: [],
+      PL_COMPLETED: [],
+      FUND_CONFIRMED: [],
+      FIRST_PAID: [],
+      ALL_PAID: [],
+    };
     const plPending: SupabaseProject[] = [];
     const plDoneFundNeeded: SupabaseProject[] = [];
     const isInactive = (p: SupabaseProject) =>
@@ -80,6 +88,7 @@ export default function DashboardPage() {
     for (const p of projects) {
       const stage = paymentStageOf(p);
       c[stage]++;
+      byStage[stage].push(p);
       if (stage === 'PL_PENDING' && !isInactive(p)) {
         plPending.push(p);
       } else if (stage === 'PL_COMPLETED' && p.acquisition_status === 'WON') {
@@ -91,9 +100,39 @@ export default function DashboardPage() {
       (a.submitted_at ?? '').localeCompare(b.submitted_at ?? '');
     plPending.sort(byOldest);
     plDoneFundNeeded.sort(byOldest);
-    return { counts: c, plPending, plDoneFundNeeded };
+    for (const s of Object.keys(byStage) as PaymentStage[]) byStage[s].sort(byOldest);
+    return { counts: c, byStage, plPending, plDoneFundNeeded };
   }, [projects]);
   const stageCounts = stageGroups.counts;
+
+  // 클릭한 단계(또는 '전체')의 프로젝트를 보여주는 모달
+  type DrillKey = PaymentStage | 'ALL';
+  const [drillStage, setDrillStage] = useState<DrillKey | null>(null);
+  const drillProjects: SupabaseProject[] = useMemo(() => {
+    if (!drillStage) return [];
+    if (drillStage === 'ALL') {
+      return [...projects].sort((a, b) =>
+        (a.submitted_at ?? '').localeCompare(b.submitted_at ?? '')
+      );
+    }
+    return stageGroups.byStage[drillStage];
+  }, [drillStage, projects, stageGroups]);
+  const drillLabel = drillStage === 'ALL' ? '전체 프로젝트' : drillStage ? PAYMENT_STAGE_LABEL[drillStage] : '';
+
+  // 수주성공(WON) 내 신규/연장 분포
+  const wonBreakdown = useMemo(() => {
+    let neu = 0;
+    let ext = 0;
+    let other = 0;
+    for (const p of projects) {
+      if (p.acquisition_status !== 'WON') continue;
+      const c = (p.category ?? '').trim();
+      if (c === '신규') neu++;
+      else if (c === '연장') ext++;
+      else other++;
+    }
+    return { 신규: neu, 연장: ext, 기타: other };
+  }, [projects]);
 
   // 기준일 — 사용자 로컬 기준 yyyy. mm. dd
   const baseDateLabel = useMemo(
@@ -157,7 +196,7 @@ export default function DashboardPage() {
     {
       label: '1차 지급 완료 비율',
       value: `${stats.firstPayRatio.toFixed(1)}%`,
-      sub: `위원회 진행 ${stats.fundConfirmedCount}건 중 ${stats.firstPaidCount}건`,
+      sub: `재원확정 ${stats.fundConfirmedCount}건 중 ${stats.firstPaidCount}건 완료 · 전체 ${stats.totalProjects}건`,
       icon: TrendingUp,
       colorCls: 'text-emerald-700',
       bgCls: 'bg-emerald-50',
@@ -166,7 +205,7 @@ export default function DashboardPage() {
     {
       label: '1~2차 지급 완료 비율',
       value: `${stats.allPayRatio.toFixed(1)}%`,
-      sub: `위원회 진행 ${stats.fundConfirmedCount}건 중 총 ${stats.allPaidCount}건`,
+      sub: `재원확정 ${stats.fundConfirmedCount}건 중 ${stats.allPaidCount}건 모두 완료 · 전체 ${stats.totalProjects}건`,
       icon: CheckCircle,
       colorCls: 'text-sky-700',
       bgCls: 'bg-sky-50',
@@ -225,12 +264,18 @@ export default function DashboardPage() {
 
           {/* 3 × 2 — 전체 / PL작성대기 / PL작성완료 / 재원확정완료 / 1차 지급완료 / 전체 지급완료 */}
           <div className="grid grid-cols-3 gap-3">
-            <StageTile label="전체" value={stats.totalProjects} highlight />
+            <StageTile
+              label="전체"
+              value={stats.totalProjects}
+              highlight
+              onClick={() => setDrillStage('ALL')}
+            />
             {(Object.keys(PAYMENT_STAGE_LABEL) as PaymentStage[]).map(stage => (
               <StageTile
                 key={stage}
                 label={PAYMENT_STAGE_LABEL[stage]}
                 value={stageCounts[stage]}
+                onClick={() => setDrillStage(stage)}
               />
             ))}
           </div>
@@ -251,16 +296,36 @@ export default function DashboardPage() {
             {Object.entries(stats.stageCounts)
               .sort((a, b) => b[1] - a[1])
               .map(([key, count]) => (
-                <div key={key} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className={clsx('w-2 h-2 rounded-full', acqDotColor(key))}
-                    />
-                    <span className="text-xs text-gray-500">
-                      {ACQUISITION_LABEL[key] ?? key}
-                    </span>
+                <div key={key}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={clsx('w-2 h-2 rounded-full', acqDotColor(key))}
+                      />
+                      <span className="text-xs text-gray-500">
+                        {ACQUISITION_LABEL[key] ?? key}
+                      </span>
+                    </div>
+                    <span className="text-sm font-semibold text-gray-800">{count}건</span>
                   </div>
-                  <span className="text-sm font-semibold text-gray-800">{count}건</span>
+                  {key === 'WON' && count > 0 && (
+                    <div className="ml-4 mt-1 flex items-center gap-2 text-[11px] text-gray-400">
+                      <span className="inline-flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-300" />
+                        신규 {wonBreakdown.신규}건
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-300" />
+                        연장 {wonBreakdown.연장}건
+                      </span>
+                      {wonBreakdown.기타 > 0 && (
+                        <span className="inline-flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+                          기타 {wonBreakdown.기타}건
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
           </div>
@@ -284,7 +349,7 @@ export default function DashboardPage() {
           icon={Coins}
           tone="indigo"
           title="재원확정 필요"
-          hint="수주성공 · PL 작성 완료 — 위원회 재원확정만 남음"
+          hint="수주성공 건 중 PL 작성 완료 건"
           projects={stageGroups.plDoneFundNeeded}
         />
       </div>
@@ -390,6 +455,15 @@ export default function DashboardPage() {
           </table>
         </div>
       </div>
+
+      {/* 단계 박스 드릴다운 모달 */}
+      {drillStage && (
+        <StageDrillModal
+          title={drillLabel}
+          projects={drillProjects}
+          onClose={() => setDrillStage(null)}
+        />
+      )}
     </div>
   );
 }
@@ -412,23 +486,34 @@ function acqDotColor(key: string): string {
   }
 }
 
-// 지급 단계 타일 — 동일 크기로 3×2 그리드에 배치
+// 지급 단계 타일 — 동일 크기로 3×2 그리드에 배치 (클릭 시 해당 단계 프로젝트 모달)
 function StageTile({
   label,
   value,
   highlight,
+  onClick,
 }: {
   label: string;
   value: number;
   highlight?: boolean;
+  onClick?: () => void;
 }) {
+  const clickable = !!onClick && value > 0;
   return (
-    <div
+    <button
+      type="button"
+      onClick={clickable ? onClick : undefined}
+      disabled={!clickable}
       className={clsx(
-        'rounded-lg border px-4 py-3 text-center',
+        'rounded-lg border px-4 py-3 text-center transition-colors',
         highlight
           ? 'border-blue-100 bg-blue-50/60'
-          : 'border-gray-100 bg-gray-50/50'
+          : 'border-gray-100 bg-gray-50/50',
+        clickable
+          ? highlight
+            ? 'hover:bg-blue-100 cursor-pointer'
+            : 'hover:bg-gray-100 cursor-pointer'
+          : 'cursor-default'
       )}
     >
       <p className={clsx('text-[11px] truncate', highlight ? 'text-blue-700' : 'text-gray-500')}>
@@ -443,6 +528,89 @@ function StageTile({
         {value}
         {highlight && <span className="text-xs font-semibold ml-0.5">건</span>}
       </p>
+    </button>
+  );
+}
+
+// 단계 박스 클릭 시 뜨는 프로젝트 리스트 모달
+function StageDrillModal({
+  title,
+  projects,
+  onClose,
+}: {
+  title: string;
+  projects: SupabaseProject[];
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{projects.length}건 — 제출일 오래된 순</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-700 text-xl leading-none"
+            aria-label="닫기"
+          >
+            ×
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-3 py-3">
+          {projects.length === 0 ? (
+            <div className="text-center text-sm text-gray-400 py-10">해당 단계 프로젝트가 없습니다</div>
+          ) : (
+            <div className="space-y-1">
+              {projects.map(p => (
+                <Link
+                  key={p.id}
+                  href={`/projects/${p.id}`}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-100 hover:bg-gray-50/70 hover:border-gray-200 transition-colors group"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-medium text-gray-900 truncate group-hover:text-blue-700">
+                        {p.campaign_name}
+                      </span>
+                      {p.acquisition_status && (
+                        <span
+                          className={clsx(
+                            'text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap',
+                            p.acquisition_status === 'WON'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : p.acquisition_status === 'LOST'
+                              ? 'bg-red-100 text-red-700'
+                              : p.acquisition_status === 'CANCELLED'
+                              ? 'bg-gray-200 text-gray-600'
+                              : 'bg-amber-100 text-amber-700'
+                          )}
+                        >
+                          {ACQUISITION_LABEL[p.acquisition_status] ?? p.acquisition_status}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                      <span>{p.id}</span>
+                      {p.team && <span>· {p.team}</span>}
+                      {p.pl && <span>· PL {p.pl}</span>}
+                      {p.submitted_at && <span>· 제출 {p.submitted_at}</span>}
+                    </div>
+                  </div>
+                  <ChevronRight size={14} className="text-gray-300 group-hover:text-blue-400 flex-shrink-0" />
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
