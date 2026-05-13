@@ -411,6 +411,7 @@ function ProjectModal({
     pl_completed: project?.pl_completed ?? false,
     fund_confirmed: project?.fund_confirmed ?? false,
     incentive_fund: project?.incentive_fund ?? 0,
+    fund_rate: (project as any)?.fund_rate ?? (project?.category === '신규' ? 0.02 : 0.01),
     first_payment_date: project?.first_payment_date ?? '',
     first_payment_ratio: project?.first_payment_ratio ?? 60,
     first_payment_completed: project?.first_payment_completed ?? false,
@@ -453,6 +454,13 @@ function ProjectModal({
       'note',
     ]) {
       if (payload[k] === '') payload[k] = null;
+    }
+    // 인센티브 재원 자동 계산 — R값 × 수수료 × fund_rate
+    {
+      const rv = Number(form.r_value) || 0;
+      const cm = Number(form.commission) || 0;
+      const fr = Number(form.fund_rate) || 0;
+      payload.incentive_fund = Math.round(rv * cm * fr);
     }
 
     try {
@@ -542,7 +550,13 @@ function ProjectModal({
               <Field label="구분">
                 <select
                   value={form.category ?? ''}
-                  onChange={e => set('category', e.target.value)}
+                  onChange={e => {
+                    const v = e.target.value;
+                    set('category', v);
+                    // 구분 변경 시 fund_rate 자동 조정 (수정 가능)
+                    if (v === '신규') set('fund_rate' as any, 0.02 as any);
+                    else if (v === '연장') set('fund_rate' as any, 0.01 as any);
+                  }}
                   className={inputCls}
                 >
                   <option value="">선택</option>
@@ -614,18 +628,30 @@ function ProjectModal({
                   className={inputCls}
                 />
               </Field>
-              <Field label="인센티브 재원 (원)">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={form.incentive_fund ? withCommas(form.incentive_fund) : ''}
-                  onChange={e => {
-                    const digits = e.target.value.replace(/[^0-9]/g, '');
-                    set('incentive_fund', digits ? Number(digits) : 0);
-                  }}
-                  placeholder="0"
+              <Field label="구분 → 재원율">
+                <select
+                  value={String(form.fund_rate)}
+                  onChange={e => set('fund_rate' as any, Number(e.target.value) as any)}
                   className={inputCls}
-                />
+                  title="연장 = 1% / 신규 = 2% (자동 적용되지만 수정 가능)"
+                >
+                  <option value="0.01">1% (연장 기본)</option>
+                  <option value="0.02">2% (신규 기본)</option>
+                </select>
+              </Field>
+              <Field label="인센티브 재원 (자동 계산)">
+                <div className={clsx(inputCls, 'bg-gray-50 text-gray-700 cursor-not-allowed tabular-nums')}>
+                  {(() => {
+                    const rv = Number(form.r_value) || 0;
+                    const cm = Number(form.commission) || 0;
+                    const fr = Number(form.fund_rate) || 0;
+                    const calc = Math.round(rv * cm * fr);
+                    return `${withCommas(calc)} 원`;
+                  })()}
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1">
+                  R값 × 수수료 × 재원율
+                </p>
               </Field>
             </div>
           </Section>

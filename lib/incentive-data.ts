@@ -25,6 +25,10 @@ export interface SupabaseProjectMember {
   first_paid_at: string | null;
   second_amount: number;
   second_paid_at: string | null;
+  // PL 양식에서 입력
+  role: string | null;       // 'PL' | 'PJ'
+  team_name: string | null;  // 마케팅1팀, Creative.Lab 등
+  duty: string | null;       // 담당 업무 상세
 }
 
 export interface SupabaseProject {
@@ -53,6 +57,7 @@ export interface SupabaseProject {
   campaign_end_date: string | null;
   category: string | null;
   note: string | null;
+  fund_rate: number | null; // 0.01 (연장) | 0.02 (신규) — 수정 가능
   members: SupabaseProjectMember[];
 }
 

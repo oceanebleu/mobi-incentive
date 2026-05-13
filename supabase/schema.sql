@@ -119,6 +119,9 @@ create table if not exists public.projects (
   category                    text,                            -- V: 연장/신규
   note                        text,                            -- W: 지급 특이사항
   source_proposal_id          bigint,                          -- proposals.id에서 승격된 경우
+  -- 인센티브 재원율 (= R값 × 수수료 × fund_rate 로 incentive_fund 자동 계산)
+  --   연장 = 0.01 (1%) · 신규 = 0.02 (2%) — 수정 가능
+  fund_rate                   numeric not null default 0.01,
   created_at                  timestamptz not null default now(),
   updated_at                  timestamptz not null default now()
 );
@@ -152,6 +155,10 @@ create table if not exists public.project_members (
   first_paid_at          date,
   second_amount          bigint not null default 0,
   second_paid_at         date,
+  -- PL 양식에서 입력하는 메타
+  role                   text,    -- 'PL' | 'PJ' (직책 구분)
+  team_name              text,    -- '마케팅1팀' | 'Creative.Lab' 등
+  duty                   text,    -- 담당 업무 상세 (정성적)
   created_at             timestamptz not null default now(),
   updated_at             timestamptz not null default now(),
   unique(project_id, member_name)

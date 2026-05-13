@@ -30,7 +30,37 @@ interface MemberRow {
   first_paid_at: string | null;
   second_amount: number;
   second_paid_at: string | null;
+  role: string;       // 'PL' | 'PJ'
+  team_name: string;  // 팀명
+  duty: string;       // 담당 업무 상세
 }
+
+// 멤버 행 — 팀 드롭다운 옵션
+const TEAM_OPTIONS = [
+  '마케팅1팀',
+  '마케팅2팀',
+  '마케팅3팀',
+  '마케팅4팀',
+  '마케팅5팀',
+  '마케팅6팀',
+  'Creative.Lab',
+  '세일즈TFT',
+  'CC',
+  'AI Tech Lab',
+  'R&D',
+];
+const ROLE_OPTIONS = [
+  { value: 'PL', label: 'PL' },
+  { value: 'PJ', label: 'PJ팀원' },
+];
+
+// 인센티브 재원율 — 카테고리에 따른 기본값 (UI는 PL이 수정 불가, 관리자만 수정)
+const FUND_RATE_BY_CATEGORY: Record<string, number> = {
+  연장: 0.01,
+  신규: 0.02,
+};
+const defaultFundRate = (category: string | null | undefined) =>
+  FUND_RATE_BY_CATEGORY[(category ?? '').trim()] ?? 0.01;
 
 // 위원회 구성 — 현재 정책상 고정값 (변경 필요 시 한 곳만 수정)
 const COMMITTEE_DIVISION_HEAD = '이광수';
@@ -286,6 +316,9 @@ function PLProjectFormPageInner() {
             first_paid_at: m.first_paid_at ?? null,
             second_amount: Number(m.second_amount) || 0,
             second_paid_at: m.second_paid_at ?? null,
+            role: m.role ?? '',
+            team_name: m.team_name ?? '',
+            duty: m.duty ?? '',
           }))
         );
         const f = j.form ?? {};
@@ -327,8 +360,36 @@ function PLProjectFormPageInner() {
     () => members.reduce((s, r) => s + (Number.isFinite(r.contribution) ? r.contribution : 0), 0),
     [members]
   );
-  const firstTotal = useMemo(() => members.reduce((s, r) => s + (r.first_amount || 0), 0), [members]);
-  const secondTotal = useMemo(() => members.reduce((s, r) => s + (r.second_amount || 0), 0), [members]);
+
+  // 인센티브 총 재원 = R값 × 수수료 × fund_rate (구분에 따라 1%/2%)
+  //   PL 화면에선 자동 계산만 표시. 수정 권한은 관리자.
+  const fundRate = useMemo(() => {
+    if (project && typeof (project as any).fund_rate === 'number') {
+      return (project as any).fund_rate as number;
+    }
+    return defaultFundRate(project?.category);
+  }, [project]);
+  const incentiveFund = useMemo(() => {
+    const rv = Number(onlyDigits(form.r_value));
+    const cm = form.commission_pct === '' ? NaN : Number(form.commission_pct);
+    if (!Number.isFinite(rv) || rv <= 0) return 0;
+    if (!Number.isFinite(cm) || cm <= 0) return 0;
+    return Math.round(rv * (cm / 100) * fundRate);
+  }, [form.r_value, form.commission_pct, fundRate]);
+
+  // 1차/2차 지급 비율 (기본 60/40)
+  const firstRatio = Number(project?.first_payment_ratio ?? 60);
+  const secondRatio = Number(project?.second_payment_ratio ?? 40);
+
+  // 회차별 멤버 자동 분배 (기여도 × 비율)
+  const firstTotal = useMemo(
+    () => Math.round((incentiveFund * firstRatio) / 100),
+    [incentiveFund, firstRatio]
+  );
+  const secondTotal = useMemo(
+    () => Math.round((incentiveFund * secondRatio) / 100),
+    [incentiveFund, secondRatio]
+  );
 
   function updateRow(i: number, patch: Partial<MemberRow>) {
     setMembers(prev => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
@@ -344,6 +405,9 @@ function PLProjectFormPageInner() {
         first_paid_at: null,
         second_amount: 0,
         second_paid_at: null,
+        role: 'PJ',
+        team_name: '',
+        duty: '',
       },
     ]);
   }
@@ -355,9 +419,18 @@ function PLProjectFormPageInner() {
     if (saving) return;
     setError(null);
 
+    // 자동 분배: 1차 = incentiveFund × ratio% × contribution/100, 2차 = 동일 공식
     const cleaned = members
       .map(m => ({ ...m, member_name: m.member_name.trim() }))
-      .filter(m => m.member_name !== '');
+      .filter(m => m.member_name !== '')
+      .map(m => {
+        const share = (Number(m.contribution) || 0) / 100;
+        return {
+          ...m,
+          first_amount: Math.round(firstTotal * share),
+          second_amount: Math.round(secondTotal * share),
+        };
+      });
 
     if (cleaned.length === 0) {
       setError('참여 멤버를 최소 한 명 이상 입력해 주세요.');
@@ -529,13 +602,13 @@ function PLProjectFormPageInner() {
               </p>
             </div>
 
-            {/* ① 위원회 구성 — 부문대표/C.O1 고정, PL 자동 파싱(수정 가능) */}
+            {/* ① 위원회 구성 — 부문대표/C.O1 고정, PL/캠페인 구분 자동 파싱 */}
             <Card>
               <CardHeader
                 title="① 위원회 구성"
                 subtitle="부문대표·C.O1은 고정값입니다. 프로젝트 리더는 자동으로 채워지며 필요 시 수정할 수 있습니다."
               />
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-4 gap-4">
                 <FixedField label="부문대표" value={COMMITTEE_DIVISION_HEAD} />
                 <FixedField label="C.O1" value={COMMITTEE_CO1} />
                 <Field
@@ -544,38 +617,76 @@ function PLProjectFormPageInner() {
                   onChange={v => setForm(f => ({ ...f, pl_name: v }))}
                   placeholder="이름"
                 />
+                <FixedField label="캠페인 구분" value={project.category ?? '-'} />
               </div>
             </Card>
 
             {/* ② 참여 멤버 및 기여도 */}
             <Card>
-              <CardHeader title="② 참여 멤버 및 기여도" />
-              <div className="grid grid-cols-4 gap-3 text-xs mb-3">
+              <CardHeader
+                title="② 참여 멤버 및 기여도"
+                subtitle={`인센티브 총 재원 = R값 × 수수료 × ${(fundRate * 100).toFixed(0)}% (${project.category ?? '-'})`}
+              />
+              <div className="grid grid-cols-5 gap-3 text-xs mb-3">
                 <Stat label="멤버" value={`${members.length}명`} />
                 <Stat
                   label="기여도 합계"
                   value={`${totalContribution}%`}
                   tone={totalContribution === 100 ? 'good' : 'warn'}
                 />
-                <Stat label="1차 합계" value={firstTotal.toLocaleString('en-US') + '원'} />
-                <Stat label="2차 합계" value={secondTotal.toLocaleString('en-US') + '원'} />
+                <Stat
+                  label="인센티브 총 재원"
+                  value={incentiveFund.toLocaleString('en-US') + '원'}
+                  tone="good"
+                />
+                <Stat label="1차 지급 총액" value={firstTotal.toLocaleString('en-US') + '원'} />
+                <Stat label="2차 지급 총액" value={secondTotal.toLocaleString('en-US') + '원'} />
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[560px]">
+                <table className="w-full text-sm min-w-[960px]">
                   <thead>
                     <tr className="text-[11px] text-gray-400 uppercase tracking-wide">
+                      <th className="text-left pb-2 font-medium w-24">구분</th>
+                      <th className="text-left pb-2 font-medium w-32">팀</th>
                       <th className="text-left pb-2 font-medium">이름</th>
-                      <th className="text-center pb-2 font-medium w-20">팀계정</th>
+                      <th className="text-center pb-2 font-medium w-16">팀계정</th>
+                      <th className="text-left pb-2 font-medium">담당 업무 상세</th>
                       <th className="text-right pb-2 font-medium w-24">기여도(%)</th>
-                      <th className="text-right pb-2 font-medium w-36">1차 금액</th>
-                      <th className="text-right pb-2 font-medium w-36">2차 금액</th>
                       <th className="w-8" />
                     </tr>
                   </thead>
                   <tbody>
                     {members.map((r, i) => (
                       <tr key={i} className="border-t border-gray-100">
+                        <td className="py-2 pr-2">
+                          <select
+                            value={r.role}
+                            onChange={e => updateRow(i, { role: e.target.value })}
+                            className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md bg-white"
+                          >
+                            <option value="">선택</option>
+                            {ROLE_OPTIONS.map(o => (
+                              <option key={o.value} value={o.value}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="py-2 pr-2">
+                          <select
+                            value={r.team_name}
+                            onChange={e => updateRow(i, { team_name: e.target.value })}
+                            className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md bg-white"
+                          >
+                            <option value="">선택</option>
+                            {TEAM_OPTIONS.map(t => (
+                              <option key={t} value={t}>
+                                {t}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
                         <td className="py-2 pr-2">
                           <input
                             type="text"
@@ -595,32 +706,21 @@ function PLProjectFormPageInner() {
                         </td>
                         <td className="py-2 pr-2">
                           <input
+                            type="text"
+                            value={r.duty}
+                            onChange={e => updateRow(i, { duty: e.target.value })}
+                            placeholder="예: 전략 수립, RFP 분석"
+                            className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md"
+                          />
+                        </td>
+                        <td className="py-2 pr-2">
+                          <input
                             type="number"
                             value={r.contribution}
                             onChange={e => updateRow(i, { contribution: Number(e.target.value) })}
                             min={0}
                             max={100}
                             step="0.1"
-                            className="w-full px-2 py-1.5 text-sm text-right border border-gray-200 rounded-md tabular-nums"
-                          />
-                        </td>
-                        <td className="py-2 pr-2">
-                          <input
-                            type="number"
-                            value={r.first_amount}
-                            onChange={e => updateRow(i, { first_amount: Number(e.target.value) })}
-                            min={0}
-                            step="1"
-                            className="w-full px-2 py-1.5 text-sm text-right border border-gray-200 rounded-md tabular-nums"
-                          />
-                        </td>
-                        <td className="py-2 pr-2">
-                          <input
-                            type="number"
-                            value={r.second_amount}
-                            onChange={e => updateRow(i, { second_amount: Number(e.target.value) })}
-                            min={0}
-                            step="1"
                             className="w-full px-2 py-1.5 text-sm text-right border border-gray-200 rounded-md tabular-nums"
                           />
                         </td>
@@ -647,6 +747,7 @@ function PLProjectFormPageInner() {
               </button>
               <p className="text-[11px] text-gray-400 mt-3">
                 ※ 크리에이티브 팀명은 반드시 'Creative.Lab' 으로 작성해 주세요. (팀계정 체크박스 ON)
+                <br />※ 1차/2차 지급액은 위 'R값 × 수수료 × {(fundRate * 100).toFixed(0)}%'와 기여도에 따라 자동 계산되어 저장됩니다.
                 <br />※ 합계가 100% 인지 확인 후 저장해 주세요.
               </p>
             </Card>

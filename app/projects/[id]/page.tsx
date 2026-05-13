@@ -334,7 +334,25 @@ type MemberDraft = {
   first_paid_at: string | null;
   second_amount: number;
   second_paid_at: string | null;
+  role: string;
+  team_name: string;
+  duty: string;
 };
+
+// PL 양식과 동일한 팀 옵션
+const ADMIN_TEAM_OPTIONS = [
+  '마케팅1팀',
+  '마케팅2팀',
+  '마케팅3팀',
+  '마케팅4팀',
+  '마케팅5팀',
+  '마케팅6팀',
+  'Creative.Lab',
+  '세일즈TFT',
+  'CC',
+  'AI Tech Lab',
+  'R&D',
+];
 
 const makeUid = (() => {
   let n = 0;
@@ -351,6 +369,9 @@ function toDraft(m: SupabaseProjectMember): MemberDraft {
     first_paid_at: m.first_paid_at,
     second_amount: m.second_amount,
     second_paid_at: m.second_paid_at,
+    role: m.role ?? '',
+    team_name: m.team_name ?? '',
+    duty: m.duty ?? '',
   };
 }
 
@@ -412,6 +433,9 @@ function MembersEditModal({
         first_paid_at: null,
         second_amount: 0,
         second_paid_at: null,
+        role: 'PJ',
+        team_name: '',
+        duty: '',
       },
     ]);
   }
@@ -457,6 +481,9 @@ function MembersEditModal({
         first_paid_at: r.first_paid_at || null,
         second_amount: Number(r.second_amount) || 0,
         second_paid_at: r.second_paid_at || null,
+        role: r.role || null,
+        team_name: r.team_name || null,
+        duty: r.duty || null,
       })),
     };
 
@@ -525,29 +552,55 @@ function MembersEditModal({
 
         {/* 행 리스트 */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm min-w-[1200px]">
             <thead>
               <tr className="text-[11px] text-gray-400 uppercase tracking-wide">
+                <th className="text-left pb-2 font-medium w-20">구분</th>
+                <th className="text-left pb-2 font-medium w-32">팀</th>
                 <th className="text-left pb-2 font-medium">이름</th>
-                <th className="text-center pb-2 font-medium w-20">팀계정</th>
-                <th className="text-right pb-2 font-medium w-24">기여도(%)</th>
-                <th className="text-right pb-2 font-medium w-40">1차 금액</th>
-                <th className="text-right pb-2 font-medium w-44">1차 지급일</th>
-                <th className="text-right pb-2 font-medium w-40">2차 금액</th>
-                <th className="text-right pb-2 font-medium w-44">2차 지급일</th>
+                <th className="text-center pb-2 font-medium w-14">팀계정</th>
+                <th className="text-left pb-2 font-medium w-56">담당 업무</th>
+                <th className="text-right pb-2 font-medium w-20">기여도(%)</th>
+                <th className="text-right pb-2 font-medium w-32">1차 금액</th>
+                <th className="text-right pb-2 font-medium w-36">1차 지급일</th>
+                <th className="text-right pb-2 font-medium w-32">2차 금액</th>
+                <th className="text-right pb-2 font-medium w-36">2차 지급일</th>
                 <th className="w-10" />
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-8 text-gray-400">
+                  <td colSpan={11} className="text-center py-8 text-gray-400">
                     멤버가 없습니다. 아래 [멤버 추가]를 눌러 행을 추가하세요.
                   </td>
                 </tr>
               ) : (
                 rows.map(r => (
                   <tr key={r.uid} className="border-t border-gray-100">
+                    <td className="py-2 pr-2">
+                      <select
+                        value={r.role}
+                        onChange={e => updateRow(r.uid, { role: e.target.value })}
+                        className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                      >
+                        <option value="">선택</option>
+                        <option value="PL">PL</option>
+                        <option value="PJ">PJ팀원</option>
+                      </select>
+                    </td>
+                    <td className="py-2 pr-2">
+                      <select
+                        value={r.team_name}
+                        onChange={e => updateRow(r.uid, { team_name: e.target.value })}
+                        className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                      >
+                        <option value="">선택</option>
+                        {ADMIN_TEAM_OPTIONS.map(t => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                    </td>
                     <td className="py-2 pr-2">
                       <input
                         list="member-name-suggestions"
@@ -564,6 +617,15 @@ function MembersEditModal({
                         checked={r.is_team_account}
                         onChange={e => updateRow(r.uid, { is_team_account: e.target.checked })}
                         className="w-4 h-4 accent-emerald-600"
+                      />
+                    </td>
+                    <td className="py-2 pr-2">
+                      <input
+                        type="text"
+                        value={r.duty}
+                        onChange={e => updateRow(r.uid, { duty: e.target.value })}
+                        placeholder="예: 전략 수립, RFP 분석"
+                        className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                       />
                     </td>
                     <td className="py-2 pr-2">

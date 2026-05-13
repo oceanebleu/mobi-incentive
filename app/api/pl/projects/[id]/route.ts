@@ -91,7 +91,7 @@ export async function GET(
     supabase
       .from('projects')
       .select(
-        'id, campaign_name, submitted_at, r_value, commission, team, pl, category, pl_completed, first_payment_date, second_payment_date'
+        'id, campaign_name, submitted_at, r_value, commission, team, pl, category, pl_completed, first_payment_date, second_payment_date, first_payment_ratio, second_payment_ratio, fund_rate, incentive_fund'
       )
       .eq('id', params.id)
       .single(),
@@ -157,6 +157,12 @@ export async function PUT(
         first_paid_at: m?.first_paid_at || null,
         second_amount: Number(m?.second_amount) || 0,
         second_paid_at: m?.second_paid_at || null,
+        role: typeof m?.role === 'string' && m.role.trim() !== '' ? m.role.trim() : null,
+        team_name:
+          typeof m?.team_name === 'string' && m.team_name.trim() !== ''
+            ? m.team_name.trim()
+            : null,
+        duty: typeof m?.duty === 'string' && m.duty.trim() !== '' ? m.duty : null,
       }))
       .filter(r => r.member_name !== '');
     if (rows.length > 0) {
@@ -236,6 +242,25 @@ export async function PUT(
     if (Number.isFinite(cp) && cp >= 0)
       projectsPatch.commission = Math.round(cp * 100) / 10000; // 5.25% → 0.0525
   }
+
+  // 인센티브 재원 자동 계산 = R값 × 수수료 × fund_rate
+  //   r_value/commission 은 위에서 갱신했거나 기존 값을 사용
+  const { data: cur } = await supabase
+    .from('projects')
+    .select('r_value, commission, fund_rate, category')
+    .eq('id', params.id)
+    .maybeSingle();
+  const rvFinal =
+    projectsPatch.r_value ?? (cur?.r_value as number | null) ?? null;
+  const cmFinal =
+    projectsPatch.commission ?? (cur?.commission as number | null) ?? null;
+  let frFinal =
+    (cur?.fund_rate as number | null) ??
+    (cur?.category === '신규' ? 0.02 : 0.01);
+  if (rvFinal != null && cmFinal != null && Number.isFinite(frFinal)) {
+    projectsPatch.incentive_fund = Math.round(rvFinal * cmFinal * frFinal);
+  }
+
   const { error: updErr } = await supabase
     .from('projects')
     .update(projectsPatch)
