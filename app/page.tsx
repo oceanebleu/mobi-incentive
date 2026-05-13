@@ -63,8 +63,8 @@ export default function DashboardPage() {
   );
 
   // 단계별 카운트 + 프로젝트 분류 (PL 작성대기 / 재원확정 필요 리스트용)
-  //   액션 리스트(plPending / plDoneFundNeeded)는 수주실패·대행종료 프로젝트 제외 —
-  //   PL 기여도를 더 받을 이유도, 재원을 확정할 이유도 없는 건들이라 처리 대기 상태로 노출하면 혼란만 줌
+  //   · PL 작성대기 : 수주실패·대행종료 제외 (PL 기여도 더 받을 이유 없음)
+  //   · 재원확정 필요: 수주성공(WON) 한정 — 재원은 수주가 확정돼야 의미가 있으므로
   const stageGroups = useMemo(() => {
     const c: Record<PaymentStage, number> = {
       PL_PENDING: 0,
@@ -80,9 +80,11 @@ export default function DashboardPage() {
     for (const p of projects) {
       const stage = paymentStageOf(p);
       c[stage]++;
-      if (isInactive(p)) continue;
-      if (stage === 'PL_PENDING') plPending.push(p);
-      else if (stage === 'PL_COMPLETED') plDoneFundNeeded.push(p);
+      if (stage === 'PL_PENDING' && !isInactive(p)) {
+        plPending.push(p);
+      } else if (stage === 'PL_COMPLETED' && p.acquisition_status === 'WON') {
+        plDoneFundNeeded.push(p);
+      }
     }
     // 가장 오래 멈춰있던 순(제출일 오래된 순) 표시 — 처리 압박이 높은 것부터
     const byOldest = (a: SupabaseProject, b: SupabaseProject) =>
@@ -282,7 +284,7 @@ export default function DashboardPage() {
           icon={Coins}
           tone="indigo"
           title="재원확정 필요"
-          hint="PL 작성 완료 — 위원회 재원확정만 남음"
+          hint="수주성공 · PL 작성 완료 — 위원회 재원확정만 남음"
           projects={stageGroups.plDoneFundNeeded}
         />
       </div>
