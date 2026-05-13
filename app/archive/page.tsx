@@ -70,7 +70,11 @@ interface ArchiveRow {
   updated_at: string;
 }
 
-type Tab = 'PENDING' | 'PROMOTED';
+type Tab = 'PENDING' | 'PROMOTED' | 'LOST';
+
+// 입찰상태가 수주실패인지 — 시트 표기 변형 흡수 (공백 제거 후 substring)
+const isLostStatus = (s: string | null | undefined) =>
+  !!s && s.replace(/\s/g, '').includes('수주실패');
 
 const withCommas = (n: number) => {
   const s = String(Math.round(n));
@@ -122,9 +126,8 @@ export default function ArchivePage() {
       if (!res.ok) throw new Error(json?.error ?? '동기화 실패');
       setLastSync(
         `시트 ${json.fetched}행 / A=FALSE 제외 ${json.skippedFalse}행 / ` +
-          `수주실패 제외 ${json.skippedLost ?? 0}행 / ` +
           `이미 프로젝트로 등록 ${json.skippedExistingProject ?? 0}건 / ` +
-          `기존 수주실패 정리 ${json.cleanedLost ?? 0}건 / ` +
+          `수주실패 ${json.lostCount ?? 0}건 (수주실패 탭으로 분류) / ` +
           `중복정리 ${json.deduped}건 / 신규 ${json.new}건 / 갱신 ${json.updated}건`
       );
       await load();
@@ -139,8 +142,8 @@ export default function ArchivePage() {
     if (row.promoted_project_id) return;
     if (
       !confirm(
-        `[${row.client_name}] 건을 운영위 프로젝트로 등록합니다.\n\n` +
-          `등록 후 프로젝트 관리 페이지에서 멤버 기여도·지급 단계를 입력할 수 있습니다.`
+        `[${row.client_name}] 건으로 프로젝트를 생성합니다.\n\n` +
+          `생성 후 프로젝트 관리 페이지에서 멤버 기여도·지급 단계를 입력할 수 있습니다.`
       )
     )
       return;
@@ -194,12 +197,19 @@ export default function ArchivePage() {
 
   // 등록 완료 = 정식 promote ∪ 수동 '이미 생성됨' 마크
   const isDone = (r: ArchiveRow) => !!r.promoted_project_id || r.marked_existing === true;
+  // 행 카테고리(우선순위): 등록완료 > 수주실패 > 미등록
+  //  · 운영위 시트 작성 요청 전에 이미 수주실패가 된 건은 별도 탭으로 분리
+  //  · 운영위 등록(promote/수동표시) 후 시트에서 수주실패로 바뀐 경우는 등록완료 그대로 유지
+  const tabOf = (r: ArchiveRow): Tab => {
+    if (isDone(r)) return 'PROMOTED';
+    if (isLostStatus(r.bidding_status)) return 'LOST';
+    return 'PENDING';
+  };
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter(r => {
-      if (tab === 'PENDING' && isDone(r)) return false;
-      if (tab === 'PROMOTED' && !isDone(r)) return false;
+      if (tabOf(r) !== tab) return false;
       if (!q) return true;
       const hay = [
         r.client_name,
@@ -222,15 +232,20 @@ export default function ArchivePage() {
     let pending = 0;
     let promoted = 0;
     let markedExisting = 0;
+    let lost = 0;
     for (const r of items) {
-      if (r.promoted_project_id) promoted++;
-      else if (r.marked_existing) markedExisting++;
+      const t = tabOf(r);
+      if (t === 'PROMOTED') {
+        if (r.promoted_project_id) promoted++;
+        else markedExisting++;
+      } else if (t === 'LOST') lost++;
       else pending++;
     }
     return {
       pending,
       promoted,
       markedExisting,
+      lost,
       done: promoted + markedExisting,
       total: items.length,
     };
@@ -289,11 +304,12 @@ export default function ArchivePage() {
       )}
 
       {/* 통계 */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-5 gap-3">
         <Stat label="전체" value={counts.total} />
-        <Stat label="운영위 대상 (미등록)" value={counts.pending} tone="amber" />
+        <Stat label="미등록 (운영위 대상)" value={counts.pending} tone="amber" />
         <Stat label="프로젝트로 등록됨" value={counts.promoted} tone="emerald" />
         <Stat label="수동 표시 (이미 생성됨)" value={counts.markedExisting} tone="gray" />
+        <Stat label="수주실패" value={counts.lost} tone="red" />
       </div>
 
       {/* 탭 */}
@@ -302,7 +318,7 @@ export default function ArchivePage() {
           active={tab === 'PENDING'}
           onClick={() => setTab('PENDING')}
           label="미등록"
-          hint="아직 운영위로 보내지 않은 건"
+          hint="수주실패 제외, 아직 운영위 등록 전"
           count={counts.pending}
         />
         <TabButton
@@ -311,6 +327,13 @@ export default function ArchivePage() {
           label="등록 완료"
           hint="정식 등록 + 수동 '이미 생성됨'"
           count={counts.done}
+        />
+        <TabButton
+          active={tab === 'LOST'}
+          onClick={() => setTab('LOST')}
+          label="수주실패"
+          hint="운영위 요청 전에 이미 실패된 건"
+          count={counts.lost}
         />
       </div>
 
@@ -380,7 +403,9 @@ export default function ArchivePage() {
                         ? '아직 동기화된 데이터가 없습니다. 우측 상단 [시트와 동기화]를 눌러주세요.'
                         : tab === 'PENDING'
                         ? '운영위 대상 미등록 건이 없습니다.'
-                        : '아직 등록된 프로젝트가 없습니다.'}
+                        : tab === 'PROMOTED'
+                        ? '아직 등록된 프로젝트가 없습니다.'
+                        : '수주실패로 분류된 건이 없습니다.'}
                     </p>
                   </td>
                 </tr>
@@ -453,6 +478,8 @@ export default function ArchivePage() {
                             {markingId === r.id ? '처리 중...' : '표시 해제'}
                           </button>
                         </div>
+                      ) : isLostStatus(r.bidding_status) ? (
+                        <span className="text-[11px] text-gray-400">진행 불필요 (수주실패)</span>
                       ) : (
                         <div className="flex flex-col gap-1.5">
                           <button
@@ -461,7 +488,7 @@ export default function ArchivePage() {
                             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-60 transition-colors whitespace-nowrap"
                           >
                             <ArrowRight size={12} />
-                            {promotingId === r.id ? '등록 중...' : '운영위로 보내기'}
+                            {promotingId === r.id ? '생성 중...' : '프로젝트 생성'}
                           </button>
                           <button
                             onClick={() => setMarkExisting(r, true)}
@@ -496,13 +523,14 @@ function Stat({
 }: {
   label: string;
   value: number;
-  tone?: 'default' | 'amber' | 'emerald' | 'gray';
+  tone?: 'default' | 'amber' | 'emerald' | 'gray' | 'red';
 }) {
   const toneCls: Record<string, string> = {
     default: 'text-gray-900',
     amber: 'text-amber-700',
     emerald: 'text-emerald-700',
     gray: 'text-gray-500',
+    red: 'text-red-700',
   };
   return (
     <div className="bg-white rounded-xl border border-gray-200 px-4 py-3">

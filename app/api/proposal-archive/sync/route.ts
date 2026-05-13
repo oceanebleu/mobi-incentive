@@ -2,10 +2,9 @@
 // POST /api/proposal-archive/sync
 // '제안서.2025 Ver' 시트 → proposal_archive 테이블 동기화.
 // 규칙:
-//   - A열(needs_committee) = TRUE 인 행만 upsert
-//   - 단, 입찰상태가 '수주실패'인 행은 운영위 대상에서 제외
-//   - 또한 projects.campaign_name 에 이미 존재하는 광고주는 제외
-//     (이미 프로젝트 관리로 진입한 건은 시트 동기화로 덮어쓰지 않음)
+//   - A열(needs_committee) = TRUE 인 행만 upsert (수주실패 포함 — UI에서 별도 탭으로 분리)
+//   - projects.campaign_name 에 이미 존재하는 광고주는 제외
+//     (이미 프로젝트 관리로 진입한 건은 시트 → archive 덮어쓰기 차단)
 //   - 광고주(client_name) 기준 upsert. 같은 client_name이면 덮어쓰기.
 //   - 시트에서 false로 바뀌었거나 사라진 행은 DB에서 자동 제거하지 않음
 //     (이력 보존; UI에서 수동 삭제 가능하도록 별도 엔드포인트로)
@@ -20,6 +19,9 @@ import { fetchProposalArchive } from '@/lib/google-sheets';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
+
+const isLost = (s: string | null) =>
+  !!s && s.replace(/\s/g, '').includes('수주실패');
 
 export async function POST() {
   const session = await getServerSession(authOptions);
@@ -39,18 +41,14 @@ export async function POST() {
     );
   }
 
-  // 2) A=TRUE 만 필터 + 수주실패 행 제외
+  // 2) A=TRUE 만 필터 (수주실패도 포함 — UI에서 별도 탭으로 노출)
   const aTrueRows = allRows.filter(r => r.needs_committee === true);
   const skippedFalse = allRows.length - aTrueRows.length;
-  const isLost = (s: string | null) =>
-    !!s && s.replace(/\s/g, '').includes('수주실패');
-  const afterLost = aTrueRows.filter(r => !isLost(r.bidding_status));
-  const skippedLost = aTrueRows.length - afterLost.length;
+  const lostCount = aTrueRows.filter(r => isLost(r.bidding_status)).length;
 
   const supabase = getSupabaseAdmin();
 
   // 3) projects.campaign_name 에 이미 있는 광고주는 동기화 후보에서 제외
-  //    (이미 프로젝트로 관리 중인 건은 시트 → archive 덮어쓰기 차단)
   const { data: existingProjects } = await supabase
     .from('projects')
     .select('campaign_name');
@@ -61,10 +59,10 @@ export async function POST() {
       .filter((n): n is string => !!n && n.trim() !== '')
       .map(normalize)
   );
-  const candidates = afterLost.filter(
+  const candidates = aTrueRows.filter(
     r => !existingProjectNames.has(normalize(r.client_name))
   );
-  const skippedExistingProject = afterLost.length - candidates.length;
+  const skippedExistingProject = aTrueRows.length - candidates.length;
 
   // 4) client_name 중복 처리 — 같은 광고주가 시트에 2번 이상 나오면 마지막 행 채택
   const dedupedByName = new Map<string, typeof candidates[number]>();
@@ -85,33 +83,7 @@ export async function POST() {
     else newCount++;
   }
 
-  // 6) 기존 archive 에 남아있던 '수주실패' 행도 정리 (이미 운영위 or 수동표시된 건은 보호)
-  const { data: legacyLost } = await supabase
-    .from('proposal_archive')
-    .select('id, bidding_status, promoted_project_id, marked_existing');
-  const lostIdsToDelete: number[] = [];
-  for (const row of legacyLost ?? []) {
-    const r = row as any;
-    if (!isLost(r.bidding_status)) continue;
-    if (r.promoted_project_id) continue;
-    if (r.marked_existing === true) continue;
-    lostIdsToDelete.push(r.id);
-  }
-  let cleanedLost = 0;
-  if (lostIdsToDelete.length > 0) {
-    const { error: delErr, count } = await supabase
-      .from('proposal_archive')
-      .delete({ count: 'exact' })
-      .in('id', lostIdsToDelete);
-    if (delErr) {
-      // 정리 실패는 치명적이지 않음 — 로그만 남기고 진행
-      console.error('[sync] legacy LOST cleanup failed:', delErr.message);
-    } else {
-      cleanedLost = count ?? lostIdsToDelete.length;
-    }
-  }
-
-  // 7) Upsert (client_name 기준)
+  // 6) Upsert (client_name 기준)
   const now = new Date().toISOString();
   const rows = toUpsert.map(r => ({ ...r, synced_at: now }));
 
@@ -133,9 +105,8 @@ export async function POST() {
     ok: true,
     fetched: allRows.length,
     skippedFalse,
-    skippedLost,
     skippedExistingProject,
-    cleanedLost,
+    lostCount,
     deduped: candidates.length - toUpsert.length,
     new: newCount,
     updated: updatedCount,
