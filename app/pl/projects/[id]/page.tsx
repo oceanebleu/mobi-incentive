@@ -655,17 +655,26 @@ function PLProjectFormPageInner() {
                 />
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[960px]">
+              <div>
+                <table className="w-full text-sm table-fixed">
+                  <colgroup>
+                    <col className="w-[68px]" />   {/* 구분 */}
+                    <col className="w-[108px]" />  {/* 팀 */}
+                    <col className="w-[100px]" />  {/* 이름 */}
+                    <col className="w-[44px]" />   {/* 팀계정 */}
+                    <col />                         {/* 담당 업무 — 가변 */}
+                    <col className="w-[80px]" />   {/* 기여도 */}
+                    <col className="w-[28px]" />   {/* 삭제 */}
+                  </colgroup>
                   <thead>
                     <tr className="text-[11px] text-gray-400 uppercase tracking-wide">
-                      <th className="text-left pb-2 font-medium w-24">구분</th>
-                      <th className="text-left pb-2 font-medium w-32">팀</th>
+                      <th className="text-left pb-2 font-medium">구분</th>
+                      <th className="text-left pb-2 font-medium">팀</th>
                       <th className="text-left pb-2 font-medium">이름</th>
-                      <th className="text-center pb-2 font-medium w-16">팀계정</th>
+                      <th className="text-center pb-2 font-medium">팀계정</th>
                       <th className="text-left pb-2 font-medium">담당 업무 상세</th>
-                      <th className="text-right pb-2 font-medium w-24">기여도(%)</th>
-                      <th className="w-8" />
+                      <th className="text-right pb-2 font-medium">기여도(%)</th>
+                      <th />
                     </tr>
                   </thead>
                   <tbody>
@@ -758,7 +767,7 @@ function PLProjectFormPageInner() {
                 멤버 추가
               </button>
               <p className="text-[11px] text-gray-400 mt-3">
-                ※ 크리에이티브 팀명은 반드시 'Creative.Lab' 으로 작성해 주세요. (팀계정 체크박스 ON)
+                ※ 팀명 'Creative.Lab' 을 선택하셨을 경우, 이름에도 반드시 동일하게 작성 부탁드리며, 팀 계정으로 체크해 주세요.
                 <br />※ 1차/2차 지급액은 위 'R값 × 수수료 × {(fundRate * 100).toFixed(0)}%'와 기여도에 따라 자동 계산되어 저장됩니다.
                 <br />※ 합계가 100% 인지 확인 후 저장해 주세요.
               </p>
