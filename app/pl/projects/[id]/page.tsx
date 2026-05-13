@@ -292,68 +292,72 @@ function PLProjectFormPageInner() {
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
 
-  useEffect(() => {
+  async function loadData() {
     if (!empId) return;
     setLoading(true);
     setError(null);
-    fetch(
-      `/api/pl/projects/${encodeURIComponent(projectId)}?emp=${encodeURIComponent(empId)}`,
-      { cache: 'no-store' }
-    )
-      .then(async r => {
-        const j = await r.json();
-        if (!r.ok) throw new Error(j?.error ?? '조회 실패');
-        return j;
-      })
-      .then(j => {
-        setProject(j.project);
-        setMembers(
-          (j.members ?? []).map((m: any) => ({
-            member_name: m.member_name ?? '',
-            is_team_account: !!m.is_team_account,
-            contribution: Number(m.contribution) || 0,
-            first_amount: Number(m.first_amount) || 0,
-            first_paid_at: m.first_paid_at ?? null,
-            second_amount: Number(m.second_amount) || 0,
-            second_paid_at: m.second_paid_at ?? null,
-            role: m.role ?? '',
-            team_name: m.team_name ?? '',
-            duty: m.duty ?? '',
-          }))
-        );
-        const f = j.form ?? {};
-        // projects 테이블이 진실의 원천 — 양식 진입 시 그 값을 기본으로 채움.
-        const p = j.project ?? {};
-        const rValueStr = p.r_value != null ? withCommas(String(p.r_value)) : '';
-        const commissionPctStr =
-          typeof p.commission === 'number'
-            ? (Math.round(p.commission * 10000) / 100).toString()
-            : '';
-        setForm({
-          pl_name: p.pl ?? '',
-          won_date: p.first_payment_date ?? '',
-          campaign_end_date: p.second_payment_date ?? '',
-          r_value: rValueStr,
-          commission_pct: commissionPctStr,
-          budget_note: f.budget_note ?? '',
-          client_importance_case: f.client_importance_case != null ? String(f.client_importance_case) : '',
-          client_importance: f.client_importance ?? '',
-          rfp_route_case: f.rfp_route_case != null ? String(f.rfp_route_case) : '',
-          rfp_route: f.rfp_route ?? '',
-          prep_effort_case: f.prep_effort_case != null ? String(f.prep_effort_case) : '',
-          prep_effort: f.prep_effort ?? '',
-          bidding_difficulty_case: f.bidding_difficulty_case != null ? String(f.bidding_difficulty_case) : '',
-          bidding_difficulty: f.bidding_difficulty ?? '',
-          proposal_resource_case: f.proposal_resource_case != null ? String(f.proposal_resource_case) : '',
-          proposal_resource: f.proposal_resource ?? '',
-          external_expert_case: f.external_expert_case ?? '',
-          external_expert: f.external_expert ?? '',
-          stop_risk_case: f.stop_risk_case != null ? String(f.stop_risk_case) : '',
-          stop_risk: f.stop_risk ?? '',
-        });
-      })
-      .catch(e => setError(e?.message ?? '오류'))
-      .finally(() => setLoading(false));
+    try {
+      const r = await fetch(
+        `/api/pl/projects/${encodeURIComponent(projectId)}?emp=${encodeURIComponent(empId)}`,
+        { cache: 'no-store' }
+      );
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error ?? '조회 실패');
+
+      setProject(j.project);
+      setMembers(
+        (j.members ?? []).map((m: any) => ({
+          member_name: m.member_name ?? '',
+          is_team_account: !!m.is_team_account,
+          contribution: Number(m.contribution) || 0,
+          first_amount: Number(m.first_amount) || 0,
+          first_paid_at: m.first_paid_at ?? null,
+          second_amount: Number(m.second_amount) || 0,
+          second_paid_at: m.second_paid_at ?? null,
+          role: m.role ?? '',
+          team_name: m.team_name ?? '',
+          duty: m.duty ?? '',
+        }))
+      );
+      const f = j.form ?? {};
+      const p = j.project ?? {};
+      const rValueStr = p.r_value != null ? withCommas(String(p.r_value)) : '';
+      const commissionPctStr =
+        typeof p.commission === 'number'
+          ? (Math.round(p.commission * 10000) / 100).toString()
+          : '';
+      setForm({
+        pl_name: p.pl ?? '',
+        won_date: p.first_payment_date ?? '',
+        campaign_end_date: p.second_payment_date ?? '',
+        r_value: rValueStr,
+        commission_pct: commissionPctStr,
+        budget_note: f.budget_note ?? '',
+        client_importance_case: f.client_importance_case != null ? String(f.client_importance_case) : '',
+        client_importance: f.client_importance ?? '',
+        rfp_route_case: f.rfp_route_case != null ? String(f.rfp_route_case) : '',
+        rfp_route: f.rfp_route ?? '',
+        prep_effort_case: f.prep_effort_case != null ? String(f.prep_effort_case) : '',
+        prep_effort: f.prep_effort ?? '',
+        bidding_difficulty_case: f.bidding_difficulty_case != null ? String(f.bidding_difficulty_case) : '',
+        bidding_difficulty: f.bidding_difficulty ?? '',
+        proposal_resource_case: f.proposal_resource_case != null ? String(f.proposal_resource_case) : '',
+        proposal_resource: f.proposal_resource ?? '',
+        external_expert_case: f.external_expert_case ?? '',
+        external_expert: f.external_expert ?? '',
+        stop_risk_case: f.stop_risk_case != null ? String(f.stop_risk_case) : '',
+        stop_risk: f.stop_risk ?? '',
+      });
+    } catch (e: any) {
+      setError(e?.message ?? '오류');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, empId]);
 
   const totalContribution = useMemo(
@@ -509,10 +513,19 @@ function PLProjectFormPageInner() {
           body: JSON.stringify(payload),
         }
       );
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error ?? '저장 실패');
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // 백엔드가 stage/hint 를 함께 내려주면 그대로 노출 — 어디서 실패했는지 즉시 파악
+        const parts: string[] = [];
+        if (json?.error) parts.push(json.error);
+        if (json?.stage) parts.push(`[단계: ${json.stage}]`);
+        if (json?.hint) parts.push(`힌트: ${json.hint}`);
+        throw new Error(parts.join(' · ') || `저장 실패 (HTTP ${res.status})`);
+      }
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2500);
+      // 저장 직후 서버 상태로 강제 재동기화 — 일부 단계만 성공했어도 화면에 정확히 반영
+      await loadData();
     } catch (e: any) {
       setError(e?.message ?? '저장 중 오류');
     } finally {

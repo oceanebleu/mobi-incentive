@@ -154,6 +154,12 @@ export async function PUT(
   const members: any[] = Array.isArray(body?.members) ? body.members : [];
   const formInput = body?.form ?? {};
 
+  // 0) pl_completed=true 우선 갱신 — 뒤 단계가 실패해도 작성완료 분류는 보장
+  await supabase
+    .from('projects')
+    .update({ pl_completed: true })
+    .eq('id', params.id);
+
   // 1) project_members 통째 교체 — 관리자 모달과 동일 정책
   const { error: delErr } = await supabase
     .from('project_members')

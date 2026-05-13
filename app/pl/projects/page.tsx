@@ -98,33 +98,18 @@ function PLProjectsPageInner() {
     return { pending, done };
   }, [projects]);
 
-  function logout() {
-    try {
-      localStorage.removeItem('mobi-pl-emp');
-    } catch {}
-    router.push('/pl');
-  }
-
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-3xl mx-auto px-5 py-8">
-        {/* 헤더 */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2">
-            <ShieldCheck size={18} className="text-blue-600" />
-            <div>
-              <h1 className="text-base font-bold text-gray-900">PL 양식 입력</h1>
-              <p className="text-xs text-gray-500">
-                {name ? `${name} 님 (${empId})` : `사번 ${empId}`}
-              </p>
-            </div>
+        {/* 헤더 — 본인 사번 외 접근 금지: '다른 사번으로' 진입 경로 제거 */}
+        <div className="flex items-center gap-2 mb-6">
+          <ShieldCheck size={18} className="text-blue-600" />
+          <div>
+            <h1 className="text-base font-bold text-gray-900">PL 양식 입력</h1>
+            <p className="text-xs text-gray-500">
+              {name ? `${name} 님 (${empId})` : `사번 ${empId}`}
+            </p>
           </div>
-          <button
-            onClick={logout}
-            className="text-xs text-gray-400 hover:text-gray-700"
-          >
-            다른 사번으로
-          </button>
         </div>
 
         {loading ? (
