@@ -658,13 +658,13 @@ function PLProjectFormPageInner() {
               <div>
                 <table className="w-full text-sm table-fixed">
                   <colgroup>
-                    <col className="w-[68px]" />   {/* 구분 */}
-                    <col className="w-[108px]" />  {/* 팀 */}
-                    <col className="w-[100px]" />  {/* 이름 */}
+                    <col className="w-[88px]" />   {/* 구분 */}
+                    <col className="w-[110px]" />  {/* 팀 */}
+                    <col className="w-[96px]" />   {/* 이름 */}
                     <col className="w-[44px]" />   {/* 팀계정 */}
                     <col />                         {/* 담당 업무 — 가변 */}
-                    <col className="w-[80px]" />   {/* 기여도 */}
-                    <col className="w-[28px]" />   {/* 삭제 */}
+                    <col className="w-[76px]" />   {/* 기여도 */}
+                    <col className="w-[24px]" />   {/* 삭제 */}
                   </colgroup>
                   <thead>
                     <tr className="text-[11px] text-gray-400 uppercase tracking-wide">
@@ -684,7 +684,7 @@ function PLProjectFormPageInner() {
                           <select
                             value={r.role}
                             onChange={e => updateRow(i, { role: e.target.value })}
-                            className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md bg-white"
+                            className="w-full pl-1.5 pr-1 py-1.5 text-xs border border-gray-200 rounded-md bg-white truncate"
                           >
                             <option value="">선택</option>
                             {ROLE_OPTIONS.map(o => (
@@ -698,7 +698,7 @@ function PLProjectFormPageInner() {
                           <select
                             value={r.team_name}
                             onChange={e => updateRow(i, { team_name: e.target.value })}
-                            className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md bg-white"
+                            className="w-full pl-1.5 pr-1 py-1.5 text-xs border border-gray-200 rounded-md bg-white truncate"
                           >
                             <option value="">선택</option>
                             {TEAM_OPTIONS.map(t => (
@@ -713,11 +713,11 @@ function PLProjectFormPageInner() {
                             type="text"
                             value={r.member_name}
                             onChange={e => updateRow(i, { member_name: e.target.value })}
-                            placeholder="이름 또는 팀 계정"
-                            className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md"
+                            placeholder="이름"
+                            className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-md"
                           />
                         </td>
-                        <td className="py-2 px-2 text-center">
+                        <td className="py-2 px-1 text-center">
                           <input
                             type="checkbox"
                             checked={r.is_team_account}
@@ -731,7 +731,7 @@ function PLProjectFormPageInner() {
                             value={r.duty}
                             onChange={e => updateRow(i, { duty: e.target.value })}
                             placeholder="예: 전략 수립, RFP 분석"
-                            className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md"
+                            className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-md"
                           />
                         </td>
                         <td className="py-2 pr-2">
@@ -742,7 +742,7 @@ function PLProjectFormPageInner() {
                             min={0}
                             max={100}
                             step="0.1"
-                            className="w-full px-2 py-1.5 text-sm text-right border border-gray-200 rounded-md tabular-nums"
+                            className="w-full px-2 py-1.5 text-xs text-right border border-gray-200 rounded-md tabular-nums"
                           />
                         </td>
                         <td className="py-2 text-center">
