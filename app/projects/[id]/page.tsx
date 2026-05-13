@@ -821,13 +821,12 @@ type PLFieldDef =
   | { kind: 'number'; key: string; label: string; suffix?: string; format?: 'krw' | 'pct' }
   | { kind: 'case'; caseKey: string; noteKey: string; label: string };
 
+// 관리자 화면 표시 — 부문대표/C.O1 은 고정값이라 가독성 위해 제외
 const PL_FORM_FIELDS: PLFieldDef[] = [
-  { kind: 'text', key: 'committee_division_head', label: '부문대표' },
-  { kind: 'text', key: 'committee_co1', label: 'C.O1' },
   { kind: 'text', key: 'budget_note', label: '총 예산 및 수수료 참고사항' },
   { kind: 'case', caseKey: 'client_importance_case', noteKey: 'client_importance', label: '고객 중요도' },
   { kind: 'case', caseKey: 'rfp_route_case', noteKey: 'rfp_route', label: '세일즈 케이스 (RFP 수취 루트)' },
-  { kind: 'case', caseKey: 'prep_effort_case', noteKey: 'prep_effort', label: '사전 작업 정도' },
+  { kind: 'case', caseKey: 'prep_effort_case', noteKey: 'prep_effort', label: '사전 영업 정도' },
   { kind: 'case', caseKey: 'bidding_difficulty_case', noteKey: 'bidding_difficulty', label: '비딩 난이도' },
   { kind: 'case', caseKey: 'proposal_resource_case', noteKey: 'proposal_resource', label: '제안 리소스' },
   { kind: 'case', caseKey: 'external_expert_case', noteKey: 'external_expert', label: '외부 전문가풀 사용 여부' },
@@ -914,53 +913,68 @@ function PLFormPanel({ projectId }: { projectId: string }) {
           )}
           {!loading && !error && hasAny && data && (
             <>
+              {/* 마지막 저장 메타 */}
               {data.last_saved_by_name && (
-                <p className="text-[11px] text-gray-400">
-                  마지막 저장 · {data.last_saved_by_name}
+                <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg text-[11px] text-gray-500 mb-1">
+                  <span className="font-semibold text-gray-600">마지막 저장</span>
+                  <span>·</span>
+                  <span>{data.last_saved_by_name}</span>
                   {data.last_saved_at && (
-                    <> · {new Date(data.last_saved_at).toLocaleString('ko-KR')}</>
+                    <>
+                      <span>·</span>
+                      <span className="tabular-nums">
+                        {new Date(data.last_saved_at).toLocaleString('ko-KR')}
+                      </span>
+                    </>
                   )}
-                </p>
+                </div>
               )}
-              <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                {PL_FORM_FIELDS.map(f => {
+
+              {/* 총 예산 메모 — 가로 전체 폭 */}
+              {(() => {
+                const v = (data as any).budget_note;
+                if (!v || (typeof v === 'string' && v.trim() === '')) return null;
+                return (
+                  <div className="bg-blue-50/50 border border-blue-100 rounded-lg px-4 py-3">
+                    <p className="text-[11px] font-semibold text-blue-600 mb-1">
+                      총 예산 및 수수료 참고사항
+                    </p>
+                    <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                      {v}
+                    </p>
+                  </div>
+                );
+              })()}
+
+              {/* 판단 사유 7개 — 2단 카드 그리드 */}
+              <div className="grid grid-cols-2 gap-3">
+                {PL_FORM_FIELDS.filter(f => f.kind === 'case').map(f => {
+                  if (f.kind !== 'case') return null;
                   if (!fieldHasValue(f)) return null;
-                  if (f.kind === 'case') {
-                    const rawCase = (data as any)[f.caseKey];
-                    const note = (data as any)[f.noteKey] ?? '';
-                    const caseStr = rawCase != null ? String(rawCase) : '';
-                    const labelMap = PL_CASE_LABELS[f.caseKey];
-                    const caseLabel =
-                      caseStr === ''
-                        ? null
-                        : labelMap?.[caseStr] ?? caseStr;
-                    return (
-                      <div key={f.label}>
-                        <p className="text-[11px] font-semibold text-gray-400 uppercase mb-1">
-                          {f.label}
-                        </p>
-                        {caseLabel && (
-                          <p className="text-sm font-medium text-blue-700 mb-0.5">
-                            {caseLabel}
-                          </p>
-                        )}
-                        {note && (
-                          <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
-                            {note}
-                          </p>
-                        )}
-                      </div>
-                    );
-                  }
-                  const v = (data as any)[f.key];
+                  const rawCase = (data as any)[f.caseKey];
+                  const note = (data as any)[f.noteKey] ?? '';
+                  const caseStr = rawCase != null ? String(rawCase) : '';
+                  const labelMap = PL_CASE_LABELS[f.caseKey];
+                  const caseLabel =
+                    caseStr === '' ? null : labelMap?.[caseStr] ?? caseStr;
                   return (
-                    <div key={f.key}>
-                      <p className="text-[11px] font-semibold text-gray-400 uppercase mb-1">
+                    <div
+                      key={f.label}
+                      className="bg-white border border-gray-200 rounded-lg px-4 py-3 hover:border-gray-300 transition-colors"
+                    >
+                      <p className="text-[11px] font-semibold text-gray-500 mb-2">
                         {f.label}
                       </p>
-                      <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
-                        {v}
-                      </p>
+                      {caseLabel && (
+                        <div className="inline-flex items-center px-2 py-1 mb-2 bg-blue-50 text-blue-700 text-xs font-semibold rounded">
+                          {caseLabel}
+                        </div>
+                      )}
+                      {note && (
+                        <p className="text-[13px] text-gray-700 whitespace-pre-wrap leading-relaxed">
+                          {note}
+                        </p>
+                      )}
                     </div>
                   );
                 })}
