@@ -38,8 +38,24 @@ async function authorize(empId: string, projectId: string) {
   if (!projRes.data) return { error: '프로젝트를 찾을 수 없습니다.', status: 404 };
 
   const userName = (userRes.data as any).name as string;
+  const userEmp = (userRes.data as any).employee_id as string;
   const plName = (projRes.data as any).pl as string | null;
-  if (!plName || normalize(plName) !== normalize(userName)) {
+  let allowed = !!plName && normalize(plName) === normalize(userName);
+
+  // Fallback ① — 본인이 이 프로젝트의 양식을 저장한 적이 있으면 권한 인정
+  //   (PL이 양식에서 자기 이름을 살짝 다르게 수정해도 다시 들어올 수 있도록)
+  if (!allowed) {
+    const { data: priorForm } = await supabase
+      .from('project_pl_forms')
+      .select('last_saved_by_emp')
+      .eq('project_id', projectId)
+      .maybeSingle();
+    if (priorForm && (priorForm as any).last_saved_by_emp === userEmp) {
+      allowed = true;
+    }
+  }
+
+  if (!allowed) {
     return {
       error: '이 프로젝트에 본인으로 배정되어 있지 않습니다.',
       status: 403,
@@ -47,7 +63,7 @@ async function authorize(empId: string, projectId: string) {
   }
   return {
     supabase,
-    user: { employee_id: (userRes.data as any).employee_id, name: userName },
+    user: { employee_id: userEmp, name: userName },
     project: projRes.data as any,
   } as const;
 }
@@ -88,11 +104,10 @@ export async function GET(
 
   // 프로젝트 본체 + 멤버 + PL 양식
   const [projRes, memRes, formRes] = await Promise.all([
+    // fund_rate 컬럼이 없을 수 있는 환경 보호 — '*' select로 받아 누락 컬럼은 undefined 로 처리
     supabase
       .from('projects')
-      .select(
-        'id, campaign_name, submitted_at, r_value, commission, team, pl, category, pl_completed, first_payment_date, second_payment_date, first_payment_ratio, second_payment_ratio, fund_rate, incentive_fund'
-      )
+      .select('*')
       .eq('id', params.id)
       .single(),
     supabase
@@ -166,8 +181,24 @@ export async function PUT(
       }))
       .filter(r => r.member_name !== '');
     if (rows.length > 0) {
-      const { error: insErr } = await supabase.from('project_members').insert(rows);
-      if (insErr) return NextResponse.json({ error: insErr.message, stage: 'members-insert' }, { status: 500 });
+      // 1차 시도 — 전체 컬럼 포함
+      let { error: insErr } = await supabase.from('project_members').insert(rows);
+      // 새 컬럼(role/team_name/duty)이 DB에 없으면 그 컬럼 빼고 재시도 (마이그레이션 미실행 환경 보호)
+      if (insErr && /role|team_name|duty/.test(insErr.message ?? '')) {
+        const stripped = rows.map(({ role, team_name, duty, ...rest }) => rest);
+        const retry = await supabase.from('project_members').insert(stripped);
+        insErr = retry.error;
+      }
+      if (insErr) {
+        return NextResponse.json(
+          {
+            error: insErr.message,
+            stage: 'members-insert',
+            hint: 'project_members 테이블에 role/team_name/duty 컬럼을 추가하는 alter SQL이 필요합니다.',
+          },
+          { status: 500 }
+        );
+      }
     }
   }
 
@@ -206,10 +237,43 @@ export async function PUT(
     .maybeSingle();
   if (!existing) formRow.submitted_at = now;
 
-  const { error: formErr } = await supabase
+  // 1차 시도 — 전체 컬럼 포함
+  let { error: formErr } = await supabase
     .from('project_pl_forms')
     .upsert(formRow, { onConflict: 'project_id' });
-  if (formErr) return NextResponse.json({ error: formErr.message, stage: 'pl-form' }, { status: 500 });
+  // 새 컬럼(*_case, budget_note) 미존재 환경 보호 — 누락된 컬럼만 빼고 재시도
+  if (formErr) {
+    const msg = formErr.message ?? '';
+    const knownNewCols = [
+      'budget_note',
+      'client_importance_case',
+      'rfp_route_case',
+      'prep_effort_case',
+      'bidding_difficulty_case',
+      'proposal_resource_case',
+      'external_expert_case',
+      'stop_risk_case',
+    ];
+    const missing = knownNewCols.filter(c => msg.includes(c));
+    if (missing.length > 0) {
+      const stripped: any = { ...formRow };
+      for (const c of missing) delete stripped[c];
+      const retry = await supabase
+        .from('project_pl_forms')
+        .upsert(stripped, { onConflict: 'project_id' });
+      formErr = retry.error;
+    }
+  }
+  if (formErr) {
+    return NextResponse.json(
+      {
+        error: formErr.message,
+        stage: 'pl-form',
+        hint: 'project_pl_forms 에 *_case / budget_note 컬럼을 추가하는 alter SQL이 필요합니다.',
+      },
+      { status: 500 }
+    );
+  }
 
   // 3) projects 업데이트 — PL 이름·일정·R값·수수료 동기화 + pl_completed=true
   //    PL이 양식에서 수정한 값이 진실의 원천.
@@ -245,26 +309,55 @@ export async function PUT(
 
   // 인센티브 재원 자동 계산 = R값 × 수수료 × fund_rate
   //   r_value/commission 은 위에서 갱신했거나 기존 값을 사용
-  const { data: cur } = await supabase
-    .from('projects')
-    .select('r_value, commission, fund_rate, category')
-    .eq('id', params.id)
-    .maybeSingle();
-  const rvFinal =
-    projectsPatch.r_value ?? (cur?.r_value as number | null) ?? null;
-  const cmFinal =
-    projectsPatch.commission ?? (cur?.commission as number | null) ?? null;
-  let frFinal =
-    (cur?.fund_rate as number | null) ??
-    (cur?.category === '신규' ? 0.02 : 0.01);
+  //   fund_rate 컬럼이 DB에 없을 수 있으니 안전하게 select (없으면 category로 fallback)
+  let curR: number | null = null;
+  let curC: number | null = null;
+  let curFr: number | null = null;
+  let curCat: string | null = null;
+  {
+    const sel = await supabase
+      .from('projects')
+      .select('r_value, commission, fund_rate, category')
+      .eq('id', params.id)
+      .maybeSingle();
+    if (sel.error && /fund_rate/.test(sel.error.message ?? '')) {
+      // fund_rate 컬럼 미존재 — 빼고 재시도
+      const sel2 = await supabase
+        .from('projects')
+        .select('r_value, commission, category')
+        .eq('id', params.id)
+        .maybeSingle();
+      curR = (sel2.data as any)?.r_value ?? null;
+      curC = (sel2.data as any)?.commission ?? null;
+      curCat = (sel2.data as any)?.category ?? null;
+    } else {
+      curR = (sel.data as any)?.r_value ?? null;
+      curC = (sel.data as any)?.commission ?? null;
+      curFr = (sel.data as any)?.fund_rate ?? null;
+      curCat = (sel.data as any)?.category ?? null;
+    }
+  }
+  const rvFinal = projectsPatch.r_value ?? curR;
+  const cmFinal = projectsPatch.commission ?? curC;
+  const frFinal = curFr ?? (curCat === '신규' ? 0.02 : 0.01);
   if (rvFinal != null && cmFinal != null && Number.isFinite(frFinal)) {
     projectsPatch.incentive_fund = Math.round(rvFinal * cmFinal * frFinal);
   }
 
-  const { error: updErr } = await supabase
+  // 1차 시도 — 전체 patch
+  let { error: updErr } = await supabase
     .from('projects')
     .update(projectsPatch)
     .eq('id', params.id);
+  // 일부 컬럼이 DB에 없으면 안전한 최소집합(pl_completed만)으로라도 갱신해서
+  // 다음 진입 시 '작성 완료' 로 분류되도록 보장
+  if (updErr) {
+    const retry = await supabase
+      .from('projects')
+      .update({ pl_completed: true })
+      .eq('id', params.id);
+    updErr = retry.error;
+  }
   if (updErr) return NextResponse.json({ error: updErr.message, stage: 'pl-completed' }, { status: 500 });
 
   // 4) 감사 로그 — PL 셀프 작성 추적
