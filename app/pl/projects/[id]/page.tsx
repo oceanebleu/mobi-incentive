@@ -623,10 +623,16 @@ function PLProjectFormPageInner() {
 
             {/* ② 참여 멤버 및 기여도 */}
             <Card>
-              <CardHeader
-                title="② 참여 멤버 및 기여도"
-                subtitle={`인센티브 총 재원 = R값 × 수수료 × ${(fundRate * 100).toFixed(0)}% (${project.category ?? '-'})`}
-              />
+              <div className="mb-4">
+                <h2 className="text-sm font-semibold text-gray-800">② 참여 멤버 및 기여도</h2>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  인센티브 총 재원 = R값 × 수수료 × {(fundRate * 100).toFixed(0)}% (
+                  {project.category ?? '-'})
+                </p>
+                <p className="text-[11px] text-amber-700 mt-0.5">
+                  ※ 1, 2차 지급 총액(비율)은 캠페인 상황 및 운영위원회 검토 결과에 따라 변동될 수 있습니다.
+                </p>
+              </div>
               <div className="grid grid-cols-5 gap-3 text-xs mb-3">
                 <Stat label="멤버" value={`${members.length}명`} />
                 <Stat
@@ -639,8 +645,14 @@ function PLProjectFormPageInner() {
                   value={incentiveFund.toLocaleString('en-US') + '원'}
                   tone="good"
                 />
-                <Stat label="1차 지급 총액" value={firstTotal.toLocaleString('en-US') + '원'} />
-                <Stat label="2차 지급 총액" value={secondTotal.toLocaleString('en-US') + '원'} />
+                <Stat
+                  label={`1차 지급 총액 (기본 ${firstRatio}%)`}
+                  value={firstTotal.toLocaleString('en-US') + '원'}
+                />
+                <Stat
+                  label={`2차 지급 총액 (기본 ${secondRatio}%)`}
+                  value={secondTotal.toLocaleString('en-US') + '원'}
+                />
               </div>
 
               <div className="overflow-x-auto">
