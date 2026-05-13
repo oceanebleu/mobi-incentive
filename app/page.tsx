@@ -124,6 +124,10 @@ export default function DashboardPage() {
   //   · 수주실패·대행종료 프로젝트 제외
   //   · 명시적 미지급(skipped)·이미 지급 완료(completed) 회차 제외
   //   · 지급예정일(planned date)이 오늘 이전이면 자동으로 사라지도록 미래만 포함
+  //
+  //  ※ 금액은 그 회차 멤버들의 first_amount(또는 second_amount) 단순 합 — '이 회차에 얼마가
+  //     나갈 예정인가' 를 그대로 보여주는 게 사용자 기대치. 개인별 지급 페이지에서 쓰는
+  //     멤버 단위 제외(퇴사·lwd 초과·이미 paid) 로직은 회차 총액과는 정책이 다르므로 적용 X.
   const upcomingPayments = useMemo(() => {
     const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
     type Row = {
@@ -137,64 +141,45 @@ export default function DashboardPage() {
     for (const p of projects) {
       if (p.acquisition_status === 'LOST' || p.acquisition_status === 'CANCELLED') continue;
 
-      // 멤버 회차 합산 — 같은 정책: 퇴사자 회차 제외, lwd 초과 제외
-      const sumForPhase = (which: 1 | 2): number => {
-        let s = 0;
-        for (const m of p.members) {
-          if (!m.is_team_account) {
-            const st = statusByName[m.member_name];
-            if (st === '퇴사') continue;
-          }
-          const lwd = !m.is_team_account ? lastWorkDateByName[m.member_name] ?? null : null;
-          const paidAt = which === 1 ? m.first_paid_at : m.second_paid_at;
-          if (lwd && paidAt && paidAt > lwd) continue;
-          // 이미 지급된 회차 제외 (paid_at 있고 오늘 이전)
-          if (paidAt && paidAt <= today) continue;
-          s += which === 1 ? m.first_amount : m.second_amount;
-        }
-        return s;
-      };
+      const sumFirst = p.members.reduce((s, m) => s + (m.first_amount || 0), 0);
+      const sumSecond = p.members.reduce((s, m) => s + (m.second_amount || 0), 0);
 
       // 1차
       if (
         !p.first_payment_completed &&
         !p.first_payment_skipped &&
         p.first_payment_date &&
-        p.first_payment_date >= today
+        p.first_payment_date >= today &&
+        sumFirst > 0
       ) {
-        const total = sumForPhase(1);
-        if (total > 0) {
-          rows.push({
-            projectId: p.id,
-            campaignName: p.campaign_name,
-            phase: 1,
-            plannedDate: p.first_payment_date,
-            total,
-          });
-        }
+        rows.push({
+          projectId: p.id,
+          campaignName: p.campaign_name,
+          phase: 1,
+          plannedDate: p.first_payment_date,
+          total: sumFirst,
+        });
       }
       // 2차
       if (
         !p.second_payment_completed &&
         !p.second_payment_skipped &&
         p.second_payment_date &&
-        p.second_payment_date >= today
+        p.second_payment_date >= today &&
+        sumSecond > 0
       ) {
-        const total = sumForPhase(2);
-        if (total > 0) {
-          rows.push({
-            projectId: p.id,
-            campaignName: p.campaign_name,
-            phase: 2,
-            plannedDate: p.second_payment_date,
-            total,
-          });
-        }
+        rows.push({
+          projectId: p.id,
+          campaignName: p.campaign_name,
+          phase: 2,
+          plannedDate: p.second_payment_date,
+          total: sumSecond,
+        });
       }
     }
     rows.sort((a, b) => a.plannedDate.localeCompare(b.plannedDate));
     return rows;
-  }, [projects, lastWorkDateByName, statusByName]);
+  }, [projects]);
 
   // 수주성공(WON) 내 신규/연장 분포
   const wonBreakdown = useMemo(() => {
