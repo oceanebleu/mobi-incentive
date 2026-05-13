@@ -89,7 +89,9 @@ export async function POST(
     commission: a.commission ?? null,
     team: teams[0] ?? null,
     pl: a.pl ?? null,
-    submitted_at: a.proposal_at ?? null,
+    // 제출일 = 시트 I열 '비딩 제출일자' (building_due_at).
+    //   I열이 비어있는 과거 행에 한해 H열(proposal_at)을 폴백으로 사용.
+    submitted_at: a.building_due_at ?? a.proposal_at ?? null,
     distributed: false,
     distributed_at: null,
     acquisition_status: mapAcquisitionStatus(a.bidding_status) ?? 'PENDING',
