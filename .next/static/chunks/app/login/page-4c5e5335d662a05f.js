@@ -1,0 +1,21 @@
+(self.webpackChunk_N_E=self.webpackChunk_N_E||[]).push([[626],{3162:function(e,t,r){Promise.resolve().then(r.bind(r,5207))},5207:function(e,t,r){"use strict";r.r(t),r.d(t,{default:function(){return i}});var n=r(7437),s=r(998),l=r(3225);function i(){return(0,n.jsx)("div",{className:"min-h-screen flex items-center justify-center",style:{background:"var(--bg-base)"},children:(0,n.jsxs)("div",{className:"bg-white rounded-2xl shadow-sm border border-gray-200 p-10 w-full max-w-sm text-center",children:[(0,n.jsxs)("div",{className:"flex items-center justify-center gap-2.5 mb-2",children:[(0,n.jsx)("div",{className:"w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center",children:(0,n.jsx)(l.Z,{size:20,className:"text-white"})}),(0,n.jsx)("span",{className:"text-lg font-bold text-gray-900",children:"인센티브 관리"})]}),(0,n.jsx)("p",{className:"text-sm text-gray-400 mb-8",children:"수주인센티브 운영관리 시스템"}),(0,n.jsxs)("button",{onClick:()=>(0,s.signIn)("google",{callbackUrl:"/"}),className:"w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors",children:[(0,n.jsxs)("svg",{width:"18",height:"18",viewBox:"0 0 48 48",children:[(0,n.jsx)("path",{fill:"#EA4335",d:"M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"}),(0,n.jsx)("path",{fill:"#4285F4",d:"M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"}),(0,n.jsx)("path",{fill:"#FBBC05",d:"M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"}),(0,n.jsx)("path",{fill:"#34A853",d:"M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.36-8.16 2.36-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"})]}),"Google 계정으로 로그인"]}),(0,n.jsx)("p",{className:"text-xs text-gray-400 mt-5",children:"@mobidays.com 계정만 접속 가능합니다"})]})})}},8030:function(e,t,r){"use strict";r.d(t,{Z:function(){return a}});var n=r(2265);/**
+ * @license lucide-react v0.383.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */let s=e=>e.replace(/([a-z0-9])([A-Z])/g,"$1-$2").toLowerCase(),l=function(){for(var e=arguments.length,t=Array(e),r=0;r<e;r++)t[r]=arguments[r];return t.filter((e,t,r)=>!!e&&r.indexOf(e)===t).join(" ")};/**
+ * @license lucide-react v0.383.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */var i={xmlns:"http://www.w3.org/2000/svg",width:24,height:24,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round"};/**
+ * @license lucide-react v0.383.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */let c=(0,n.forwardRef)((e,t)=>{let{color:r="currentColor",size:s=24,strokeWidth:c=2,absoluteStrokeWidth:a,className:o="",children:d,iconNode:u,...f}=e;return(0,n.createElement)("svg",{ref:t,...i,width:s,height:s,stroke:r,strokeWidth:a?24*Number(c)/Number(s):c,className:l("lucide",o),...f},[...u.map(e=>{let[t,r]=e;return(0,n.createElement)(t,r)}),...Array.isArray(d)?d:[d]])}),a=(e,t)=>{let r=(0,n.forwardRef)((r,i)=>{let{className:a,...o}=r;return(0,n.createElement)(c,{ref:i,iconNode:t,className:l("lucide-".concat(s(e)),a),...o})});return r.displayName="".concat(e),r}},3225:function(e,t,r){"use strict";r.d(t,{Z:function(){return n}});/**
+ * @license lucide-react v0.383.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */let n=(0,r(8030).Z)("TrendingUp",[["polyline",{points:"22 7 13.5 15.5 8.5 10.5 2 17",key:"126l90"}],["polyline",{points:"16 7 22 7 22 13",key:"kwv8wd"}]])}},function(e){e.O(0,[998,971,23,744],function(){return e(e.s=3162)}),_N_E=e.O()}]);

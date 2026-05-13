@@ -5,7 +5,7 @@
 // 사번에 매칭되는 PL의 프로젝트 목록 (작성대기 / 작성완료 분리)
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -36,7 +36,23 @@ const ACQ_LABEL: Record<string, string> = {
   RESULT_PENDING: '결과대기',
 };
 
+// useSearchParams() 는 정적 prerender 와 충돌 — Suspense 안에서 호출되어야 함.
 export default function PLProjectsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center text-sm text-gray-400">
+          <Loader2 size={14} className="animate-spin mr-2" />
+          불러오는 중...
+        </div>
+      }
+    >
+      <PLProjectsPageInner />
+    </Suspense>
+  );
+}
+
+function PLProjectsPageInner() {
   const search = useSearchParams();
   const router = useRouter();
   const empId = search?.get('emp') ?? '';

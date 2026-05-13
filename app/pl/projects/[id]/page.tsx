@@ -7,7 +7,7 @@
 // 와 PL 양식 섹션에 즉시 반영
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -130,7 +130,23 @@ const ACQ_LABEL: Record<string, string> = {
   RESULT_PENDING: '결과대기',
 };
 
+// useSearchParams() 는 Suspense 안에서 호출되어야 정적 prerender 충돌 없음.
 export default function PLProjectFormPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center text-sm text-gray-400">
+          <Loader2 size={14} className="animate-spin mr-2" />
+          불러오는 중...
+        </div>
+      }
+    >
+      <PLProjectFormPageInner />
+    </Suspense>
+  );
+}
+
+function PLProjectFormPageInner() {
   const params = useParams<{ id: string }>();
   const search = useSearchParams();
   const router = useRouter();
