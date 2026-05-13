@@ -292,6 +292,54 @@ function PLProjectFormPageInner() {
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
 
+  // 서버 응답(project/members/form)을 폼 상태로 매핑 — GET/PUT 양쪽에서 재사용
+  function applyServerData(j: { project: any; members: any[]; form: any }) {
+    setProject(j.project);
+    setMembers(
+      (j.members ?? []).map((m: any) => ({
+        member_name: m.member_name ?? '',
+        is_team_account: !!m.is_team_account,
+        contribution: Number(m.contribution) || 0,
+        first_amount: Number(m.first_amount) || 0,
+        first_paid_at: m.first_paid_at ?? null,
+        second_amount: Number(m.second_amount) || 0,
+        second_paid_at: m.second_paid_at ?? null,
+        role: m.role ?? '',
+        team_name: m.team_name ?? '',
+        duty: m.duty ?? '',
+      }))
+    );
+    const f = j.form ?? {};
+    const p = j.project ?? {};
+    const rValueStr = p.r_value != null ? withCommas(String(p.r_value)) : '';
+    const commissionPctStr =
+      typeof p.commission === 'number'
+        ? (Math.round(p.commission * 10000) / 100).toString()
+        : '';
+    setForm({
+      pl_name: p.pl ?? '',
+      won_date: p.first_payment_date ?? '',
+      campaign_end_date: p.second_payment_date ?? '',
+      r_value: rValueStr,
+      commission_pct: commissionPctStr,
+      budget_note: f.budget_note ?? '',
+      client_importance_case: f.client_importance_case != null ? String(f.client_importance_case) : '',
+      client_importance: f.client_importance ?? '',
+      rfp_route_case: f.rfp_route_case != null ? String(f.rfp_route_case) : '',
+      rfp_route: f.rfp_route ?? '',
+      prep_effort_case: f.prep_effort_case != null ? String(f.prep_effort_case) : '',
+      prep_effort: f.prep_effort ?? '',
+      bidding_difficulty_case: f.bidding_difficulty_case != null ? String(f.bidding_difficulty_case) : '',
+      bidding_difficulty: f.bidding_difficulty ?? '',
+      proposal_resource_case: f.proposal_resource_case != null ? String(f.proposal_resource_case) : '',
+      proposal_resource: f.proposal_resource ?? '',
+      external_expert_case: f.external_expert_case ?? '',
+      external_expert: f.external_expert ?? '',
+      stop_risk_case: f.stop_risk_case != null ? String(f.stop_risk_case) : '',
+      stop_risk: f.stop_risk ?? '',
+    });
+  }
+
   async function loadData() {
     if (!empId) return;
     setLoading(true);
@@ -303,51 +351,7 @@ function PLProjectFormPageInner() {
       );
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error ?? '조회 실패');
-
-      setProject(j.project);
-      setMembers(
-        (j.members ?? []).map((m: any) => ({
-          member_name: m.member_name ?? '',
-          is_team_account: !!m.is_team_account,
-          contribution: Number(m.contribution) || 0,
-          first_amount: Number(m.first_amount) || 0,
-          first_paid_at: m.first_paid_at ?? null,
-          second_amount: Number(m.second_amount) || 0,
-          second_paid_at: m.second_paid_at ?? null,
-          role: m.role ?? '',
-          team_name: m.team_name ?? '',
-          duty: m.duty ?? '',
-        }))
-      );
-      const f = j.form ?? {};
-      const p = j.project ?? {};
-      const rValueStr = p.r_value != null ? withCommas(String(p.r_value)) : '';
-      const commissionPctStr =
-        typeof p.commission === 'number'
-          ? (Math.round(p.commission * 10000) / 100).toString()
-          : '';
-      setForm({
-        pl_name: p.pl ?? '',
-        won_date: p.first_payment_date ?? '',
-        campaign_end_date: p.second_payment_date ?? '',
-        r_value: rValueStr,
-        commission_pct: commissionPctStr,
-        budget_note: f.budget_note ?? '',
-        client_importance_case: f.client_importance_case != null ? String(f.client_importance_case) : '',
-        client_importance: f.client_importance ?? '',
-        rfp_route_case: f.rfp_route_case != null ? String(f.rfp_route_case) : '',
-        rfp_route: f.rfp_route ?? '',
-        prep_effort_case: f.prep_effort_case != null ? String(f.prep_effort_case) : '',
-        prep_effort: f.prep_effort ?? '',
-        bidding_difficulty_case: f.bidding_difficulty_case != null ? String(f.bidding_difficulty_case) : '',
-        bidding_difficulty: f.bidding_difficulty ?? '',
-        proposal_resource_case: f.proposal_resource_case != null ? String(f.proposal_resource_case) : '',
-        proposal_resource: f.proposal_resource ?? '',
-        external_expert_case: f.external_expert_case ?? '',
-        external_expert: f.external_expert ?? '',
-        stop_risk_case: f.stop_risk_case != null ? String(f.stop_risk_case) : '',
-        stop_risk: f.stop_risk ?? '',
-      });
+      applyServerData(j);
     } catch (e: any) {
       setError(e?.message ?? '오류');
     } finally {
@@ -524,8 +528,15 @@ function PLProjectFormPageInner() {
       }
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2500);
-      // 저장 직후 서버 상태로 강제 재동기화 — 일부 단계만 성공했어도 화면에 정확히 반영
-      await loadData();
+      // 저장 직후 PUT 응답에 실린 최신 상태를 그대로 화면에 적용 — 별도 GET 호출하지 않음
+      //   (별도 GET 시 권한 fallback / 동기화 지연으로 빈 값이 돌아오는 경우 차단)
+      if (json && json.project) {
+        applyServerData({
+          project: json.project,
+          members: json.members ?? [],
+          form: json.form ?? null,
+        });
+      }
     } catch (e: any) {
       setError(e?.message ?? '저장 중 오류');
     } finally {

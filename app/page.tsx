@@ -17,7 +17,7 @@ import {
   ChevronRight,
   CalendarClock,
 } from 'lucide-react';
-import type { SupabaseProject } from '@/lib/incentive-data';
+import { effectivePhaseAmount, type SupabaseProject } from '@/lib/incentive-data';
 import clsx from 'clsx';
 import { formatKRW, formatKRWFull } from '@/lib/utils';
 import {
@@ -141,8 +141,8 @@ export default function DashboardPage() {
     for (const p of projects) {
       if (p.acquisition_status === 'LOST' || p.acquisition_status === 'CANCELLED') continue;
 
-      const sumFirst = p.members.reduce((s, m) => s + (m.first_amount || 0), 0);
-      const sumSecond = p.members.reduce((s, m) => s + (m.second_amount || 0), 0);
+      const sumFirst = p.members.reduce((s, m) => s + effectivePhaseAmount(m, p, 1), 0);
+      const sumSecond = p.members.reduce((s, m) => s + effectivePhaseAmount(m, p, 2), 0);
 
       // 1차
       if (

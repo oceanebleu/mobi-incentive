@@ -29,6 +29,7 @@ import {
   paymentStageOf,
   PAYMENT_STAGE_LABEL,
   ACQUISITION_LABEL,
+  effectivePhaseAmount,
   type SupabaseProject,
   type SupabaseProjectMember,
 } from '@/lib/incentive-data';
@@ -84,9 +85,15 @@ export default function ProjectDetailPage() {
   const acq = project.acquisition_status ?? 'PENDING';
   const year = project.submitted_at ? parseInt(project.submitted_at.slice(0, 4), 10) : '-';
 
-  // 회차별 총 지급액 합계 (member 행들의 first_amount / second_amount 합)
-  const firstTotal = project.members.reduce((s, m) => s + m.first_amount, 0);
-  const secondTotal = project.members.reduce((s, m) => s + m.second_amount, 0);
+  // 회차별 총 지급액 합계 — DB에 저장된 값이 0이면 자동 환산값(effectivePhaseAmount) 사용
+  const firstTotal = project.members.reduce(
+    (s, m) => s + effectivePhaseAmount(m, project, 1),
+    0
+  );
+  const secondTotal = project.members.reduce(
+    (s, m) => s + effectivePhaseAmount(m, project, 2),
+    0
+  );
 
   return (
     <div className="p-8 space-y-6 fade-in">
@@ -227,52 +234,56 @@ export default function ProjectDetailPage() {
             </tr>
           </thead>
           <tbody>
-            {project.members.map(m => (
-              <tr key={m.member_name} className="border-b border-gray-50">
-                <td className="py-3 font-medium text-gray-900">
-                  {m.member_name}
-                  {m.is_team_account && (
-                    <span className="ml-1.5 text-[10px] text-emerald-700 font-medium">[팀]</span>
-                  )}
-                </td>
-                <td className="py-3 text-right">
-                  <span className="inline-flex items-center px-2 py-0.5 bg-blue-50 text-blue-700 text-xs font-semibold rounded">
-                    {m.contribution}%
-                  </span>
-                </td>
-                <td className="py-3 text-right text-sm">
-                  <span
-                    className={clsx(
-                      m.first_paid_at ? 'text-emerald-600 font-medium' : 'text-gray-600'
+            {project.members.map(m => {
+              const eff1 = effectivePhaseAmount(m, project, 1);
+              const eff2 = effectivePhaseAmount(m, project, 2);
+              return (
+                <tr key={m.member_name} className="border-b border-gray-50">
+                  <td className="py-3 font-medium text-gray-900">
+                    {m.member_name}
+                    {m.is_team_account && (
+                      <span className="ml-1.5 text-[10px] text-emerald-700 font-medium">[팀]</span>
                     )}
-                  >
-                    {formatKRWFull(m.first_amount)}
-                    {m.first_paid_at && (
-                      <span className="ml-1 text-[10px] text-gray-400">
-                        {formatDate(m.first_paid_at)}
-                      </span>
-                    )}
-                  </span>
-                </td>
-                <td className="py-3 text-right text-sm">
-                  <span
-                    className={clsx(
-                      m.second_paid_at ? 'text-emerald-600 font-medium' : 'text-gray-600'
-                    )}
-                  >
-                    {formatKRWFull(m.second_amount)}
-                    {m.second_paid_at && (
-                      <span className="ml-1 text-[10px] text-gray-400">
-                        {formatDate(m.second_paid_at)}
-                      </span>
-                    )}
-                  </span>
-                </td>
-                <td className="py-3 text-right font-bold text-gray-900">
-                  {formatKRWFull(m.first_amount + m.second_amount)}
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="py-3 text-right">
+                    <span className="inline-flex items-center px-2 py-0.5 bg-blue-50 text-blue-700 text-xs font-semibold rounded">
+                      {m.contribution}%
+                    </span>
+                  </td>
+                  <td className="py-3 text-right text-sm">
+                    <span
+                      className={clsx(
+                        m.first_paid_at ? 'text-emerald-600 font-medium' : 'text-gray-600'
+                      )}
+                    >
+                      {formatKRWFull(eff1)}
+                      {m.first_paid_at && (
+                        <span className="ml-1 text-[10px] text-gray-400">
+                          {formatDate(m.first_paid_at)}
+                        </span>
+                      )}
+                    </span>
+                  </td>
+                  <td className="py-3 text-right text-sm">
+                    <span
+                      className={clsx(
+                        m.second_paid_at ? 'text-emerald-600 font-medium' : 'text-gray-600'
+                      )}
+                    >
+                      {formatKRWFull(eff2)}
+                      {m.second_paid_at && (
+                        <span className="ml-1 text-[10px] text-gray-400">
+                          {formatDate(m.second_paid_at)}
+                        </span>
+                      )}
+                    </span>
+                  </td>
+                  <td className="py-3 text-right font-bold text-gray-900">
+                    {formatKRWFull(eff1 + eff2)}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
           <tfoot>
             <tr className="border-t border-gray-200">

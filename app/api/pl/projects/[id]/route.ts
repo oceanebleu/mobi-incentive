@@ -378,5 +378,26 @@ export async function PUT(
     { email: null, name: user.name }
   );
 
-  return NextResponse.json({ ok: true });
+  // 5) 저장 직후의 최종 상태를 그대로 응답에 포함 — 클라이언트는 별도 GET 없이 이 결과를 화면에 반영
+  //    (별도 GET 호출 시 권한 fallback / 동기화 race condition 등으로 빈 값이 돌아오는 사례 차단)
+  const [projAfter, memAfter, formAfter] = await Promise.all([
+    supabase.from('projects').select('*').eq('id', params.id).single(),
+    supabase
+      .from('project_members')
+      .select('*')
+      .eq('project_id', params.id)
+      .order('contribution', { ascending: false }),
+    supabase
+      .from('project_pl_forms')
+      .select('*')
+      .eq('project_id', params.id)
+      .maybeSingle(),
+  ]);
+
+  return NextResponse.json({
+    ok: true,
+    project: projAfter.data ?? null,
+    members: memAfter.data ?? [],
+    form: formAfter.data ?? null,
+  });
 }

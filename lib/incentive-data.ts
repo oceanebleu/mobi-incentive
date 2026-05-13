@@ -14,6 +14,26 @@ import { useEffect, useState, useCallback } from 'react';
 
 // ─── 타입 (Supabase 행을 그대로 반영) ──────────────────────────
 
+/**
+ * 표시용 회차 금액 — DB에 저장된 first_amount/second_amount 가 0(=과거 CSV 임포트 시 비어있던 행)이면
+ *   `프로젝트.incentive_fund × 지급비율 × 기여도/100` 공식으로 자동 환산해서 보여준다.
+ * 저장된 값이 0이 아니면 그 값을 그대로 신뢰.
+ */
+export function effectivePhaseAmount(
+  m: { first_amount: number; second_amount: number; contribution: number },
+  p: { incentive_fund: number; first_payment_ratio: number | null; second_payment_ratio: number | null },
+  phase: 1 | 2
+): number {
+  const stored = phase === 1 ? m.first_amount : m.second_amount;
+  if (stored && stored > 0) return stored;
+  const ratio = phase === 1
+    ? (p.first_payment_ratio ?? 60)
+    : (p.second_payment_ratio ?? 40);
+  const fund = p.incentive_fund ?? 0;
+  if (fund <= 0) return 0;
+  return Math.round((fund * ratio / 100) * ((m.contribution ?? 0) / 100));
+}
+
 export interface SupabaseProjectMember {
   project_id: string;
   member_name: string;
@@ -239,6 +259,10 @@ export function calcMemberSummariesV2(
         projectLost || !!p.second_payment_skipped
       );
 
+      // 회차 금액 — CSV 임포트로 0 이 들어간 행은 effectivePhaseAmount 로 자동 환산
+      const firstAmt = effectivePhaseAmount(m, p, 1);
+      const secondAmt = effectivePhaseAmount(m, p, 2);
+
       // 합계 누적
       const addToBucket = (amt: number, status: PhaseStatus) => {
         if (amt === 0) return;
@@ -247,8 +271,8 @@ export function calcMemberSummariesV2(
         else if (status === 'excluded') s.total_excluded += amt;
         else if (status === 'skipped') s.total_skipped += amt;
       };
-      addToBucket(m.first_amount, firstStatus);
-      addToBucket(m.second_amount, secondStatus);
+      addToBucket(firstAmt, firstStatus);
+      addToBucket(secondAmt, secondStatus);
 
       // 회차별 연도 — 실제 지급일 우선, 없으면 예정일
       //   - 예전: 프로젝트 제출일 연도로 묶음 (2026년 지급도 2025로 잡힘)
@@ -270,27 +294,27 @@ export function calcMemberSummariesV2(
       };
       const b1 = bucket(firstYear);
       if (b1) {
-        if (firstStatus === 'paid') b1.paid += m.first_amount;
-        else if (firstStatus === 'pending') b1.pending += m.first_amount;
+        if (firstStatus === 'paid') b1.paid += firstAmt;
+        else if (firstStatus === 'pending') b1.pending += firstAmt;
       }
       const b2 = bucket(secondYear);
       if (b2) {
-        if (secondStatus === 'paid') b2.paid += m.second_amount;
-        else if (secondStatus === 'pending') b2.pending += m.second_amount;
+        if (secondStatus === 'paid') b2.paid += secondAmt;
+        else if (secondStatus === 'pending') b2.pending += secondAmt;
       }
 
-      // 프로젝트 단위 명세
+      // 프로젝트 단위 명세 — 환산된 금액으로 표시
       s.projects.push({
         project_id: p.id,
         campaign_name: p.campaign_name,
         year,
         contribution: m.contribution,
         acquisition_status: p.acquisition_status,
-        first_amount: m.first_amount,
+        first_amount: firstAmt,
         first_paid_at: m.first_paid_at,
         first_status: firstStatus,
         first_year: firstYear,
-        second_amount: m.second_amount,
+        second_amount: secondAmt,
         second_paid_at: m.second_paid_at,
         second_status: secondStatus,
         second_year: secondYear,
@@ -355,15 +379,19 @@ export function getDashboardStatsV2(
       const afterLwd = (paidAt: string | null) =>
         !!(lwd && paidAt && paidAt > lwd);
 
+      // 회차 금액 — CSV 임포트로 0 이 들어간 행은 자동 환산
+      const firstAmt = effectivePhaseAmount(m, p, 1);
+      const secondAmt = effectivePhaseAmount(m, p, 2);
+
       // 1차
       if (projectLost || p.first_payment_skipped) {
         // 수주실패 또는 명시적 미지급 → paid/pending 어디에도 안 더해짐
       } else if (afterLwd(m.first_paid_at)) {
         // 마지막 근무일 이후 지급 예정 → excluded
       } else if (m.first_paid_at && m.first_paid_at <= today) {
-        totalFirstPaid += m.first_amount;
-      } else if (m.first_amount > 0) {
-        totalPending += m.first_amount;
+        totalFirstPaid += firstAmt;
+      } else if (firstAmt > 0) {
+        totalPending += firstAmt;
       }
       // 2차
       if (projectLost || p.second_payment_skipped) {
@@ -371,9 +399,9 @@ export function getDashboardStatsV2(
       } else if (afterLwd(m.second_paid_at)) {
         // excluded
       } else if (m.second_paid_at && m.second_paid_at <= today) {
-        totalSecondPaid += m.second_amount;
-      } else if (m.second_amount > 0) {
-        totalPending += m.second_amount;
+        totalSecondPaid += secondAmt;
+      } else if (secondAmt > 0) {
+        totalPending += secondAmt;
       }
     }
   }
