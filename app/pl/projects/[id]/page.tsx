@@ -562,16 +562,14 @@ function PLProjectFormPageInner() {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[760px]">
+                <table className="w-full text-sm min-w-[560px]">
                   <thead>
                     <tr className="text-[11px] text-gray-400 uppercase tracking-wide">
                       <th className="text-left pb-2 font-medium">이름</th>
                       <th className="text-center pb-2 font-medium w-20">팀계정</th>
                       <th className="text-right pb-2 font-medium w-24">기여도(%)</th>
-                      <th className="text-right pb-2 font-medium w-32">1차 금액</th>
-                      <th className="text-right pb-2 font-medium w-40">1차 지급일</th>
-                      <th className="text-right pb-2 font-medium w-32">2차 금액</th>
-                      <th className="text-right pb-2 font-medium w-40">2차 지급일</th>
+                      <th className="text-right pb-2 font-medium w-36">1차 금액</th>
+                      <th className="text-right pb-2 font-medium w-36">2차 금액</th>
                       <th className="w-8" />
                     </tr>
                   </thead>
@@ -618,28 +616,12 @@ function PLProjectFormPageInner() {
                         </td>
                         <td className="py-2 pr-2">
                           <input
-                            type="date"
-                            value={r.first_paid_at ?? ''}
-                            onChange={e => updateRow(i, { first_paid_at: e.target.value || null })}
-                            className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md"
-                          />
-                        </td>
-                        <td className="py-2 pr-2">
-                          <input
                             type="number"
                             value={r.second_amount}
                             onChange={e => updateRow(i, { second_amount: Number(e.target.value) })}
                             min={0}
                             step="1"
                             className="w-full px-2 py-1.5 text-sm text-right border border-gray-200 rounded-md tabular-nums"
-                          />
-                        </td>
-                        <td className="py-2 pr-2">
-                          <input
-                            type="date"
-                            value={r.second_paid_at ?? ''}
-                            onChange={e => updateRow(i, { second_paid_at: e.target.value || null })}
-                            className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md"
                           />
                         </td>
                         <td className="py-2 text-center">
@@ -673,7 +655,7 @@ function PLProjectFormPageInner() {
             <Card>
               <CardHeader
                 title="③ 캠페인 운영 일정"
-                subtitle="반드시 작성해주시기 바랍니다. (수주 확정 일자 = 1차 지급일 / 캠페인 운영 종료 예상일 = 2차 지급일)"
+                subtitle="반드시 작성해주시기 바랍니다."
               />
               <div className="grid grid-cols-2 gap-4">
                 <DateField
