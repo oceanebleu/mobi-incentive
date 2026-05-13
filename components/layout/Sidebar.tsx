@@ -15,23 +15,25 @@ import {
   Archive,
 } from 'lucide-react';
 import clsx from 'clsx';
-import { ROLE_LABELS, canManageUsers } from '@/lib/roles';
+import { ROLE_LABELS } from '@/lib/roles';
 import type { UserRole } from '@/lib/roles';
 
 interface NavItem {
   href: string;
   label: string;
   icon: typeof LayoutDashboard;
-  adminOnly?: boolean;
+  /** 메뉴 노출 가능 역할. 비어있으면 모든 진입 가능 역할(EXEC·ADMIN) 노출 */
+  roles?: UserRole[];
 }
 
+// EXEC(경영진)에게는 운영 도구(아카이브·사용자관리·데이터 import)는 노출 안 함
 const NAV_ITEMS: NavItem[] = [
   { href: '/', label: '대시보드', icon: LayoutDashboard },
   { href: '/projects', label: '프로젝트 관리', icon: FolderKanban },
   { href: '/members', label: '개인별 지급 관리', icon: Users },
-  { href: '/archive', label: '제안 자료 아카이브', icon: Archive, adminOnly: true },
-  { href: '/users', label: '사용자관리', icon: ShieldCheck, adminOnly: true },
-  { href: '/admin/import', label: '데이터 Import', icon: Upload, adminOnly: true },
+  { href: '/archive', label: '제안 자료 아카이브', icon: Archive, roles: ['ADMIN'] },
+  { href: '/users', label: '사용자관리', icon: ShieldCheck, roles: ['ADMIN'] },
+  { href: '/admin/import', label: '데이터 Import', icon: Upload, roles: ['ADMIN'] },
 ];
 
 export default function Sidebar() {
@@ -61,7 +63,7 @@ export default function Sidebar() {
 
       {/* 내비게이션 */}
       <nav className="flex-1 px-3 py-4 space-y-0.5">
-        {NAV_ITEMS.filter(item => !item.adminOnly || canManageUsers(role)).map(({ href, label, icon: Icon }) => {
+        {NAV_ITEMS.filter(item => !item.roles || (role ? item.roles.includes(role) : false)).map(({ href, label, icon: Icon }) => {
           const active =
             href === '/'
               ? pathname === '/'

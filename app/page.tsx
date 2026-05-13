@@ -15,6 +15,7 @@ import {
   Coins,
   Send,
   ChevronRight,
+  CalendarClock,
 } from 'lucide-react';
 import type { SupabaseProject } from '@/lib/incentive-data';
 import clsx from 'clsx';
@@ -118,6 +119,82 @@ export default function DashboardPage() {
     return stageGroups.byStage[drillStage];
   }, [drillStage, projects, stageGroups]);
   const drillLabel = drillStage === 'ALL' ? '전체 프로젝트' : drillStage ? PAYMENT_STAGE_LABEL[drillStage] : '';
+
+  // 인센티브 지급 예정 — 회차 단위(1차/2차)로 펼쳐서 가까운 일자부터 정렬
+  //   · 수주실패·대행종료 프로젝트 제외
+  //   · 명시적 미지급(skipped)·이미 지급 완료(completed) 회차 제외
+  //   · 지급예정일(planned date)이 오늘 이전이면 자동으로 사라지도록 미래만 포함
+  const upcomingPayments = useMemo(() => {
+    const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    type Row = {
+      projectId: string;
+      campaignName: string;
+      phase: 1 | 2;
+      plannedDate: string;
+      total: number;
+    };
+    const rows: Row[] = [];
+    for (const p of projects) {
+      if (p.acquisition_status === 'LOST' || p.acquisition_status === 'CANCELLED') continue;
+
+      // 멤버 회차 합산 — 같은 정책: 퇴사자 회차 제외, lwd 초과 제외
+      const sumForPhase = (which: 1 | 2): number => {
+        let s = 0;
+        for (const m of p.members) {
+          if (!m.is_team_account) {
+            const st = statusByName[m.member_name];
+            if (st === '퇴사') continue;
+          }
+          const lwd = !m.is_team_account ? lastWorkDateByName[m.member_name] ?? null : null;
+          const paidAt = which === 1 ? m.first_paid_at : m.second_paid_at;
+          if (lwd && paidAt && paidAt > lwd) continue;
+          // 이미 지급된 회차 제외 (paid_at 있고 오늘 이전)
+          if (paidAt && paidAt <= today) continue;
+          s += which === 1 ? m.first_amount : m.second_amount;
+        }
+        return s;
+      };
+
+      // 1차
+      if (
+        !p.first_payment_completed &&
+        !p.first_payment_skipped &&
+        p.first_payment_date &&
+        p.first_payment_date >= today
+      ) {
+        const total = sumForPhase(1);
+        if (total > 0) {
+          rows.push({
+            projectId: p.id,
+            campaignName: p.campaign_name,
+            phase: 1,
+            plannedDate: p.first_payment_date,
+            total,
+          });
+        }
+      }
+      // 2차
+      if (
+        !p.second_payment_completed &&
+        !p.second_payment_skipped &&
+        p.second_payment_date &&
+        p.second_payment_date >= today
+      ) {
+        const total = sumForPhase(2);
+        if (total > 0) {
+          rows.push({
+            projectId: p.id,
+            campaignName: p.campaign_name,
+            phase: 2,
+            plannedDate: p.second_payment_date,
+            total,
+          });
+        }
+      }
+    }
+    rows.sort((a, b) => a.plannedDate.localeCompare(b.plannedDate));
+    return rows;
+  }, [projects, lastWorkDateByName, statusByName]);
 
   // 수주성공(WON) 내 신규/연장 분포
   const wonBreakdown = useMemo(() => {
@@ -332,8 +409,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 액션이 필요한 프로젝트 — PL 작성대기 / 재원확정 필요 */}
-      <div className="grid grid-cols-2 gap-5">
+      {/* 액션이 필요한 프로젝트 + 지급 예정 — 3 × 1 */}
+      <div className="grid grid-cols-3 gap-5">
         <ProjectActionList
           icon={FileText}
           tone="amber"
@@ -352,6 +429,7 @@ export default function DashboardPage() {
           hint="수주성공 건 중 PL 작성 완료 건"
           projects={stageGroups.plDoneFundNeeded}
         />
+        <UpcomingPaymentsList items={upcomingPayments} />
       </div>
 
       {/* 개인별 인센티브 지급 현황 */}
@@ -698,6 +776,74 @@ function ProjectActionList({
                 </button>
               )}
             </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 인센티브 지급 예정 — 회차 단위, 가까운 일자부터
+function UpcomingPaymentsList({
+  items,
+}: {
+  items: Array<{
+    projectId: string;
+    campaignName: string;
+    phase: 1 | 2;
+    plannedDate: string;
+    total: number;
+  }>;
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col">
+      <div className="flex items-center gap-2 mb-1">
+        <CalendarClock size={16} className="text-rose-500" />
+        <h2 className="text-sm font-semibold text-gray-800">인센티브 지급 예정</h2>
+        <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
+          {items.length}건
+        </span>
+      </div>
+      <p className="text-[11px] text-gray-400 mb-4">지급예정일 가까운 순 (지난 일자 자동 제외)</p>
+
+      {items.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center text-xs text-gray-400 py-10">
+          예정된 지급이 없습니다
+        </div>
+      ) : (
+        <div className="flex-1 max-h-[320px] overflow-y-auto space-y-1.5 pr-1 -mr-1">
+          {items.map((r, i) => (
+            <Link
+              key={`${r.projectId}-${r.phase}-${i}`}
+              href={`/projects/${r.projectId}`}
+              className="group flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-100 hover:bg-gray-50/70 hover:border-gray-200 transition-colors"
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-medium text-gray-900 truncate group-hover:text-blue-700">
+                    {r.campaignName}
+                  </span>
+                  <span
+                    className={clsx(
+                      'text-[10px] font-semibold px-1.5 py-0.5 rounded whitespace-nowrap',
+                      r.phase === 1
+                        ? 'bg-indigo-100 text-indigo-700'
+                        : 'bg-violet-100 text-violet-700'
+                    )}
+                  >
+                    {r.phase}차
+                  </span>
+                </div>
+                <div className="text-[11px] text-gray-400 mt-0.5">
+                  지급예정 {r.plannedDate}
+                </div>
+              </div>
+              <div className="text-right whitespace-nowrap">
+                <span className="text-sm font-semibold text-gray-800">
+                  {formatKRWFull(r.total)}
+                </span>
+              </div>
+            </Link>
           ))}
         </div>
       )}
