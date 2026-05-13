@@ -720,18 +720,57 @@ function PLLinkCopyButton({ projectId }: { projectId: string }) {
 // PL 양식 패널 — 판단 사유 9개 + 위원회 구성을 읽기 전용으로 표시
 //   (입력은 /pl/projects/[id] 페이지에서 PL이 직접)
 // ─────────────────────────────────────────────
-const PL_FORM_FIELDS: Array<{ key: string; label: string }> = [
-  { key: 'committee_division_head', label: '부문대표' },
-  { key: 'committee_co1', label: 'C.O1' },
-  { key: 'profit_judgment', label: '이익율' },
-  { key: 'commission_judgment', label: '수수료' },
-  { key: 'client_importance', label: '고객 중요도' },
-  { key: 'rfp_route', label: '인센종 케이스 (RFP 수취 루트)' },
-  { key: 'prep_effort', label: '사전 작업 정도' },
-  { key: 'bidding_difficulty', label: '빌딩 난이도' },
-  { key: 'proposal_resource', label: '제안 리소스' },
-  { key: 'external_expert', label: '외부 전문가 사용 여부' },
-  { key: 'stop_risk', label: '중지될 가능성' },
+// 관리자 화면에서 PL 양식을 읽기 전용으로 표시 — 케이스 + 정성적 의견 페어
+const PL_CASE_LABELS: Record<string, Record<string, string>> = {
+  client_importance_case: {
+    '1': '1. 대형·우선군 내 신규 고객사',
+    '2': '2. 레퍼런스 확장 기회',
+  },
+  rfp_route_case: {
+    '1': '1. PL 직접 수취',
+    '2': '2. 인센종TF 수취',
+    '3': '3. 기존 고객사 연장 빌딩',
+    '4': '4. 경영진 별도 수단',
+    '5': '5. 인바운드 인지',
+  },
+  prep_effort_case: {
+    '1': '1. 지속적인 사전 작업',
+    '2': '2. 일부 사전 작업',
+    '3': '3. 거의 없음',
+  },
+  bidding_difficulty_case: {
+    '1': '1. 경쟁 비딩 — 어려움',
+    '2': '2. 경쟁 비딩 — 우선 후보',
+    '3': '3. 단독 비딩',
+  },
+  proposal_resource_case: {
+    '1': '1. 컨텐츠 중요 — 철저한 준비',
+    '2': '2. 회사(임원) 관여 중요',
+    '3': '3. 수수료율에 민감',
+  },
+  stop_risk_case: {
+    '1': '1. 매출 중지 가능성 높음',
+    '2': '2. 2개 이상 대행사 — 중지 가능성',
+    '3': '3. 2년 계약 / 연속 중지 예정',
+  },
+};
+
+type PLFieldDef =
+  | { kind: 'text'; key: string; label: string }
+  | { kind: 'number'; key: string; label: string; suffix?: string; format?: 'krw' | 'pct' }
+  | { kind: 'case'; caseKey: string; noteKey: string; label: string };
+
+const PL_FORM_FIELDS: PLFieldDef[] = [
+  { kind: 'text', key: 'committee_division_head', label: '부문대표' },
+  { kind: 'text', key: 'committee_co1', label: 'C.O1' },
+  { kind: 'text', key: 'budget_note', label: '총 예산 및 수수료 참고사항' },
+  { kind: 'case', caseKey: 'client_importance_case', noteKey: 'client_importance', label: '고객 중요도' },
+  { kind: 'case', caseKey: 'rfp_route_case', noteKey: 'rfp_route', label: '세일즈 케이스 (RFP 수취 루트)' },
+  { kind: 'case', caseKey: 'prep_effort_case', noteKey: 'prep_effort', label: '사전 작업 정도' },
+  { kind: 'case', caseKey: 'bidding_difficulty_case', noteKey: 'bidding_difficulty', label: '비딩 난이도' },
+  { kind: 'case', caseKey: 'proposal_resource_case', noteKey: 'proposal_resource', label: '제안 리소스' },
+  { kind: 'case', caseKey: 'external_expert_case', noteKey: 'external_expert', label: '외부 전문가풀 사용 여부' },
+  { kind: 'case', caseKey: 'stop_risk_case', noteKey: 'stop_risk', label: '실집행 가능성' },
 ];
 
 function PLFormPanel({ projectId }: { projectId: string }) {
@@ -756,12 +795,21 @@ function PLFormPanel({ projectId }: { projectId: string }) {
       .finally(() => setLoading(false));
   }, [open, data, projectId]);
 
-  const hasAny =
-    data &&
-    PL_FORM_FIELDS.some(f => {
-      const v = (data as any)[f.key];
-      return typeof v === 'string' && v.trim() !== '';
-    });
+  function fieldHasValue(f: PLFieldDef) {
+    if (!data) return false;
+    if (f.kind === 'case') {
+      const cv = (data as any)[f.caseKey];
+      const nv = (data as any)[f.noteKey];
+      return (
+        (cv != null && String(cv).trim() !== '') ||
+        (typeof nv === 'string' && nv.trim() !== '')
+      );
+    }
+    const v = (data as any)[f.key];
+    if (f.kind === 'number') return v != null && v !== '';
+    return typeof v === 'string' && v.trim() !== '';
+  }
+  const hasAny = data && PL_FORM_FIELDS.some(fieldHasValue);
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -815,8 +863,35 @@ function PLFormPanel({ projectId }: { projectId: string }) {
               )}
               <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                 {PL_FORM_FIELDS.map(f => {
+                  if (!fieldHasValue(f)) return null;
+                  if (f.kind === 'case') {
+                    const rawCase = (data as any)[f.caseKey];
+                    const note = (data as any)[f.noteKey] ?? '';
+                    const caseStr = rawCase != null ? String(rawCase) : '';
+                    const labelMap = PL_CASE_LABELS[f.caseKey];
+                    const caseLabel =
+                      caseStr === ''
+                        ? null
+                        : labelMap?.[caseStr] ?? caseStr;
+                    return (
+                      <div key={f.label}>
+                        <p className="text-[11px] font-semibold text-gray-400 uppercase mb-1">
+                          {f.label}
+                        </p>
+                        {caseLabel && (
+                          <p className="text-sm font-medium text-blue-700 mb-0.5">
+                            {caseLabel}
+                          </p>
+                        )}
+                        {note && (
+                          <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                            {note}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  }
                   const v = (data as any)[f.key];
-                  if (!v || (typeof v === 'string' && v.trim() === '')) return null;
                   return (
                     <div key={f.key}>
                       <p className="text-[11px] font-semibold text-gray-400 uppercase mb-1">

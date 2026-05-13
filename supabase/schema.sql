@@ -278,21 +278,31 @@ for each row execute function public.set_updated_at();
 -- ─────────────────────────────────────────────────────────────
 create table if not exists public.project_pl_forms (
   project_id text primary key references public.projects(id) on delete cascade,
-  -- 판단 사유 (자유 텍스트, CSV 첨부 9개 항목)
-  profit_judgment       text,    -- 이익율 (연간 총 매출)
-  commission_judgment   text,    -- 수수료 (제안 의지부)
-  client_importance     text,    -- 고객 중요도
-  rfp_route             text,    -- 인센종 케이스 (RFP 수취 루트)
-  prep_effort           text,    -- 사전 작업 정도
-  bidding_difficulty    text,    -- 빌딩 난이도
-  proposal_resource     text,    -- 제안 리소스
-  external_expert       text,    -- 외부 전문가 사용 여부
-  stop_risk             text,    -- 중지될 가능성
-  -- 위원회 구성
-  committee_division_head text,  -- 부문대표
-  committee_co1           text,  -- C.O1
+  -- 판단 사유 (자유 텍스트 정성적 의견) — 새 양식에서는 의견란으로 사용
+  profit_judgment       text,    -- (구) 이익율 — 더 이상 UI에서 사용 안 함, 데이터 보존용
+  commission_judgment   text,    -- (구) 수수료 — 더 이상 UI에서 사용 안 함, 데이터 보존용
+  client_importance     text,    -- 고객 중요도 — 정성적 의견
+  rfp_route             text,    -- 세일즈 케이스 (RFP 수취 루트) — 정성적 의견
+  prep_effort           text,    -- 사전 작업 정도 — 정성적 의견
+  bidding_difficulty    text,    -- 비딩 난이도 — 정성적 의견
+  proposal_resource     text,    -- 제안 리소스 — 정성적 의견
+  external_expert       text,    -- 외부 전문가풀 — 정성적 의견
+  stop_risk             text,    -- 실집행 가능성 — 정성적 의견
+  -- 케이스 선택값 (정형 데이터)
+  client_importance_case    smallint,  -- 1 ~ 2
+  rfp_route_case            smallint,  -- 1 ~ 5
+  prep_effort_case          smallint,  -- 1 ~ 3
+  bidding_difficulty_case   smallint,  -- 1 ~ 3
+  proposal_resource_case    smallint,  -- 1 ~ 3
+  external_expert_case      text,      -- '해당없음' | '해당됨'
+  stop_risk_case            smallint,  -- 1 ~ 3
+  -- 총 예산 및 수수료 위원회 참고 메모
+  budget_note text,
+  -- 위원회 구성 (현 정책상 부문대표=이광수 · C.O1=안민혁 고정 — 컬럼은 향후 변경 대비 보존)
+  committee_division_head text,
+  committee_co1           text,
   -- 작성 추적
-  submitted_at      timestamptz,   -- PL이 처음 [저장] 누른 시각
+  submitted_at      timestamptz,
   last_saved_at     timestamptz not null default now(),
   last_saved_by_emp text,
   last_saved_by_name text,

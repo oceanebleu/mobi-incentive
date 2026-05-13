@@ -52,9 +52,8 @@ async function authorize(empId: string, projectId: string) {
   } as const;
 }
 
-const FORM_FIELDS = [
-  'profit_judgment',
-  'commission_judgment',
+// 의견 텍스트 필드 (자유 입력)
+const FORM_TEXT_FIELDS = [
   'client_importance',
   'rfp_route',
   'prep_effort',
@@ -62,8 +61,17 @@ const FORM_FIELDS = [
   'proposal_resource',
   'external_expert',
   'stop_risk',
-  'committee_division_head',
-  'committee_co1',
+  'budget_note',
+] as const;
+
+// 정형 케이스 필드 (smallint or text)
+const FORM_CASE_INT_FIELDS = [
+  'client_importance_case',
+  'rfp_route_case',
+  'prep_effort_case',
+  'bidding_difficulty_case',
+  'proposal_resource_case',
+  'stop_risk_case',
 ] as const;
 
 export async function GET(
@@ -155,12 +163,27 @@ export async function PUT(
     }
   }
 
-  // 2) project_pl_forms 업서트 — 9개 판단사유 + 위원회 구성
+  // 2) project_pl_forms 업서트 — 케이스 + 의견 + 메모 + (위원회 구성: 고정값)
   const formRow: any = { project_id: params.id };
-  for (const f of FORM_FIELDS) {
+  for (const f of FORM_TEXT_FIELDS) {
     const v = formInput?.[f];
     formRow[f] = typeof v === 'string' && v.trim() !== '' ? v : null;
   }
+  for (const f of FORM_CASE_INT_FIELDS) {
+    const v = formInput?.[f];
+    const num = typeof v === 'number' ? v : v != null && v !== '' ? Number(v) : null;
+    formRow[f] = Number.isFinite(num as number) ? (num as number) : null;
+  }
+  // 외부 전문가 케이스는 문자열 — '해당없음' | '해당됨'
+  {
+    const v = formInput?.external_expert_case;
+    formRow.external_expert_case =
+      typeof v === 'string' && v.trim() !== '' ? v.trim() : null;
+  }
+  // 위원회 구성 — 현재 정책상 고정값 (스키마는 향후 변경 대비 보존)
+  formRow.committee_division_head = '이광수';
+  formRow.committee_co1 = '안민혁';
+
   // 작성 추적
   const now = new Date().toISOString();
   formRow.last_saved_at = now;
@@ -180,10 +203,20 @@ export async function PUT(
     .upsert(formRow, { onConflict: 'project_id' });
   if (formErr) return NextResponse.json({ error: formErr.message, stage: 'pl-form' }, { status: 500 });
 
-  // 3) projects.pl_completed = true 로 자동 토글
+  // 3) projects 업데이트 — r_value/commission 동기화 + pl_completed=true
+  //    PL이 양식에서 수정한 값이 진실의 원천. (수수료는 UI에서 % 단위로 받지만 저장은 fraction)
+  const projectsPatch: any = { pl_completed: true };
+  if (formInput?.r_value !== undefined && formInput.r_value !== '') {
+    const rv = Number(formInput.r_value);
+    if (Number.isFinite(rv) && rv >= 0) projectsPatch.r_value = Math.round(rv);
+  }
+  if (formInput?.commission_pct !== undefined && formInput.commission_pct !== '') {
+    const cp = Number(formInput.commission_pct);
+    if (Number.isFinite(cp) && cp >= 0) projectsPatch.commission = Math.round(cp * 100) / 10000; // 5.25% → 0.0525
+  }
   const { error: updErr } = await supabase
     .from('projects')
-    .update({ pl_completed: true })
+    .update(projectsPatch)
     .eq('id', params.id);
   if (updErr) return NextResponse.json({ error: updErr.message, stage: 'pl-completed' }, { status: 500 });
 

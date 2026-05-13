@@ -32,92 +32,138 @@ interface MemberRow {
   second_paid_at: string | null;
 }
 
+// 위원회 구성 — 현재 정책상 고정값 (변경 필요 시 한 곳만 수정)
+const COMMITTEE_DIVISION_HEAD = '이광수';
+const COMMITTEE_CO1 = '안민혁';
+
 interface FormState {
-  profit_judgment: string;
-  commission_judgment: string;
+  // 총 예산 및 수수료
+  r_value: string;         // 숫자만 (원 단위) — 문자열로 보관해 입력 UX 자연스럽게
+  commission_pct: string;  // 0~100 (%), 소숫점 2자리까지
+  budget_note: string;     // 위원회 참고 메모
+  // 케이스 + 의견 페어
+  client_importance_case: string;     // '1' | '2'
   client_importance: string;
+  rfp_route_case: string;             // '1' ~ '5'
   rfp_route: string;
+  prep_effort_case: string;           // '1' ~ '3'
   prep_effort: string;
+  bidding_difficulty_case: string;    // '1' ~ '3'
   bidding_difficulty: string;
+  proposal_resource_case: string;     // '1' ~ '3'
   proposal_resource: string;
+  external_expert_case: string;       // '해당없음' | '해당됨'
   external_expert: string;
+  stop_risk_case: string;             // '1' ~ '3'
   stop_risk: string;
-  committee_division_head: string;
-  committee_co1: string;
 }
 
 const EMPTY_FORM: FormState = {
-  profit_judgment: '',
-  commission_judgment: '',
+  r_value: '',
+  commission_pct: '',
+  budget_note: '',
+  client_importance_case: '',
   client_importance: '',
+  rfp_route_case: '',
   rfp_route: '',
+  prep_effort_case: '',
   prep_effort: '',
+  bidding_difficulty_case: '',
   bidding_difficulty: '',
+  proposal_resource_case: '',
   proposal_resource: '',
+  external_expert_case: '',
   external_expert: '',
+  stop_risk_case: '',
   stop_risk: '',
-  committee_division_head: '',
-  committee_co1: '',
 };
 
-// 텍스트 영역 9개 라벨 + 가이드 (CSV 첨부 참고)
-const JUDGMENT_FIELDS: Array<{
-  key: keyof FormState;
+// 판단 사유 7개 — 케이스 선택 + 정성적 의견 입력
+type JudgmentField = {
+  caseKey: keyof FormState;
+  noteKey: keyof FormState;
   label: string;
-  guide: string;
-  placeholder?: string;
-}> = [
+  cases: Array<{ value: string; label: string }>;
+  guide?: string;
+};
+
+const JUDGMENT_FIELDS: JudgmentField[] = [
   {
-    key: 'profit_judgment',
-    label: '이익율',
-    guide: '연간 총 매출. 예상되는 수주이익 규모와 판단 근거.',
-  },
-  {
-    key: 'commission_judgment',
-    label: '수수료',
-    guide: 'N% (제안 의지부에 따라 다름). 적용된 수수료율과 근거.',
-  },
-  {
-    key: 'client_importance',
+    caseKey: 'client_importance_case',
+    noteKey: 'client_importance',
     label: '고객 중요도',
-    guide:
-      '회사적 의미있는 고객사/레퍼런스 인가\n1. 대형·우선군 내 신규 고객사임\n2. 당장 수주 수익은 적지만 이 고객사를 레퍼런스 삼아 더 큰 기회로 확장해볼 수 있음',
+    cases: [
+      { value: '1', label: '1. 대형·우선군 내 신규 고객사' },
+      { value: '2', label: '2. 당장 수주 수익은 적지만 레퍼런스로 확장 기회' },
+    ],
+    guide: '회사적 의미있는 고객사 / 레퍼런스 가치 여부.',
   },
   {
-    key: 'rfp_route',
-    label: '인센종 케이스 (RFP 수취 루트)',
-    guide:
-      'RFP 수취 과정에서 수주PJ팀이 어떤 기여를 했는가\n1. PL이 직접 RFP 수취\n2. 인센종TF에서 RFP 수취\n3. 기존 고객사 연장 빌딩 (기존 고객사 운영팀에서 수취)\n4. 경영진이 별도 수단 통해 수취, 수주과정에서 PL의 역할은 미미함\n5. 인바운드로 인지',
+    caseKey: 'rfp_route_case',
+    noteKey: 'rfp_route',
+    label: '세일즈 케이스 (RFP 수취 루트)',
+    cases: [
+      { value: '1', label: '1. PL이 직접 RFP 수취' },
+      { value: '2', label: '2. 인센종TF에서 RFP 수취' },
+      { value: '3', label: '3. 기존 고객사 연장 빌딩 (운영팀에서 수취)' },
+      { value: '4', label: '4. 경영진이 별도 수단 통해 수취 — PL 역할 미미' },
+      { value: '5', label: '5. 인바운드로 인지' },
+    ],
+    guide: 'RFP 수취 과정에서 수주PJ팀의 기여도.',
   },
   {
-    key: 'prep_effort',
+    caseKey: 'prep_effort_case',
+    noteKey: 'prep_effort',
     label: '사전 작업 정도',
-    guide:
-      '사전 작업이 얼마나 되어있는가\n1. PL/인센종TF가 지속적으로 사전 작업을 해왔음',
+    cases: [
+      { value: '1', label: '1. PL/인센종TF가 지속적으로 사전 작업을 해옴' },
+      { value: '2', label: '2. 일부 사전 작업이 있었음' },
+      { value: '3', label: '3. 사전 작업이 거의 없었음' },
+    ],
+    guide: '사전 작업이 얼마나 누적되어 있었는가.',
   },
   {
-    key: 'bidding_difficulty',
-    label: '빌딩 난이도',
-    guide:
-      '빌딩 경쟁 측면에서 우리에게 유리(=용이)한 상황이 아닌지\n1. 경쟁 빌딩 - 우리의 관계도가 적은 고객사이고 기존 대행사와의 경쟁에서 이겨야 함\n2. 경쟁 빌딩 - 우선 후보 대상으로 선정 되어 수주 가능성 높은 편\n3. 단독 빌딩, 간단한 제안서로 종결 가능성 있음',
+    caseKey: 'bidding_difficulty_case',
+    noteKey: 'bidding_difficulty',
+    label: '비딩 난이도',
+    cases: [
+      { value: '1', label: '1. 경쟁 비딩 — 관계도 낮은 고객사, 기존 대행사 대비 어려움' },
+      { value: '2', label: '2. 경쟁 비딩 — 우선 후보로 선정, 수주 가능성 높음' },
+      { value: '3', label: '3. 단독 비딩 / 간단한 제안서로 종결 가능성' },
+    ],
+    guide: '비딩 경쟁 측면에서 우리에게 유리(용이)한 상황인지.',
   },
   {
-    key: 'proposal_resource',
+    caseKey: 'proposal_resource_case',
+    noteKey: 'proposal_resource',
     label: '제안 리소스',
-    guide:
-      '제안 리소스가 얼마나 들어가는가\n1. 제안 컨텐츠가 중요하고, 리서치부터 수수료율 결정까지 철저한 준비가 필요\n2. 회사(임원)의 다양한 발등이 중요함\n3. (제안 내용 보다는) 수수료율에 민감히 반응하는 건이라 수수료율 수준에 따라 수주여부가 결정됨',
+    cases: [
+      { value: '1', label: '1. 컨텐츠가 중요 — 리서치/수수료 결정까지 철저한 준비 필요' },
+      { value: '2', label: '2. 회사(임원) 다양한 관여가 중요' },
+      { value: '3', label: '3. 수수료율에 민감 — 수수료 수준에 따라 결정' },
+    ],
+    guide: '제안 리소스가 어느 만큼 들어가는가.',
   },
   {
-    key: 'external_expert',
-    label: '외부 전문가 사용 여부 (제안 외주 비용)',
-    guide:
-      '비용 발생 시 인센티브 이송에서 제외\n- 해당없음\n- YES. 예시) 상권 환경 과장된 전문성 분석 및 의견반영 외주 (50만원)',
+    caseKey: 'external_expert_case',
+    noteKey: 'external_expert',
+    label: '외부 전문가풀 사용 여부 (제안 외주 비용)',
+    cases: [
+      { value: '해당없음', label: '해당없음' },
+      { value: '해당됨', label: '해당됨' },
+    ],
+    guide: '비용 발생 시 인센티브 재원에서 제외. 사용 시 외주 항목·비용 정성적 의견에 기재.',
   },
   {
-    key: 'stop_risk',
-    label: '중지될 가능성',
-    guide:
-      '진행시킬 확률이 낮은(이력이 있는)광고주인지 또는 알고, 산업 특성 고려\n1. 특이사항 없음. 전체 총 매출이 중지될 가능성 높음\n2. 알고 특성상 2개 이상의 대행사를 선정하고, 이후에 중지가 있을 가능성이 높음\n3. 2년 계약건으로 봐두었던 빌딩이어서 연속해서 중지될 예정임',
+    caseKey: 'stop_risk_case',
+    noteKey: 'stop_risk',
+    label: '실집행 가능성',
+    cases: [
+      { value: '1', label: '1. 특이사항 없음 — 전체 매출이 중지될 가능성 높음' },
+      { value: '2', label: '2. 2개 이상 대행사 선정 후 중지될 가능성 있음' },
+      { value: '3', label: '3. 2년 계약 / 연속 중지 예정' },
+    ],
+    guide: '진행될 확률이 낮은(이력이 있는) 광고주인지 + 산업 특성 고려.',
   },
 ];
 
@@ -211,18 +257,31 @@ function PLProjectFormPageInner() {
           }))
         );
         const f = j.form ?? {};
+        // R값/수수료는 projects 테이블이 진실의 원천 — form 안엔 별도 저장 안 함.
+        const p = j.project ?? {};
+        const rValueStr = p.r_value != null ? String(p.r_value) : '';
+        const commissionPctStr =
+          typeof p.commission === 'number'
+            ? (Math.round(p.commission * 10000) / 100).toString()
+            : '';
         setForm({
-          profit_judgment: f.profit_judgment ?? '',
-          commission_judgment: f.commission_judgment ?? '',
+          r_value: rValueStr,
+          commission_pct: commissionPctStr,
+          budget_note: f.budget_note ?? '',
+          client_importance_case: f.client_importance_case != null ? String(f.client_importance_case) : '',
           client_importance: f.client_importance ?? '',
+          rfp_route_case: f.rfp_route_case != null ? String(f.rfp_route_case) : '',
           rfp_route: f.rfp_route ?? '',
+          prep_effort_case: f.prep_effort_case != null ? String(f.prep_effort_case) : '',
           prep_effort: f.prep_effort ?? '',
+          bidding_difficulty_case: f.bidding_difficulty_case != null ? String(f.bidding_difficulty_case) : '',
           bidding_difficulty: f.bidding_difficulty ?? '',
+          proposal_resource_case: f.proposal_resource_case != null ? String(f.proposal_resource_case) : '',
           proposal_resource: f.proposal_resource ?? '',
+          external_expert_case: f.external_expert_case ?? '',
           external_expert: f.external_expert ?? '',
+          stop_risk_case: f.stop_risk_case != null ? String(f.stop_risk_case) : '',
           stop_risk: f.stop_risk ?? '',
-          committee_division_head: f.committee_division_head ?? '',
-          committee_co1: f.committee_co1 ?? '',
         });
       })
       .catch(e => setError(e?.message ?? '오류'))
@@ -278,14 +337,51 @@ function PLProjectFormPageInner() {
       return;
     }
 
+    // R값 / 수수료 % 검증 — 빈값 허용
+    const rValueNum = form.r_value === '' ? null : Number(form.r_value);
+    if (rValueNum !== null && (!Number.isFinite(rValueNum) || rValueNum < 0)) {
+      setError('R값은 0 이상의 숫자만 입력 가능합니다.');
+      return;
+    }
+    const commissionNum =
+      form.commission_pct === '' ? null : Number(form.commission_pct);
+    if (commissionNum !== null && (!Number.isFinite(commissionNum) || commissionNum < 0)) {
+      setError('수수료는 0 이상의 숫자(% 단위)만 입력 가능합니다.');
+      return;
+    }
+
     setSaving(true);
     try {
+      const payload = {
+        members: cleaned,
+        form: {
+          // 총 예산/수수료
+          r_value: rValueNum,
+          commission_pct: commissionNum,
+          budget_note: form.budget_note,
+          // 케이스 + 의견
+          client_importance_case: form.client_importance_case,
+          client_importance: form.client_importance,
+          rfp_route_case: form.rfp_route_case,
+          rfp_route: form.rfp_route,
+          prep_effort_case: form.prep_effort_case,
+          prep_effort: form.prep_effort,
+          bidding_difficulty_case: form.bidding_difficulty_case,
+          bidding_difficulty: form.bidding_difficulty,
+          proposal_resource_case: form.proposal_resource_case,
+          proposal_resource: form.proposal_resource,
+          external_expert_case: form.external_expert_case,
+          external_expert: form.external_expert,
+          stop_risk_case: form.stop_risk_case,
+          stop_risk: form.stop_risk,
+        },
+      };
       const res = await fetch(
         `/api/pl/projects/${encodeURIComponent(projectId)}?emp=${encodeURIComponent(empId)}`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ members: cleaned, form }),
+          body: JSON.stringify(payload),
         }
       );
       const json = await res.json();
@@ -503,40 +599,66 @@ function PLProjectFormPageInner() {
               </p>
             </Card>
 
-            {/* 2) 위원회 구성 */}
+            {/* 2) 위원회 구성 — 고정값 */}
             <Card>
-              <CardHeader title="② 위원회 구성" />
+              <CardHeader title="② 위원회 구성" subtitle="현재 정책상 고정 — 변경 시 운영팀 확인 필요" />
               <div className="grid grid-cols-2 gap-4">
-                <Field
-                  label="부문대표"
-                  value={form.committee_division_head}
-                  onChange={v => setForm(f => ({ ...f, committee_division_head: v }))}
-                  placeholder="이름"
+                <FixedField label="부문대표" value={COMMITTEE_DIVISION_HEAD} />
+                <FixedField label="C.O1" value={COMMITTEE_CO1} />
+              </div>
+            </Card>
+
+            {/* 3) 총 예산 및 수수료 */}
+            <Card>
+              <CardHeader title="③ 총 예산 및 수수료" subtitle="R값과 수수료율은 위원회 판단의 기초 자료가 됩니다." />
+              <div className="grid grid-cols-2 gap-4">
+                <NumberField
+                  label="R값"
+                  value={form.r_value}
+                  onChange={v => setForm(f => ({ ...f, r_value: v }))}
+                  suffix="원"
+                  step="1"
+                  min={0}
+                  placeholder="예: 50000000"
                 />
-                <Field
-                  label="C.O1"
-                  value={form.committee_co1}
-                  onChange={v => setForm(f => ({ ...f, committee_co1: v }))}
-                  placeholder="이름"
+                <NumberField
+                  label="수수료"
+                  value={form.commission_pct}
+                  onChange={v => setForm(f => ({ ...f, commission_pct: v }))}
+                  suffix="%"
+                  step="0.01"
+                  min={0}
+                  max={100}
+                  placeholder="예: 5.25"
+                />
+              </div>
+              <div className="mt-4">
+                <TextareaField
+                  label="총 예산 및 수수료 — 위원회 참고사항"
+                  value={form.budget_note}
+                  onChange={v => setForm(f => ({ ...f, budget_note: v }))}
+                  placeholder="예: 수수료 산정 근거, 매출 가정, 예외 사항 등"
                 />
               </div>
             </Card>
 
-            {/* 3) 판단 사유 9개 */}
+            {/* 4) 판단 사유 7개 — 케이스 선택 + 정성적 의견 */}
             <Card>
               <CardHeader
-                title="③ 인센티브 이송 및 지급 시기 판단 사유"
-                subtitle="각 항목에 해당하는 케이스 번호와 보충 설명을 자유롭게 입력해 주세요."
+                title="④ 인센티브 이송 및 지급 시기 판단 사유"
+                subtitle="각 항목에 해당하는 케이스를 선택하고 정성적 의견을 자유롭게 입력해 주세요."
               />
               <div className="space-y-5">
                 {JUDGMENT_FIELDS.map(f => (
-                  <TextareaField
-                    key={f.key}
+                  <CaseField
+                    key={f.caseKey}
                     label={f.label}
                     guide={f.guide}
-                    value={form[f.key]}
-                    onChange={v => setForm(prev => ({ ...prev, [f.key]: v }))}
-                    placeholder={f.placeholder}
+                    caseValue={form[f.caseKey]}
+                    onCaseChange={v => setForm(prev => ({ ...prev, [f.caseKey]: v }))}
+                    cases={f.cases}
+                    noteValue={form[f.noteKey]}
+                    onNoteChange={v => setForm(prev => ({ ...prev, [f.noteKey]: v }))}
                   />
                 ))}
               </div>
@@ -606,27 +728,110 @@ function Stat({
     </div>
   );
 }
-function Field({
+function FixedField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <label className="text-[11px] font-semibold text-gray-500 mb-1 block">{label}</label>
+      <div className="px-3 py-2 text-sm text-gray-800 bg-gray-50 border border-gray-200 rounded-md">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function NumberField({
   label,
   value,
   onChange,
+  suffix,
+  step,
+  min,
+  max,
   placeholder,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  suffix?: string;
+  step?: string;
+  min?: number;
+  max?: number;
   placeholder?: string;
 }) {
   return (
     <div>
       <label className="text-[11px] font-semibold text-gray-500 mb-1 block">{label}</label>
-      <input
-        type="text"
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-      />
+      <div className="relative">
+        <input
+          type="number"
+          inputMode="decimal"
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder={placeholder}
+          step={step}
+          min={min}
+          max={max}
+          className="w-full px-3 py-2 pr-10 text-sm border border-gray-200 rounded-md tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+        />
+        {suffix && (
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
+            {suffix}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CaseField({
+  label,
+  guide,
+  caseValue,
+  onCaseChange,
+  cases,
+  noteValue,
+  onNoteChange,
+}: {
+  label: string;
+  guide?: string;
+  caseValue: string;
+  onCaseChange: (v: string) => void;
+  cases: Array<{ value: string; label: string }>;
+  noteValue: string;
+  onNoteChange: (v: string) => void;
+}) {
+  return (
+    <div>
+      <label className="text-sm font-semibold text-gray-700 mb-1 block">{label}</label>
+      {guide && (
+        <p className="text-[11px] text-gray-400 whitespace-pre-wrap mb-2 leading-relaxed">
+          {guide}
+        </p>
+      )}
+      <div className="space-y-2">
+        <select
+          value={caseValue}
+          onChange={e => onCaseChange(e.target.value)}
+          className={clsx(
+            'w-full px-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/30',
+            caseValue ? 'border-blue-200 bg-blue-50/40 text-gray-800' : 'border-gray-200 text-gray-500'
+          )}
+        >
+          <option value="">— 케이스 선택 —</option>
+          {cases.map(c => (
+            <option key={c.value} value={c.value}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+        <textarea
+          value={noteValue}
+          onChange={e => onNoteChange(e.target.value)}
+          placeholder="정성적 의견 (선택사항)"
+          rows={3}
+          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+        />
+      </div>
     </div>
   );
 }
