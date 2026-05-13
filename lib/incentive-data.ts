@@ -313,7 +313,19 @@ export interface DashboardStatsV2 {
 const FUND_CONFIRMED_OR_LATER = (p: SupabaseProject) =>
   p.fund_confirmed || p.first_payment_completed || p.second_payment_completed;
 
-export function getDashboardStatsV2(projects: SupabaseProject[]): DashboardStatsV2 {
+export function getDashboardStatsV2(
+  projects: SupabaseProject[],
+  /**
+   * 디렉토리 정보 (옵션). 주어지면 개인별 지급 관리 페이지와 동일한 정책으로 합산:
+   *   - status === '퇴사' 인 멤버 회차는 합계 자체에서 제외
+   *   - paid_at > last_work_date 회차는 excluded 로 분류되어 paid/pending 모두에서 제외
+   * 주어지지 않으면 종전(모든 멤버·전 기간) 합산.
+   */
+  directory?: {
+    lastWorkDateByName: Record<string, string | null | undefined>;
+    statusByName: Record<string, string | null | undefined>;
+  }
+): DashboardStatsV2 {
   const today = todayIso();
   let totalFirstPaid = 0;
   let totalSecondPaid = 0;
@@ -322,9 +334,22 @@ export function getDashboardStatsV2(projects: SupabaseProject[]): DashboardStats
   for (const p of projects) {
     const projectLost = p.acquisition_status === 'LOST';
     for (const m of p.members) {
+      // 디렉토리가 있을 땐 퇴사자(팀 계정은 제외 대상 아님) 회차 통째로 스킵
+      if (directory && !m.is_team_account) {
+        const status = directory.statusByName[m.member_name];
+        if (status === '퇴사') continue;
+      }
+      const lwd = directory && !m.is_team_account
+        ? directory.lastWorkDateByName[m.member_name] ?? null
+        : null;
+      const afterLwd = (paidAt: string | null) =>
+        !!(lwd && paidAt && paidAt > lwd);
+
       // 1차
       if (projectLost || p.first_payment_skipped) {
         // 수주실패 또는 명시적 미지급 → paid/pending 어디에도 안 더해짐
+      } else if (afterLwd(m.first_paid_at)) {
+        // 마지막 근무일 이후 지급 예정 → excluded
       } else if (m.first_paid_at && m.first_paid_at <= today) {
         totalFirstPaid += m.first_amount;
       } else if (m.first_amount > 0) {
@@ -333,6 +358,8 @@ export function getDashboardStatsV2(projects: SupabaseProject[]): DashboardStats
       // 2차
       if (projectLost || p.second_payment_skipped) {
         // 수주실패 또는 명시적 미지급 → 합계 무시
+      } else if (afterLwd(m.second_paid_at)) {
+        // excluded
       } else if (m.second_paid_at && m.second_paid_at <= today) {
         totalSecondPaid += m.second_amount;
       } else if (m.second_amount > 0) {

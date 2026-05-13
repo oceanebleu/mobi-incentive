@@ -104,7 +104,7 @@ export default function MembersPage() {
         <div>
           <h1 className="text-xl font-bold text-gray-900">개인별 지급 관리</h1>
           <p className="text-sm text-gray-400 mt-0.5">
-            구성원·팀 계정별 인센티브 지급 내역 및 수령 예정액 (paid_at ≤ 오늘 기준)
+            구성원 및 팀별 인센티브 지급 내역 및 수령 예정액
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -142,23 +142,25 @@ export default function MembersPage() {
         </div>
       )}
 
-      {/* 제외/미지급 안내 배너 */}
-      {totalExcluded > 0 && (
+      {/* 제외/미지급 안내 — 한 박스로 통합 */}
+      {(totalExcluded > 0 || totalSkipped > 0) && (
         <div className="flex items-start gap-2 px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
-          <Info size={14} className="mt-0.5 text-gray-400" />
-          <span>
-            퇴사자에게 실제로 지급되지 않은 금액 <b>{formatKRWFull(totalExcluded)}</b> 가
-            지급 집계에서 제외되었습니다.
-          </span>
-        </div>
-      )}
-      {totalSkipped > 0 && (
-        <div className="flex items-start gap-2 px-4 py-3 bg-amber-50/60 border border-amber-100 rounded-lg text-xs text-amber-800">
-          <Info size={14} className="mt-0.5 text-amber-500" />
-          <span>
-            프로젝트에서 <b>미지급</b>으로 표시된 회차의 합계 <b>{formatKRWFull(totalSkipped)}</b> 가
-            지급 집계에서 제외되었습니다.
-          </span>
+          <Info size={14} className="mt-0.5 text-gray-400 flex-shrink-0" />
+          <div className="space-y-1">
+            <p className="font-semibold text-gray-700">지급 집계 제외 안내</p>
+            {totalExcluded > 0 && (
+              <p>
+                · 마지막 근무일 이후 지급 예정인 퇴사자 회차 합계 ·{' '}
+                <b className="text-gray-800">{formatKRWFull(totalExcluded)}</b>
+              </p>
+            )}
+            {totalSkipped > 0 && (
+              <p>
+                · 프로젝트에서 <b>미지급</b>으로 표시된 회차 합계 ·{' '}
+                <b className="text-gray-800">{formatKRWFull(totalSkipped)}</b>
+              </p>
+            )}
+          </div>
         </div>
       )}
 

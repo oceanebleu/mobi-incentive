@@ -124,12 +124,15 @@ export default function ArchivePage() {
       const res = await fetch('/api/proposal-archive/sync', { method: 'POST' });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error ?? '동기화 실패');
-      setLastSync(
-        `시트 ${json.fetched}행 / A=FALSE 제외 ${json.skippedFalse}행 / ` +
-          `이미 프로젝트로 등록 ${json.skippedExistingProject ?? 0}건 / ` +
-          `수주실패 ${json.lostCount ?? 0}건 (수주실패 탭으로 분류) / ` +
-          `중복정리 ${json.deduped}건 / 신규 ${json.new}건 / 갱신 ${json.updated}건`
-      );
+      const stamp = new Date().toLocaleString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+      setLastSync(`${stamp} · 신규 ${json.new ?? 0}건 추가`);
       await load();
     } catch (e: any) {
       setError(e?.message ?? '동기화 중 오류');
@@ -303,12 +306,20 @@ export default function ArchivePage() {
         </div>
       )}
 
-      {/* 통계 */}
-      <div className="grid grid-cols-5 gap-3">
+      {/* 통계 — 수동 표시는 '프로젝트로 등록됨'에 합산 */}
+      <div className="grid grid-cols-4 gap-3">
         <Stat label="전체" value={counts.total} />
         <Stat label="미등록 (운영위 대상)" value={counts.pending} tone="amber" />
-        <Stat label="프로젝트로 등록됨" value={counts.promoted} tone="emerald" />
-        <Stat label="수동 표시 (이미 생성됨)" value={counts.markedExisting} tone="gray" />
+        <Stat
+          label="프로젝트로 등록됨"
+          value={counts.done}
+          tone="emerald"
+          sublabel={
+            counts.markedExisting > 0
+              ? `정식 ${counts.promoted} · 수동 표시 ${counts.markedExisting}`
+              : undefined
+          }
+        />
         <Stat label="수주실패" value={counts.lost} tone="red" />
       </div>
 
@@ -520,10 +531,12 @@ function Stat({
   label,
   value,
   tone = 'default',
+  sublabel,
 }: {
   label: string;
   value: number;
   tone?: 'default' | 'amber' | 'emerald' | 'gray' | 'red';
+  sublabel?: string;
 }) {
   const toneCls: Record<string, string> = {
     default: 'text-gray-900',
@@ -536,6 +549,7 @@ function Stat({
     <div className="bg-white rounded-xl border border-gray-200 px-4 py-3">
       <p className="text-[11px] text-gray-400">{label}</p>
       <p className={clsx('text-lg font-bold mt-0.5', toneCls[tone])}>{value}</p>
+      {sublabel && <p className="text-[10px] text-gray-400 mt-0.5">{sublabel}</p>}
     </div>
   );
 }

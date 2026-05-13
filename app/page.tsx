@@ -26,17 +26,23 @@ import {
 
 export default function DashboardPage() {
   const { projects, loading, error } = useIncentiveData();
-  const { lastWorkDateByName, teamByName, employeeIdByName } = useUserDirectory();
+  const { lastWorkDateByName, teamByName, employeeIdByName, statusByName } =
+    useUserDirectory();
 
-  const stats = useMemo(() => getDashboardStatsV2(projects), [projects]);
+  // 개인별 지급 관리 페이지와 동일 정책으로 합산 (퇴사자 제외 + 마지막 근무일 이후 excluded)
+  const stats = useMemo(
+    () => getDashboardStatsV2(projects, { lastWorkDateByName, statusByName }),
+    [projects, lastWorkDateByName, statusByName]
+  );
   const memberSummaries = useMemo(
     () =>
       calcMemberSummariesV2(projects, {
         lastWorkDateByName,
         teamByName,
         employeeIdByName,
+        statusByName,
       }),
-    [projects, lastWorkDateByName, teamByName, employeeIdByName]
+    [projects, lastWorkDateByName, teamByName, employeeIdByName, statusByName]
   );
 
   const sortedMembers = useMemo(
