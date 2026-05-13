@@ -4,6 +4,8 @@
 // 규칙:
 //   - A열(needs_committee) = TRUE 인 행만 upsert
 //   - 단, 입찰상태가 '수주실패'인 행은 운영위 대상에서 제외
+//   - 또한 projects.campaign_name 에 이미 존재하는 광고주는 제외
+//     (이미 프로젝트 관리로 진입한 건은 시트 동기화로 덮어쓰지 않음)
 //   - 광고주(client_name) 기준 upsert. 같은 client_name이면 덮어쓰기.
 //   - 시트에서 false로 바뀌었거나 사라진 행은 DB에서 자동 제거하지 않음
 //     (이력 보존; UI에서 수동 삭제 가능하도록 별도 엔드포인트로)
@@ -42,19 +44,36 @@ export async function POST() {
   const skippedFalse = allRows.length - aTrueRows.length;
   const isLost = (s: string | null) =>
     !!s && s.replace(/\s/g, '').includes('수주실패');
-  const candidates = aTrueRows.filter(r => !isLost(r.bidding_status));
-  const skippedLost = aTrueRows.length - candidates.length;
+  const afterLost = aTrueRows.filter(r => !isLost(r.bidding_status));
+  const skippedLost = aTrueRows.length - afterLost.length;
 
-  // 3) client_name 중복 처리 — 같은 광고주가 시트에 2번 이상 나오면 마지막 행 채택
+  const supabase = getSupabaseAdmin();
+
+  // 3) projects.campaign_name 에 이미 있는 광고주는 동기화 후보에서 제외
+  //    (이미 프로젝트로 관리 중인 건은 시트 → archive 덮어쓰기 차단)
+  const { data: existingProjects } = await supabase
+    .from('projects')
+    .select('campaign_name');
+  const normalize = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
+  const existingProjectNames = new Set(
+    (existingProjects ?? [])
+      .map(p => (p as any).campaign_name as string | null)
+      .filter((n): n is string => !!n && n.trim() !== '')
+      .map(normalize)
+  );
+  const candidates = afterLost.filter(
+    r => !existingProjectNames.has(normalize(r.client_name))
+  );
+  const skippedExistingProject = afterLost.length - candidates.length;
+
+  // 4) client_name 중복 처리 — 같은 광고주가 시트에 2번 이상 나오면 마지막 행 채택
   const dedupedByName = new Map<string, typeof candidates[number]>();
   for (const c of candidates) {
     dedupedByName.set(c.client_name, c);
   }
   const toUpsert = Array.from(dedupedByName.values());
 
-  const supabase = getSupabaseAdmin();
-
-  // 4) 기존 row 와 비교 — 신규 vs 갱신 카운트
+  // 5) 기존 row 와 비교 — 신규 vs 갱신 카운트
   const { data: existing } = await supabase
     .from('proposal_archive')
     .select('client_name');
@@ -66,7 +85,7 @@ export async function POST() {
     else newCount++;
   }
 
-  // 5) Upsert (client_name 기준)
+  // 6) Upsert (client_name 기준)
   const now = new Date().toISOString();
   const rows = toUpsert.map(r => ({ ...r, synced_at: now }));
 
@@ -89,6 +108,7 @@ export async function POST() {
     fetched: allRows.length,
     skippedFalse,
     skippedLost,
+    skippedExistingProject,
     deduped: candidates.length - toUpsert.length,
     new: newCount,
     updated: updatedCount,

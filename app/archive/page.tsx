@@ -118,6 +118,7 @@ export default function ArchivePage() {
       setLastSync(
         `시트 ${json.fetched}행 / A=FALSE 제외 ${json.skippedFalse}행 / ` +
           `수주실패 제외 ${json.skippedLost ?? 0}행 / ` +
+          `이미 프로젝트로 등록 ${json.skippedExistingProject ?? 0}건 / ` +
           `중복정리 ${json.deduped}건 / 신규 ${json.new}건 / 갱신 ${json.updated}건`
       );
       await load();
