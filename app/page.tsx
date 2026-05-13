@@ -52,16 +52,25 @@ export default function DashboardPage() {
     [projects, lastWorkDateByName, teamByName, employeeIdByName, statusByName]
   );
 
-  const sortedMembers = useMemo(
-    () =>
-      [...memberSummaries]
-        .filter(m => m.total_paid + m.total_pending > 0)
-        .sort(
-          (a, b) =>
-            b.total_paid + b.total_pending - (a.total_paid + a.total_pending)
-        ),
-    [memberSummaries]
-  );
+  // 개인/팀별 지급 현황 — 정렬 기준 & 명단 필터
+  type SortBy = 'TOTAL' | 'PAID';
+  type ScopeBy = 'ACTIVE' | 'ALL';
+  const [memberSortBy, setMemberSortBy] = useState<SortBy>('TOTAL');
+  const [memberScope, setMemberScope] = useState<ScopeBy>('ACTIVE');
+
+  const sortedMembers = useMemo(() => {
+    let list = [...memberSummaries].filter(m => m.total_paid + m.total_pending > 0);
+    if (memberScope === 'ACTIVE') {
+      // 퇴사자 제외 (팀 계정은 status 없음 → 항상 포함)
+      list = list.filter(m => m.is_team_account || m.status !== '퇴사');
+    }
+    list.sort((a, b) => {
+      if (memberSortBy === 'PAID') return b.total_paid - a.total_paid;
+      // 기본 = TOTAL (지급 총액 = 완료 + 예정)
+      return b.total_paid + b.total_pending - (a.total_paid + a.total_pending);
+    });
+    return list;
+  }, [memberSummaries, memberSortBy, memberScope]);
 
   // 단계별 카운트 + 프로젝트 분류 (PL 작성대기 / 재원확정 필요 리스트용 + 단계 박스 드릴다운용)
   //   · PL 작성대기 : 수주실패·대행종료 제외 (PL 기여도 더 받을 이유 없음)
@@ -122,12 +131,11 @@ export default function DashboardPage() {
 
   // 인센티브 지급 예정 — 회차 단위(1차/2차)로 펼쳐서 가까운 일자부터 정렬
   //   · 수주실패·대행종료 프로젝트 제외
+  //   · 재원확정(fund_confirmed) 안 된 프로젝트 제외 — 재원이 확정돼야 실제 지급 일정으로 봄
   //   · 명시적 미지급(skipped)·이미 지급 완료(completed) 회차 제외
   //   · 지급예정일(planned date)이 오늘 이전이면 자동으로 사라지도록 미래만 포함
   //
-  //  ※ 금액은 그 회차 멤버들의 first_amount(또는 second_amount) 단순 합 — '이 회차에 얼마가
-  //     나갈 예정인가' 를 그대로 보여주는 게 사용자 기대치. 개인별 지급 페이지에서 쓰는
-  //     멤버 단위 제외(퇴사·lwd 초과·이미 paid) 로직은 회차 총액과는 정책이 다르므로 적용 X.
+  //  ※ 금액은 그 회차 멤버들의 first_amount(또는 second_amount) 단순 합. 0인 행은 effectivePhaseAmount 로 환산.
   const upcomingPayments = useMemo(() => {
     const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
     type Row = {
@@ -140,6 +148,7 @@ export default function DashboardPage() {
     const rows: Row[] = [];
     for (const p of projects) {
       if (p.acquisition_status === 'LOST' || p.acquisition_status === 'CANCELLED') continue;
+      if (!p.fund_confirmed) continue;
 
       const sumFirst = p.members.reduce((s, m) => s + effectivePhaseAmount(m, p, 1), 0);
       const sumSecond = p.members.reduce((s, m) => s + effectivePhaseAmount(m, p, 2), 0);
@@ -422,7 +431,26 @@ export default function DashboardPage() {
         <div className="flex items-center gap-2 mb-5">
           <Users size={16} className="text-blue-600" />
           <h2 className="text-sm font-semibold text-gray-800">개인·팀별 인센티브 지급 현황</h2>
-          <span className="ml-auto text-xs text-gray-400">지급 총액 기준 내림차순</span>
+          <div className="ml-auto flex items-center gap-2">
+            <select
+              value={memberSortBy}
+              onChange={e => setMemberSortBy(e.target.value as 'TOTAL' | 'PAID')}
+              className="text-xs px-2.5 py-1.5 border border-gray-200 rounded-md bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              title="정렬 기준"
+            >
+              <option value="TOTAL">지급 총액 기준</option>
+              <option value="PAID">지급 완료액 기준</option>
+            </select>
+            <select
+              value={memberScope}
+              onChange={e => setMemberScope(e.target.value as 'ACTIVE' | 'ALL')}
+              className="text-xs px-2.5 py-1.5 border border-gray-200 rounded-md bg-white text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              title="명단 범위"
+            >
+              <option value="ACTIVE">퇴사자 제외</option>
+              <option value="ALL">전체 명단</option>
+            </select>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
