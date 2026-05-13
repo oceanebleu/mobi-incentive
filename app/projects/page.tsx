@@ -24,7 +24,8 @@ import {
   type SupabaseProject,
 } from '@/lib/incentive-data';
 
-const ACQ_OPTIONS = ['WON', 'LOST', 'CANCELLED', 'PENDING', 'REVIEWING', 'RESULT_PENDING'] as const;
+// '진행중'(PENDING) 은 의미가 모호하여 UI 필터 옵션에서 제외 — 데이터는 그대로 유지
+const ACQ_OPTIONS = ['WON', 'LOST', 'CANCELLED', 'REVIEWING', 'RESULT_PENDING'] as const;
 type AcqFilter = (typeof ACQ_OPTIONS)[number] | 'ALL';
 type StageFilter = PaymentStage | 'ALL';
 

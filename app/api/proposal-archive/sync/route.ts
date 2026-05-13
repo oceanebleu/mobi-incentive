@@ -85,7 +85,33 @@ export async function POST() {
     else newCount++;
   }
 
-  // 6) Upsert (client_name 기준)
+  // 6) 기존 archive 에 남아있던 '수주실패' 행도 정리 (이미 운영위 or 수동표시된 건은 보호)
+  const { data: legacyLost } = await supabase
+    .from('proposal_archive')
+    .select('id, bidding_status, promoted_project_id, marked_existing');
+  const lostIdsToDelete: number[] = [];
+  for (const row of legacyLost ?? []) {
+    const r = row as any;
+    if (!isLost(r.bidding_status)) continue;
+    if (r.promoted_project_id) continue;
+    if (r.marked_existing === true) continue;
+    lostIdsToDelete.push(r.id);
+  }
+  let cleanedLost = 0;
+  if (lostIdsToDelete.length > 0) {
+    const { error: delErr, count } = await supabase
+      .from('proposal_archive')
+      .delete({ count: 'exact' })
+      .in('id', lostIdsToDelete);
+    if (delErr) {
+      // 정리 실패는 치명적이지 않음 — 로그만 남기고 진행
+      console.error('[sync] legacy LOST cleanup failed:', delErr.message);
+    } else {
+      cleanedLost = count ?? lostIdsToDelete.length;
+    }
+  }
+
+  // 7) Upsert (client_name 기준)
   const now = new Date().toISOString();
   const rows = toUpsert.map(r => ({ ...r, synced_at: now }));
 
@@ -109,6 +135,7 @@ export async function POST() {
     skippedFalse,
     skippedLost,
     skippedExistingProject,
+    cleanedLost,
     deduped: candidates.length - toUpsert.length,
     new: newCount,
     updated: updatedCount,

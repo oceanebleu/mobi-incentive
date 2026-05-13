@@ -246,6 +246,12 @@ create table if not exists public.proposal_archive (
   promoted_by_email    text,
   promoted_by_name     text,
 
+  -- 수동 '이미 생성됨' 표시 (다른 경로로 이미 프로젝트화되어 운영위 등록 불필요한 건)
+  marked_existing          boolean not null default false,
+  marked_existing_at       timestamptz,
+  marked_existing_by_email text,
+  marked_existing_by_name  text,
+
   -- 시스템
   synced_at            timestamptz not null default now(),
   created_at           timestamptz not null default now(),

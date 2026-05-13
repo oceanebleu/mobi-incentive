@@ -62,6 +62,10 @@ interface ArchiveRow {
   promoted_at: string | null;
   promoted_by_email: string | null;
   promoted_by_name: string | null;
+  marked_existing: boolean | null;
+  marked_existing_at: string | null;
+  marked_existing_by_email: string | null;
+  marked_existing_by_name: string | null;
   synced_at: string;
   updated_at: string;
 }
@@ -82,6 +86,7 @@ export default function ArchivePage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [promotingId, setPromotingId] = useState<number | null>(null);
+  const [markingId, setMarkingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [lastPromote, setLastPromote] = useState<string | null>(null);
@@ -119,6 +124,7 @@ export default function ArchivePage() {
         `시트 ${json.fetched}행 / A=FALSE 제외 ${json.skippedFalse}행 / ` +
           `수주실패 제외 ${json.skippedLost ?? 0}행 / ` +
           `이미 프로젝트로 등록 ${json.skippedExistingProject ?? 0}건 / ` +
+          `기존 수주실패 정리 ${json.cleanedLost ?? 0}건 / ` +
           `중복정리 ${json.deduped}건 / 신규 ${json.new}건 / 갱신 ${json.updated}건`
       );
       await load();
@@ -155,15 +161,45 @@ export default function ArchivePage() {
     }
   }
 
+  async function setMarkExisting(row: ArchiveRow, value: boolean) {
+    if (row.promoted_project_id) return; // promote 된 건은 수동 표시 불가
+    const message = value
+      ? `[${row.client_name}] 건을 '이미 생성됨'으로 표시할까요?\n` +
+        `미등록 탭에서 사라지고, 등록 완료 탭에 [수동 표시됨] 으로 분류됩니다.\n` +
+        `(언제든 해제 가능)`
+      : `[${row.client_name}] 의 수동 '이미 생성됨' 표시를 해제할까요?\n미등록 탭으로 돌아갑니다.`;
+    if (!confirm(message)) return;
+
+    setMarkingId(row.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/proposal-archive/${row.id}/mark-existing`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json?.error ?? '처리 실패');
+      await load();
+    } catch (e: any) {
+      setError(e?.message ?? '처리 중 오류');
+    } finally {
+      setMarkingId(null);
+    }
+  }
+
   useEffect(() => {
     load();
   }, []);
 
+  // 등록 완료 = 정식 promote ∪ 수동 '이미 생성됨' 마크
+  const isDone = (r: ArchiveRow) => !!r.promoted_project_id || r.marked_existing === true;
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter(r => {
-      if (tab === 'PENDING' && r.promoted_project_id) return false;
-      if (tab === 'PROMOTED' && !r.promoted_project_id) return false;
+      if (tab === 'PENDING' && isDone(r)) return false;
+      if (tab === 'PROMOTED' && !isDone(r)) return false;
       if (!q) return true;
       const hay = [
         r.client_name,
@@ -185,11 +221,19 @@ export default function ArchivePage() {
   const counts = useMemo(() => {
     let pending = 0;
     let promoted = 0;
+    let markedExisting = 0;
     for (const r of items) {
       if (r.promoted_project_id) promoted++;
+      else if (r.marked_existing) markedExisting++;
       else pending++;
     }
-    return { pending, promoted, total: items.length };
+    return {
+      pending,
+      promoted,
+      markedExisting,
+      done: promoted + markedExisting,
+      total: items.length,
+    };
   }, [items]);
 
   return (
@@ -245,10 +289,11 @@ export default function ArchivePage() {
       )}
 
       {/* 통계 */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-4 gap-3">
         <Stat label="전체" value={counts.total} />
         <Stat label="운영위 대상 (미등록)" value={counts.pending} tone="amber" />
         <Stat label="프로젝트로 등록됨" value={counts.promoted} tone="emerald" />
+        <Stat label="수동 표시 (이미 생성됨)" value={counts.markedExisting} tone="gray" />
       </div>
 
       {/* 탭 */}
@@ -264,8 +309,8 @@ export default function ArchivePage() {
           active={tab === 'PROMOTED'}
           onClick={() => setTab('PROMOTED')}
           label="등록 완료"
-          hint="projects 테이블로 승격된 건"
-          count={counts.promoted}
+          hint="정식 등록 + 수동 '이미 생성됨'"
+          count={counts.done}
         />
       </div>
 
@@ -391,15 +436,43 @@ export default function ArchivePage() {
                             {r.promoted_by_name ?? r.promoted_by_email ?? ''}
                           </div>
                         </div>
+                      ) : r.marked_existing ? (
+                        <div className="text-xs">
+                          <span className="inline-flex items-center gap-1 text-gray-600 font-medium">
+                            <CheckCircle2 size={12} />
+                            수동 표시됨
+                          </span>
+                          <div className="text-[10px] text-gray-400 mt-0.5">
+                            {r.marked_existing_by_name ?? r.marked_existing_by_email ?? ''}
+                          </div>
+                          <button
+                            onClick={() => setMarkExisting(r, false)}
+                            disabled={markingId === r.id}
+                            className="mt-1 text-[10px] text-gray-400 hover:text-gray-700 underline-offset-2 hover:underline disabled:opacity-60"
+                          >
+                            {markingId === r.id ? '처리 중...' : '표시 해제'}
+                          </button>
+                        </div>
                       ) : (
-                        <button
-                          onClick={() => promote(r)}
-                          disabled={promotingId === r.id}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-60 transition-colors"
-                        >
-                          <ArrowRight size={12} />
-                          {promotingId === r.id ? '등록 중...' : '운영위로 보내기'}
-                        </button>
+                        <div className="flex flex-col gap-1.5">
+                          <button
+                            onClick={() => promote(r)}
+                            disabled={promotingId === r.id || markingId === r.id}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-60 transition-colors whitespace-nowrap"
+                          >
+                            <ArrowRight size={12} />
+                            {promotingId === r.id ? '등록 중...' : '운영위로 보내기'}
+                          </button>
+                          <button
+                            onClick={() => setMarkExisting(r, true)}
+                            disabled={promotingId === r.id || markingId === r.id}
+                            title="다른 경로(직접입력·과거자료 등)로 이미 프로젝트화된 경우에만 사용"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-60 transition-colors whitespace-nowrap"
+                          >
+                            <CheckCircle2 size={12} />
+                            {markingId === r.id ? '처리 중...' : '이미 생성됨'}
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -423,12 +496,13 @@ function Stat({
 }: {
   label: string;
   value: number;
-  tone?: 'default' | 'amber' | 'emerald';
+  tone?: 'default' | 'amber' | 'emerald' | 'gray';
 }) {
   const toneCls: Record<string, string> = {
     default: 'text-gray-900',
     amber: 'text-amber-700',
     emerald: 'text-emerald-700',
+    gray: 'text-gray-500',
   };
   return (
     <div className="bg-white rounded-xl border border-gray-200 px-4 py-3">
