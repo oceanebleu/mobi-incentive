@@ -51,6 +51,7 @@ export default withAuth(
 
 export const config = {
   matcher: [
-    '/((?!api/auth|login|unauthorized|_next/static|_next/image|favicon.ico).*)',
+    // /pl, /api/pl 은 PL이 로그인 없이 사번 인증으로 접근 — 미들웨어 우회
+    '/((?!api/auth|api/pl|pl|login|unauthorized|_next/static|_next/image|favicon.ico).*)',
   ],
 };

@@ -16,6 +16,9 @@ import {
   Save,
   X,
   AlertCircle,
+  Link2,
+  CheckCircle2,
+  FileText,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { formatKRWFull, formatCommission, formatDate } from '@/lib/utils';
@@ -114,6 +117,7 @@ export default function ProjectDetailPage() {
             >
               {PAYMENT_STAGE_LABEL[stage]}
             </span>
+            {canEdit && <PLLinkCopyButton projectId={project.id} />}
             {project.committee_sheet_link && (
               <a
                 href={project.committee_sheet_link}
@@ -296,6 +300,8 @@ export default function ProjectDetailPage() {
           <p className="text-sm text-gray-600 whitespace-pre-wrap">{project.note}</p>
         </div>
       )}
+
+      <PLFormPanel projectId={project.id} />
 
       <ChangeHistory projectId={project.id} />
 
@@ -674,6 +680,159 @@ function MembersEditModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// PL 고유 링크 복사 버튼 — 관리자가 Slack/이메일로 PL에게 전달
+// ─────────────────────────────────────────────
+function PLLinkCopyButton({ projectId }: { projectId: string }) {
+  const [copied, setCopied] = useState(false);
+  function copy() {
+    const origin =
+      typeof window !== 'undefined' ? window.location.origin : '';
+    const url = `${origin}/pl/projects/${encodeURIComponent(projectId)}`;
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(url).catch(() => {});
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  }
+  return (
+    <button
+      onClick={copy}
+      title="PL이 사번 인증 후 양식을 입력할 수 있는 고유 링크"
+      className={clsx(
+        'flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors',
+        copied
+          ? 'bg-emerald-100 text-emerald-700'
+          : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+      )}
+    >
+      {copied ? <CheckCircle2 size={11} /> : <Link2 size={11} />}
+      {copied ? '복사됨' : 'PL 링크 복사'}
+    </button>
+  );
+}
+
+// ─────────────────────────────────────────────
+// PL 양식 패널 — 판단 사유 9개 + 위원회 구성을 읽기 전용으로 표시
+//   (입력은 /pl/projects/[id] 페이지에서 PL이 직접)
+// ─────────────────────────────────────────────
+const PL_FORM_FIELDS: Array<{ key: string; label: string }> = [
+  { key: 'committee_division_head', label: '부문대표' },
+  { key: 'committee_co1', label: 'C.O1' },
+  { key: 'profit_judgment', label: '이익율' },
+  { key: 'commission_judgment', label: '수수료' },
+  { key: 'client_importance', label: '고객 중요도' },
+  { key: 'rfp_route', label: '인센종 케이스 (RFP 수취 루트)' },
+  { key: 'prep_effort', label: '사전 작업 정도' },
+  { key: 'bidding_difficulty', label: '빌딩 난이도' },
+  { key: 'proposal_resource', label: '제안 리소스' },
+  { key: 'external_expert', label: '외부 전문가 사용 여부' },
+  { key: 'stop_risk', label: '중지될 가능성' },
+];
+
+function PLFormPanel({ projectId }: { projectId: string }) {
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState<any | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open || data !== null) return;
+    setLoading(true);
+    // 관리자 전용 — 인증된 라우트로 별도 GET. /api/projects/[id]/pl-form 없음 → 직접 Supabase 호출 라우트 만들기엔 무거우니
+    // 이미 /api/projects 에서 한 번에 받아오는 게 적절하지만 별도 단순 라우트 추가.
+    fetch(`/api/projects/${encodeURIComponent(projectId)}/pl-form`, { cache: 'no-store' })
+      .then(async r => {
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+        return j;
+      })
+      .then(j => setData(j.form ?? {}))
+      .catch(e => setError(e?.message ?? String(e)))
+      .finally(() => setLoading(false));
+  }, [open, data, projectId]);
+
+  const hasAny =
+    data &&
+    PL_FORM_FIELDS.some(f => {
+      const v = (data as any)[f.key];
+      return typeof v === 'string' && v.trim() !== '';
+    });
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-5 py-4 hover:bg-gray-50 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <FileText size={15} className="text-gray-500" />
+          <h2 className="text-sm font-semibold text-gray-700">PL 작성 양식</h2>
+          {data && (
+            <span className="text-xs text-gray-400 ml-1">
+              {hasAny ? '작성됨' : '미작성'}
+            </span>
+          )}
+        </div>
+        {open ? (
+          <ChevronDown size={15} className="text-gray-400" />
+        ) : (
+          <ChevronRight size={15} className="text-gray-400" />
+        )}
+      </button>
+
+      {open && (
+        <div className="border-t border-gray-100 px-5 py-4 space-y-3">
+          {loading && (
+            <div className="flex items-center gap-2 text-sm text-gray-400">
+              <Loader2 size={14} className="animate-spin" /> 불러오는 중...
+            </div>
+          )}
+          {error && (
+            <div className="text-sm text-red-600 flex items-start gap-1.5">
+              <AlertCircle size={13} className="mt-0.5" />
+              <span className="break-all">{error}</span>
+            </div>
+          )}
+          {!loading && !error && !hasAny && (
+            <p className="text-sm text-gray-400">
+              PL이 아직 양식을 작성하지 않았습니다. 상단 [PL 링크 복사]로 PL에게 작성 링크를 전달해 주세요.
+            </p>
+          )}
+          {!loading && !error && hasAny && data && (
+            <>
+              {data.last_saved_by_name && (
+                <p className="text-[11px] text-gray-400">
+                  마지막 저장 · {data.last_saved_by_name}
+                  {data.last_saved_at && (
+                    <> · {new Date(data.last_saved_at).toLocaleString('ko-KR')}</>
+                  )}
+                </p>
+              )}
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                {PL_FORM_FIELDS.map(f => {
+                  const v = (data as any)[f.key];
+                  if (!v || (typeof v === 'string' && v.trim() === '')) return null;
+                  return (
+                    <div key={f.key}>
+                      <p className="text-[11px] font-semibold text-gray-400 uppercase mb-1">
+                        {f.label}
+                      </p>
+                      <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                        {v}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

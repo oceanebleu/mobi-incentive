@@ -271,3 +271,36 @@ drop trigger if exists proposal_archive_set_updated_at on public.proposal_archiv
 create trigger proposal_archive_set_updated_at
 before update on public.proposal_archive
 for each row execute function public.set_updated_at();
+
+-- ─────────────────────────────────────────────────────────────
+-- PL 작성 양식 (project_pl_forms) — 운영위원회 양식의 9가지 판단 사유 + 위원회 구성
+-- 멤버 기여도는 project_members 테이블에 그대로 들어감.
+-- ─────────────────────────────────────────────────────────────
+create table if not exists public.project_pl_forms (
+  project_id text primary key references public.projects(id) on delete cascade,
+  -- 판단 사유 (자유 텍스트, CSV 첨부 9개 항목)
+  profit_judgment       text,    -- 이익율 (연간 총 매출)
+  commission_judgment   text,    -- 수수료 (제안 의지부)
+  client_importance     text,    -- 고객 중요도
+  rfp_route             text,    -- 인센종 케이스 (RFP 수취 루트)
+  prep_effort           text,    -- 사전 작업 정도
+  bidding_difficulty    text,    -- 빌딩 난이도
+  proposal_resource     text,    -- 제안 리소스
+  external_expert       text,    -- 외부 전문가 사용 여부
+  stop_risk             text,    -- 중지될 가능성
+  -- 위원회 구성
+  committee_division_head text,  -- 부문대표
+  committee_co1           text,  -- C.O1
+  -- 작성 추적
+  submitted_at      timestamptz,   -- PL이 처음 [저장] 누른 시각
+  last_saved_at     timestamptz not null default now(),
+  last_saved_by_emp text,
+  last_saved_by_name text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+drop trigger if exists project_pl_forms_set_updated_at on public.project_pl_forms;
+create trigger project_pl_forms_set_updated_at
+before update on public.project_pl_forms
+for each row execute function public.set_updated_at();
