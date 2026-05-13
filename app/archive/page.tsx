@@ -198,6 +198,26 @@ export default function ArchivePage() {
     load();
   }, []);
 
+  // 가장 마지막에 동기화된 시각 — DB의 max(synced_at) (페이지 새로고침·로그인해도 유지)
+  const latestSyncedAt = useMemo(() => {
+    let max: string | null = null;
+    for (const r of items) {
+      if (r.synced_at && (!max || r.synced_at > max)) max = r.synced_at;
+    }
+    return max;
+  }, [items]);
+  const latestSyncedAtLabel = useMemo(() => {
+    if (!latestSyncedAt) return null;
+    return new Date(latestSyncedAt).toLocaleString('ko-KR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  }, [latestSyncedAt]);
+
   // 등록 완료 = 정식 promote ∪ 수동 '이미 생성됨' 마크
   const isDone = (r: ArchiveRow) => !!r.promoted_project_id || r.marked_existing === true;
   // 행 카테고리(우선순위): 등록완료 > 수주실패 > 미등록
@@ -263,6 +283,11 @@ export default function ArchivePage() {
           <p className="text-sm text-gray-400 mt-0.5">
             제안 자료 아카이브 시트와 연동되어 있습니다
           </p>
+          {latestSyncedAtLabel && (
+            <p className="text-[11px] text-gray-400 mt-0.5">
+              최근 동기화 · {latestSyncedAtLabel}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <a

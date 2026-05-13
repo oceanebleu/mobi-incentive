@@ -306,6 +306,11 @@ export interface DashboardStatsV2 {
   firstPayRatio: number;        // % — 재원확정 프로젝트 중 1차 완료된 비율
   secondPayRatio: number;
   allPayRatio: number;          // 1·2차 모두 완료
+  // 분자/분모 카운트 (위원회 진행 N건 중 N건 식 노출용)
+  fundConfirmedCount: number;   // 분모 = 재원확정 이상 (= 위원회 진행)
+  firstPaidCount: number;
+  secondPaidCount: number;
+  allPaidCount: number;
   totalProjects: number;
   stageCounts: Record<string, number>;
 }
@@ -393,6 +398,10 @@ export function getDashboardStatsV2(
     firstPayRatio,
     secondPayRatio,
     allPayRatio,
+    fundConfirmedCount: base.length,
+    firstPaidCount: firstPaid.length,
+    secondPaidCount: secondPaid.length,
+    allPaidCount: allPaid.length,
     totalProjects: projects.length,
     stageCounts,
   };
