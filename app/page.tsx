@@ -816,10 +816,10 @@ function UpcomingPaymentsList({
     if (d <= 30) return 'bg-amber-50 text-amber-700 border-amber-100';    // 한 달 내
     return 'bg-gray-50 text-gray-600 border-gray-100';                    // 여유
   };
-  // YYYY-MM-DD → MM. DD
+  // YYYY-MM-DD → MM.DD (공백 없이 — 좁은 박스 안에서 줄바꿈 방지)
   const shortDate = (s: string) => {
     if (s.length < 10) return s;
-    return `${s.slice(5, 7)}. ${s.slice(8, 10)}`;
+    return `${s.slice(5, 7)}.${s.slice(8, 10)}`;
   };
 
   return (
@@ -848,7 +848,7 @@ function UpcomingPaymentsList({
               {/* 좌측 — 날짜 박스 (시각적으로 가장 먼저 읽히도록) */}
               <div
                 className={clsx(
-                  'flex-shrink-0 w-14 rounded-md border px-1.5 py-1 text-center leading-tight',
+                  'flex-shrink-0 w-16 rounded-md border px-1.5 py-1 text-center leading-tight whitespace-nowrap',
                   dTone(r.plannedDate)
                 )}
               >
