@@ -63,6 +63,8 @@ export default function DashboardPage() {
   );
 
   // 단계별 카운트 + 프로젝트 분류 (PL 작성대기 / 재원확정 필요 리스트용)
+  //   액션 리스트(plPending / plDoneFundNeeded)는 수주실패·대행종료 프로젝트 제외 —
+  //   PL 기여도를 더 받을 이유도, 재원을 확정할 이유도 없는 건들이라 처리 대기 상태로 노출하면 혼란만 줌
   const stageGroups = useMemo(() => {
     const c: Record<PaymentStage, number> = {
       PL_PENDING: 0,
@@ -73,9 +75,12 @@ export default function DashboardPage() {
     };
     const plPending: SupabaseProject[] = [];
     const plDoneFundNeeded: SupabaseProject[] = [];
+    const isInactive = (p: SupabaseProject) =>
+      p.acquisition_status === 'LOST' || p.acquisition_status === 'CANCELLED';
     for (const p of projects) {
       const stage = paymentStageOf(p);
       c[stage]++;
+      if (isInactive(p)) continue;
       if (stage === 'PL_PENDING') plPending.push(p);
       else if (stage === 'PL_COMPLETED') plDoneFundNeeded.push(p);
     }
@@ -214,18 +219,17 @@ export default function DashboardPage() {
           <div className="flex items-center gap-2 mb-5">
             <BarChart3 size={16} className="text-blue-600" />
             <h2 className="text-sm font-semibold text-gray-800">지급 단계별 진행</h2>
-            <span className="ml-auto text-xs text-gray-400">전체 {stats.totalProjects}건</span>
           </div>
 
-          <div className="grid grid-cols-5 gap-3">
+          {/* 3 × 2 — 전체 / PL작성대기 / PL작성완료 / 재원확정완료 / 1차 지급완료 / 전체 지급완료 */}
+          <div className="grid grid-cols-3 gap-3">
+            <StageTile label="전체" value={stats.totalProjects} highlight />
             {(Object.keys(PAYMENT_STAGE_LABEL) as PaymentStage[]).map(stage => (
-              <div
+              <StageTile
                 key={stage}
-                className="rounded-lg border border-gray-100 bg-gray-50/50 px-3 py-3 text-center"
-              >
-                <p className="text-[11px] text-gray-500 truncate">{PAYMENT_STAGE_LABEL[stage]}</p>
-                <p className="text-xl font-bold text-gray-900 mt-1">{stageCounts[stage]}</p>
-              </div>
+                label={PAYMENT_STAGE_LABEL[stage]}
+                value={stageCounts[stage]}
+              />
             ))}
           </div>
         </div>
@@ -404,6 +408,41 @@ function acqDotColor(key: string): string {
     default:
       return 'bg-gray-300';
   }
+}
+
+// 지급 단계 타일 — 동일 크기로 3×2 그리드에 배치
+function StageTile({
+  label,
+  value,
+  highlight,
+}: {
+  label: string;
+  value: number;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className={clsx(
+        'rounded-lg border px-4 py-3 text-center',
+        highlight
+          ? 'border-blue-100 bg-blue-50/60'
+          : 'border-gray-100 bg-gray-50/50'
+      )}
+    >
+      <p className={clsx('text-[11px] truncate', highlight ? 'text-blue-700' : 'text-gray-500')}>
+        {label}
+      </p>
+      <p
+        className={clsx(
+          'text-xl font-bold mt-1',
+          highlight ? 'text-blue-700' : 'text-gray-900'
+        )}
+      >
+        {value}
+        {highlight && <span className="text-xs font-semibold ml-0.5">건</span>}
+      </p>
+    </div>
+  );
 }
 
 // 액션이 필요한 프로젝트 리스트 (PL 작성대기 / 재원확정 필요)
