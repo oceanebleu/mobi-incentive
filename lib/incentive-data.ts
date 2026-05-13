@@ -340,6 +340,8 @@ export interface DashboardStatsV2 {
   firstPaidCount: number;
   secondPaidCount: number;
   allPaidCount: number;
+  // 1차 지급 후 대행종료된 건 — 운영 중단 리스크 추적용
+  firstPaidThenCancelledCount: number;
   totalProjects: number;
   stageCounts: Record<string, number>;
 }
@@ -412,6 +414,11 @@ export function getDashboardStatsV2(
   const secondPaid = base.filter(p => p.second_payment_completed);
   const allPaid = base.filter(p => p.first_payment_completed && p.second_payment_completed);
 
+  // 1차 지급은 완료됐는데 그 뒤 대행종료된 건 — 운영 중단 리스크
+  const firstPaidThenCancelled = projects.filter(
+    p => p.first_payment_completed && p.acquisition_status === 'CANCELLED'
+  );
+
   const firstPayRatio = base.length ? (firstPaid.length / base.length) * 100 : 0;
   const secondPayRatio = base.length ? (secondPaid.length / base.length) * 100 : 0;
   const allPayRatio = base.length ? (allPaid.length / base.length) * 100 : 0;
@@ -435,6 +442,7 @@ export function getDashboardStatsV2(
     firstPaidCount: firstPaid.length,
     secondPaidCount: secondPaid.length,
     allPaidCount: allPaid.length,
+    firstPaidThenCancelledCount: firstPaidThenCancelled.length,
     totalProjects: projects.length,
     stageCounts,
   };

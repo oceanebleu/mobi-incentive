@@ -267,7 +267,24 @@ export default function DashboardPage() {
     {
       label: '1차 지급 완료 비율',
       value: `${stats.firstPayRatio.toFixed(1)}%`,
-      sub: `재원확정 ${stats.fundConfirmedCount}건 중 ${stats.firstPaidCount}건 완료 · 전체 ${stats.totalProjects}건`,
+      sub: (() => {
+        const cancelled = stats.firstPaidThenCancelledCount;
+        const cancelledPct =
+          stats.totalProjects > 0
+            ? ((cancelled / stats.totalProjects) * 100).toFixed(1)
+            : '0.0';
+        return (
+          <span className="block">
+            <span className="block">
+              재원확정 {stats.fundConfirmedCount}건 중 {stats.firstPaidCount}건 완료 · 전체{' '}
+              {stats.totalProjects}건
+            </span>
+            <span className="block text-rose-600 mt-0.5">
+              1차 지급 후 대행종료 {cancelled}건 ({cancelledPct}%)
+            </span>
+          </span>
+        );
+      })(),
       icon: TrendingUp,
       colorCls: 'text-emerald-700',
       bgCls: 'bg-emerald-50',
