@@ -1,21 +1,44 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import { ArrowLeft, ExternalLink, Loader2, History, ChevronDown, ChevronRight } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSession } from 'next-auth/react';
+import {
+  ArrowLeft,
+  ExternalLink,
+  Loader2,
+  History,
+  ChevronDown,
+  ChevronRight,
+  Pencil,
+  Plus,
+  Trash2,
+  Save,
+  X,
+  AlertCircle,
+} from 'lucide-react';
 import clsx from 'clsx';
 import { formatKRWFull, formatCommission, formatDate } from '@/lib/utils';
+import { canManageUsers, type UserRole } from '@/lib/roles';
 import {
   useIncentiveData,
+  useUserDirectory,
   paymentStageOf,
   PAYMENT_STAGE_LABEL,
   ACQUISITION_LABEL,
+  type SupabaseProject,
+  type SupabaseProjectMember,
 } from '@/lib/incentive-data';
 
 export default function ProjectDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { projects, loading, error } = useIncentiveData();
+  const { projects, loading, error, refresh } = useIncentiveData();
+  const { data: session } = useSession();
+  const role = (session?.user as any)?.role as UserRole | undefined;
+  const canEdit = canManageUsers(role);
+
+  const [editing, setEditing] = useState(false);
 
   if (loading) {
     return (
@@ -171,7 +194,18 @@ export default function ProjectDetailPage() {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <h2 className="text-sm font-semibold text-gray-700 mb-4">참여 멤버 및 기여도</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-gray-700">참여 멤버 및 기여도</h2>
+          {canEdit && (
+            <button
+              onClick={() => setEditing(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
+            >
+              <Pencil size={12} />
+              멤버 편집
+            </button>
+          )}
+        </div>
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100">
@@ -264,6 +298,382 @@ export default function ProjectDetailPage() {
       )}
 
       <ChangeHistory projectId={project.id} />
+
+      {editing && (
+        <MembersEditModal
+          project={project}
+          onClose={() => setEditing(false)}
+          onSaved={() => {
+            setEditing(false);
+            refresh();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// 멤버 편집 모달 — 행 추가/삭제, 이름·기여도·1차/2차 금액·지급일 편집
+//   저장 시 PATCH /api/projects/[id] { members: [...] } 으로 통째 교체
+//   감사 로그는 백엔드에서 _members_replaced 로 자동 기록됨
+// ─────────────────────────────────────────────
+
+type MemberDraft = {
+  uid: string; // React key 안정성용 임시 ID
+  member_name: string;
+  is_team_account: boolean;
+  contribution: number;
+  first_amount: number;
+  first_paid_at: string | null;
+  second_amount: number;
+  second_paid_at: string | null;
+};
+
+const makeUid = (() => {
+  let n = 0;
+  return () => `m_${++n}_${Date.now().toString(36)}`;
+})();
+
+function toDraft(m: SupabaseProjectMember): MemberDraft {
+  return {
+    uid: makeUid(),
+    member_name: m.member_name,
+    is_team_account: m.is_team_account,
+    contribution: m.contribution,
+    first_amount: m.first_amount,
+    first_paid_at: m.first_paid_at,
+    second_amount: m.second_amount,
+    second_paid_at: m.second_paid_at,
+  };
+}
+
+function MembersEditModal({
+  project,
+  onClose,
+  onSaved,
+}: {
+  project: SupabaseProject;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const directory = useUserDirectory();
+  // 자동완성 후보 — 재직자 이름 우선, 퇴사자 후순위
+  const nameSuggestions = useMemo(() => {
+    const all = Object.keys(directory.lastWorkDateByName);
+    return all.sort((a, b) => {
+      const sa = directory.statusByName[a] === '퇴사' ? 1 : 0;
+      const sb = directory.statusByName[b] === '퇴사' ? 1 : 0;
+      if (sa !== sb) return sa - sb;
+      return a.localeCompare(b, 'ko');
+    });
+  }, [directory.lastWorkDateByName, directory.statusByName]);
+
+  const [rows, setRows] = useState<MemberDraft[]>(() => project.members.map(toDraft));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const totalContribution = useMemo(
+    () => rows.reduce((s, r) => s + (Number.isFinite(r.contribution) ? r.contribution : 0), 0),
+    [rows]
+  );
+  const firstTotal = useMemo(() => rows.reduce((s, r) => s + (r.first_amount || 0), 0), [rows]);
+  const secondTotal = useMemo(() => rows.reduce((s, r) => s + (r.second_amount || 0), 0), [rows]);
+
+  const dupName = useMemo(() => {
+    const seen = new Map<string, number>();
+    for (const r of rows) {
+      const key = r.member_name.trim();
+      if (!key) continue;
+      seen.set(key, (seen.get(key) ?? 0) + 1);
+    }
+    for (const [k, v] of seen) if (v > 1) return k;
+    return null;
+  }, [rows]);
+
+  function updateRow(uid: string, patch: Partial<MemberDraft>) {
+    setRows(prev => prev.map(r => (r.uid === uid ? { ...r, ...patch } : r)));
+  }
+  function addRow() {
+    setRows(prev => [
+      ...prev,
+      {
+        uid: makeUid(),
+        member_name: '',
+        is_team_account: false,
+        contribution: 0,
+        first_amount: 0,
+        first_paid_at: null,
+        second_amount: 0,
+        second_paid_at: null,
+      },
+    ]);
+  }
+  function removeRow(uid: string) {
+    setRows(prev => prev.filter(r => r.uid !== uid));
+  }
+
+  async function save() {
+    setError(null);
+
+    // 빈 이름·중복 검사
+    const cleaned = rows
+      .map(r => ({ ...r, member_name: r.member_name.trim() }))
+      .filter(r => r.member_name !== '');
+    if (cleaned.length !== rows.length) {
+      if (
+        !confirm(
+          `이름이 비어있는 행 ${rows.length - cleaned.length}개는 저장 시 제외됩니다. 계속할까요?`
+        )
+      )
+        return;
+    }
+    if (dupName) {
+      setError(`멤버 이름이 중복되었습니다: ${dupName}`);
+      return;
+    }
+    if (
+      totalContribution !== 100 &&
+      cleaned.length > 0 &&
+      !confirm(
+        `기여도 합계가 ${totalContribution}% 입니다 (보통 100%). 그대로 저장할까요?`
+      )
+    ) {
+      return;
+    }
+
+    const payload = {
+      members: cleaned.map(r => ({
+        member_name: r.member_name,
+        is_team_account: !!r.is_team_account,
+        contribution: Number(r.contribution) || 0,
+        first_amount: Number(r.first_amount) || 0,
+        first_paid_at: r.first_paid_at || null,
+        second_amount: Number(r.second_amount) || 0,
+        second_paid_at: r.second_paid_at || null,
+      })),
+    };
+
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/projects/${encodeURIComponent(project.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`);
+      onSaved();
+    } catch (e: any) {
+      setError(e?.message ?? '저장 실패');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">참여 멤버 편집</h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {project.campaign_name} · {project.id}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-700"
+            aria-label="닫기"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* 합계 요약 */}
+        <div className="px-6 py-3 bg-gray-50/70 border-b border-gray-100 grid grid-cols-4 gap-4 text-sm">
+          <div>
+            <p className="text-[11px] text-gray-400">멤버 수</p>
+            <p className="font-semibold text-gray-800">{rows.length}명</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-gray-400">기여도 합계</p>
+            <p
+              className={clsx(
+                'font-semibold',
+                totalContribution === 100 ? 'text-emerald-700' : 'text-amber-700'
+              )}
+            >
+              {totalContribution}% {totalContribution !== 100 && '(보통 100%)'}
+            </p>
+          </div>
+          <div>
+            <p className="text-[11px] text-gray-400">1차 합계</p>
+            <p className="font-semibold text-gray-800">{formatKRWFull(firstTotal)}</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-gray-400">2차 합계</p>
+            <p className="font-semibold text-gray-800">{formatKRWFull(secondTotal)}</p>
+          </div>
+        </div>
+
+        {/* 행 리스트 */}
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-[11px] text-gray-400 uppercase tracking-wide">
+                <th className="text-left pb-2 font-medium">이름</th>
+                <th className="text-center pb-2 font-medium w-20">팀계정</th>
+                <th className="text-right pb-2 font-medium w-24">기여도(%)</th>
+                <th className="text-right pb-2 font-medium w-40">1차 금액</th>
+                <th className="text-right pb-2 font-medium w-44">1차 지급일</th>
+                <th className="text-right pb-2 font-medium w-40">2차 금액</th>
+                <th className="text-right pb-2 font-medium w-44">2차 지급일</th>
+                <th className="w-10" />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="text-center py-8 text-gray-400">
+                    멤버가 없습니다. 아래 [멤버 추가]를 눌러 행을 추가하세요.
+                  </td>
+                </tr>
+              ) : (
+                rows.map(r => (
+                  <tr key={r.uid} className="border-t border-gray-100">
+                    <td className="py-2 pr-2">
+                      <input
+                        list="member-name-suggestions"
+                        type="text"
+                        value={r.member_name}
+                        onChange={e => updateRow(r.uid, { member_name: e.target.value })}
+                        placeholder="이름 또는 팀 계정"
+                        className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                      />
+                    </td>
+                    <td className="py-2 px-2 text-center">
+                      <input
+                        type="checkbox"
+                        checked={r.is_team_account}
+                        onChange={e => updateRow(r.uid, { is_team_account: e.target.checked })}
+                        className="w-4 h-4 accent-emerald-600"
+                      />
+                    </td>
+                    <td className="py-2 pr-2">
+                      <input
+                        type="number"
+                        value={r.contribution}
+                        onChange={e =>
+                          updateRow(r.uid, { contribution: Number(e.target.value) })
+                        }
+                        min={0}
+                        max={100}
+                        step="0.1"
+                        className="w-full px-2 py-1.5 text-sm text-right border border-gray-200 rounded-md tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                      />
+                    </td>
+                    <td className="py-2 pr-2">
+                      <input
+                        type="number"
+                        value={r.first_amount}
+                        onChange={e =>
+                          updateRow(r.uid, { first_amount: Number(e.target.value) })
+                        }
+                        min={0}
+                        step="1"
+                        className="w-full px-2 py-1.5 text-sm text-right border border-gray-200 rounded-md tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                      />
+                    </td>
+                    <td className="py-2 pr-2">
+                      <input
+                        type="date"
+                        value={r.first_paid_at ?? ''}
+                        onChange={e =>
+                          updateRow(r.uid, { first_paid_at: e.target.value || null })
+                        }
+                        className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                      />
+                    </td>
+                    <td className="py-2 pr-2">
+                      <input
+                        type="number"
+                        value={r.second_amount}
+                        onChange={e =>
+                          updateRow(r.uid, { second_amount: Number(e.target.value) })
+                        }
+                        min={0}
+                        step="1"
+                        className="w-full px-2 py-1.5 text-sm text-right border border-gray-200 rounded-md tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                      />
+                    </td>
+                    <td className="py-2 pr-2">
+                      <input
+                        type="date"
+                        value={r.second_paid_at ?? ''}
+                        onChange={e =>
+                          updateRow(r.uid, { second_paid_at: e.target.value || null })
+                        }
+                        className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                      />
+                    </td>
+                    <td className="py-2 text-center">
+                      <button
+                        onClick={() => removeRow(r.uid)}
+                        title="이 행 삭제"
+                        className="text-gray-400 hover:text-red-600 transition-colors p-1"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+
+          {/* 디렉토리 자동완성용 datalist */}
+          <datalist id="member-name-suggestions">
+            {nameSuggestions.map(n => (
+              <option key={n} value={n} />
+            ))}
+          </datalist>
+
+          <button
+            onClick={addRow}
+            className="mt-3 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
+          >
+            <Plus size={13} />
+            멤버 추가
+          </button>
+        </div>
+
+        {/* 에러 / 푸터 */}
+        {error && (
+          <div className="px-6 pb-2 text-xs text-red-700 flex items-start gap-1.5">
+            <AlertCircle size={13} className="mt-0.5 flex-shrink-0" />
+            <span className="break-all">{error}</span>
+          </div>
+        )}
+
+        <div className="px-6 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
+          <button
+            onClick={onClose}
+            disabled={saving}
+            className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-lg disabled:opacity-60"
+          >
+            취소
+          </button>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors"
+          >
+            <Save size={14} />
+            {saving ? '저장 중...' : '저장'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

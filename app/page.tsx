@@ -795,6 +795,33 @@ function UpcomingPaymentsList({
     total: number;
   }>;
 }) {
+  // 오늘 기준 D-N 계산용
+  const todayKst = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const daysBetween = (a: string, b: string) => {
+    const dA = new Date(a + 'T00:00:00Z').getTime();
+    const dB = new Date(b + 'T00:00:00Z').getTime();
+    return Math.round((dA - dB) / 86400000);
+  };
+  const dLabel = (date: string) => {
+    const d = daysBetween(date, todayKst);
+    if (d === 0) return '오늘';
+    if (d === 1) return '내일';
+    if (d < 7) return `D-${d}`;
+    if (d < 30) return `D-${d}`;
+    return `D-${d}`;
+  };
+  const dTone = (date: string) => {
+    const d = daysBetween(date, todayKst);
+    if (d <= 7) return 'bg-rose-50 text-rose-700 border-rose-100';        // 임박 7일 내
+    if (d <= 30) return 'bg-amber-50 text-amber-700 border-amber-100';    // 한 달 내
+    return 'bg-gray-50 text-gray-600 border-gray-100';                    // 여유
+  };
+  // YYYY-MM-DD → MM. DD
+  const shortDate = (s: string) => {
+    if (s.length < 10) return s;
+    return `${s.slice(5, 7)}. ${s.slice(8, 10)}`;
+  };
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col">
       <div className="flex items-center gap-2 mb-1">
@@ -816,8 +843,24 @@ function UpcomingPaymentsList({
             <Link
               key={`${r.projectId}-${r.phase}-${i}`}
               href={`/projects/${r.projectId}`}
-              className="group flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-100 hover:bg-gray-50/70 hover:border-gray-200 transition-colors"
+              className="group flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-gray-100 hover:bg-gray-50/70 hover:border-gray-200 transition-colors"
             >
+              {/* 좌측 — 날짜 박스 (시각적으로 가장 먼저 읽히도록) */}
+              <div
+                className={clsx(
+                  'flex-shrink-0 w-14 rounded-md border px-1.5 py-1 text-center leading-tight',
+                  dTone(r.plannedDate)
+                )}
+              >
+                <div className="text-[10px] font-semibold opacity-80">
+                  {dLabel(r.plannedDate)}
+                </div>
+                <div className="text-sm font-bold tabular-nums">
+                  {shortDate(r.plannedDate)}
+                </div>
+              </div>
+
+              {/* 중앙 — 캠페인명 + 회차 배지 + 연도 */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5">
                   <span className="text-sm font-medium text-gray-900 truncate group-hover:text-blue-700">
@@ -828,18 +871,20 @@ function UpcomingPaymentsList({
                       'text-[10px] font-semibold px-1.5 py-0.5 rounded whitespace-nowrap',
                       r.phase === 1
                         ? 'bg-indigo-100 text-indigo-700'
-                        : 'bg-violet-100 text-violet-700'
+                        : 'bg-emerald-100 text-emerald-700'
                     )}
                   >
                     {r.phase}차
                   </span>
                 </div>
-                <div className="text-[11px] text-gray-400 mt-0.5">
-                  지급예정 {r.plannedDate}
+                <div className="text-[11px] text-gray-400 mt-0.5 tabular-nums">
+                  {r.plannedDate}
                 </div>
               </div>
+
+              {/* 우측 — 금액 */}
               <div className="text-right whitespace-nowrap">
-                <span className="text-sm font-semibold text-gray-800">
+                <span className="text-sm font-semibold text-gray-800 tabular-nums">
                   {formatKRWFull(r.total)}
                 </span>
               </div>
