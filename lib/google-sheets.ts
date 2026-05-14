@@ -140,7 +140,7 @@ export async function fetchSheetValues(
 }
 
 // information_employees 시트를 1행=헤더 가정으로 객체 배열로 변환
-// A=사번 B=사원명 C=법인/그룹 D=소속1 E=소속2 F=재직상태 G=입사일 H=마지막근무일 I=서류상퇴사일 J=회사이메일
+// A=사번 B=사원명 C=법인/그룹 D=소속1 E=소속2 F=재직상태 G=입사일 H=마지막근무일 I=서류상퇴사일 J=회사이메일 K=PL고유코드
 export interface EmployeeRow {
   employee_id: string;
   name: string;
@@ -152,6 +152,7 @@ export interface EmployeeRow {
   last_work_date: string | null;
   resignation_date: string | null;
   email: string | null;
+  access_code: string | null; // K열 (대문자 5자: 알파벳3+숫자2)
 }
 
 export async function fetchEmployees(): Promise<EmployeeRow[]> {
@@ -159,8 +160,8 @@ export async function fetchEmployees(): Promise<EmployeeRow[]> {
   if (!sheetId) {
     throw new Error('GOOGLE_SHEETS_SHEET_ID 환경변수가 필요합니다.');
   }
-  // 헤더 행 제외하고 2행부터, A~J 전체
-  const rows = await fetchSheetValues(sheetId, 'information_employees!A2:J');
+  // 헤더 행 제외하고 2행부터, A~K 전체 (K=PL 고유코드)
+  const rows = await fetchSheetValues(sheetId, 'information_employees!A2:K');
   const norm = (v: string | undefined) => {
     const t = (v ?? '').trim();
     return t === '' ? null : t;
@@ -178,6 +179,11 @@ export async function fetchEmployees(): Promise<EmployeeRow[]> {
       last_work_date: norm(r[7]),
       resignation_date: norm(r[8]),
       email: norm(r[9])?.toLowerCase() ?? null,
+      // K열 — 공백 제거 + 대문자 통일. 빈 칸이면 null (sync 라우트에서 자동 발급)
+      access_code: (() => {
+        const raw = norm(r[10]);
+        return raw ? raw.toUpperCase() : null;
+      })(),
     }));
 }
 

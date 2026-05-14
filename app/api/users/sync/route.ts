@@ -77,9 +77,17 @@ export async function POST() {
       ? (existed.role as UserRole)        // 수동 설정 보존
       : defaultRole;
 
-    // PL 본인 인증용 고유코드 — 기존 코드가 있으면 보존, 없으면 새로 발급
-    const existingCode = (existed as any)?.access_code as string | null | undefined;
-    const accessCode = existingCode && existingCode.trim() !== '' ? existingCode : generateAccessCode();
+    // PL 본인 인증용 고유코드 우선순위
+    //   1) 시트 K열에 값이 있으면 그 값을 그대로 사용 (운영팀이 시트를 진실의 원천으로 관리)
+    //   2) 시트에는 없지만 DB에 이미 있으면 보존
+    //   3) 둘 다 없으면 새로 자동 발급
+    const sheetCode = (emp.access_code ?? '').trim();
+    const existingCode = ((existed as any)?.access_code ?? '').trim();
+    const accessCode = sheetCode !== ''
+      ? sheetCode
+      : existingCode !== ''
+      ? existingCode
+      : generateAccessCode();
 
     upserts.push({
       employee_id: emp.employee_id,
