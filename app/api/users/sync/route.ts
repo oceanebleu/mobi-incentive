@@ -43,12 +43,25 @@ export async function POST() {
   const supabase = getSupabaseAdmin();
 
   // 기존 row 일괄 로드 (employee_id → {role, role_overridden, access_code})
-  //   access_code 컬럼이 아직 없는 환경도 안전하게 동작시키기 위해 '*' 로 select
-  const { data: existing, error: exErr } = await supabase
-    .from('users')
-    .select('employee_id, role, role_overridden, access_code');
-  if (exErr) {
-    return NextResponse.json({ error: exErr.message }, { status: 500 });
+  //   access_code 컬럼이 아직 없는 환경에서도 동작하도록 fallback select 적용
+  let existing: any[] | null;
+  {
+    const r1 = await supabase
+      .from('users')
+      .select('employee_id, role, role_overridden, access_code');
+    if (r1.error && /access_code/.test(r1.error.message ?? '')) {
+      const r2 = await supabase
+        .from('users')
+        .select('employee_id, role, role_overridden');
+      if (r2.error) {
+        return NextResponse.json({ error: r2.error.message }, { status: 500 });
+      }
+      existing = r2.data ?? [];
+    } else if (r1.error) {
+      return NextResponse.json({ error: r1.error.message }, { status: 500 });
+    } else {
+      existing = r1.data ?? [];
+    }
   }
   const existingMap = new Map(
     (existing ?? []).map(r => [r.employee_id as string, r])
@@ -117,15 +130,35 @@ export async function POST() {
 
   if (upserts.length > 0) {
     // 500건 단위로 잘라 upsert (Supabase 권장 페이로드)
+    //   access_code 컬럼이 DB에 아직 없는 환경(=alter SQL 미실행)을 보호 — 컬럼 누락 에러면
+    //   해당 컬럼을 빼고 재시도. 다른 컬럼 동기화는 정상적으로 진행되도록.
     const CHUNK = 500;
+    let codeMissingNoted = false;
     for (let i = 0; i < upserts.length; i += CHUNK) {
       const slice = upserts.slice(i, i + CHUNK);
-      const { error } = await supabase
+      let { error } = await supabase
         .from('users')
         .upsert(slice, { onConflict: 'employee_id' });
+      if (error && /access_code/.test(error.message ?? '')) {
+        if (!codeMissingNoted) {
+          console.warn('[users/sync] access_code 컬럼 미존재 — 빼고 동기화 진행');
+          codeMissingNoted = true;
+        }
+        const stripped = slice.map(({ access_code, ...rest }) => rest);
+        const retry = await supabase
+          .from('users')
+          .upsert(stripped, { onConflict: 'employee_id' });
+        error = retry.error;
+      }
       if (error) {
         return NextResponse.json(
-          { error: `upsert 실패: ${error.message}`, processed: i },
+          {
+            error: `upsert 실패: ${error.message}`,
+            processed: i,
+            hint: /access_code/.test(error.message)
+              ? "Supabase SQL Editor에서 'alter table public.users add column if not exists access_code text; notify pgrst, ''reload schema'';' 를 실행해 주세요."
+              : undefined,
+          },
           { status: 500 }
         );
       }
