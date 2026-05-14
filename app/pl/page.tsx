@@ -52,12 +52,12 @@ export default function PLEntryPage() {
       <div className="w-full max-w-sm bg-white border border-gray-200 rounded-2xl p-7 shadow-sm">
         <div className="flex items-center gap-2 mb-1">
           <ShieldCheck size={18} className="text-blue-600" />
-          <h1 className="text-base font-bold text-gray-900">PL 양식 입력</h1>
+          <h1 className="text-base font-bold text-gray-900">프로젝트 정보 입력</h1>
         </div>
         <p className="text-xs text-gray-500 mb-6">
           본인 사번과 개인 고유코드를 입력해 주세요.
           <br />
-          고유코드는 운영팀 / 사용자관리에서 확인할 수 있습니다.
+          고유코드를 모르실 경우 HRBP팀에 문의바랍니다.
         </p>
 
         <form onSubmit={submit} className="space-y-3">
