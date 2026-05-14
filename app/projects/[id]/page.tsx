@@ -415,8 +415,32 @@ function MembersEditModal({
     () => rows.reduce((s, r) => s + (Number.isFinite(r.contribution) ? r.contribution : 0), 0),
     [rows]
   );
-  const firstTotal = useMemo(() => rows.reduce((s, r) => s + (r.first_amount || 0), 0), [rows]);
-  const secondTotal = useMemo(() => rows.reduce((s, r) => s + (r.second_amount || 0), 0), [rows]);
+
+  // 자동 계산 — 인센티브 재원 × 지급 비율 × 기여도/100
+  //   (1차 지급 총액 / 2차 지급 총액 도 동일 공식)
+  const firstRatio = Number(project.first_payment_ratio ?? 60);
+  const secondRatio = Number(project.second_payment_ratio ?? 40);
+  const incentiveFund = Number(project.incentive_fund ?? 0);
+  const firstPhaseTotal = Math.round((incentiveFund * firstRatio) / 100);
+  const secondPhaseTotal = Math.round((incentiveFund * secondRatio) / 100);
+
+  function computeFirst(contribution: number) {
+    return Math.round(firstPhaseTotal * (contribution / 100));
+  }
+  function computeSecond(contribution: number) {
+    return Math.round(secondPhaseTotal * (contribution / 100));
+  }
+
+  const firstTotal = useMemo(
+    () => rows.reduce((s, r) => s + computeFirst(Number(r.contribution) || 0), 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, firstPhaseTotal]
+  );
+  const secondTotal = useMemo(
+    () => rows.reduce((s, r) => s + computeSecond(Number(r.contribution) || 0), 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, secondPhaseTotal]
+  );
 
   const dupName = useMemo(() => {
     const seen = new Map<string, number>();
@@ -484,18 +508,23 @@ function MembersEditModal({
     }
 
     const payload = {
-      members: cleaned.map(r => ({
-        member_name: r.member_name,
-        is_team_account: !!r.is_team_account,
-        contribution: Number(r.contribution) || 0,
-        first_amount: Number(r.first_amount) || 0,
-        first_paid_at: r.first_paid_at || null,
-        second_amount: Number(r.second_amount) || 0,
-        second_paid_at: r.second_paid_at || null,
-        role: r.role || null,
-        team_name: r.team_name || null,
-        duty: r.duty || null,
-      })),
+      members: cleaned.map(r => {
+        const contrib = Number(r.contribution) || 0;
+        return {
+          member_name: r.member_name,
+          is_team_account: !!r.is_team_account,
+          contribution: contrib,
+          // 1차/2차 금액은 기여도 × 인센티브 재원 × 지급 비율 로 자동 계산해서 저장
+          first_amount: computeFirst(contrib),
+          second_amount: computeSecond(contrib),
+          // 지급일은 멤버 편집에서 다루지 않음 — 기존 값 보존 또는 null
+          first_paid_at: r.first_paid_at || null,
+          second_paid_at: r.second_paid_at || null,
+          role: r.role || null,
+          team_name: r.team_name || null,
+          duty: r.duty || null,
+        };
+      }),
     };
 
     setSaving(true);
@@ -563,37 +592,50 @@ function MembersEditModal({
 
         {/* 행 리스트 */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          <table className="w-full text-sm min-w-[1200px]">
+          <table className="w-full text-sm table-fixed">
+            <colgroup>
+              <col className="w-[88px]" />   {/* 구분 */}
+              <col className="w-[120px]" />  {/* 팀 */}
+              <col className="w-[120px]" />  {/* 이름 */}
+              <col className="w-[44px]" />   {/* 팀계정 */}
+              <col />                         {/* 담당업무 (가변) */}
+              <col className="w-[80px]" />   {/* 기여도 */}
+              <col className="w-[110px]" />  {/* 1차 금액 (자동) */}
+              <col className="w-[110px]" />  {/* 2차 금액 (자동) */}
+              <col className="w-[28px]" />   {/* 삭제 */}
+            </colgroup>
             <thead>
               <tr className="text-[11px] text-gray-400 uppercase tracking-wide">
-                <th className="text-left pb-2 font-medium w-20">구분</th>
-                <th className="text-left pb-2 font-medium w-32">팀</th>
+                <th className="text-left pb-2 font-medium">구분</th>
+                <th className="text-left pb-2 font-medium">팀</th>
                 <th className="text-left pb-2 font-medium">이름</th>
-                <th className="text-center pb-2 font-medium w-14">팀계정</th>
-                <th className="text-left pb-2 font-medium w-56">담당 업무</th>
-                <th className="text-right pb-2 font-medium w-20">기여도(%)</th>
-                <th className="text-right pb-2 font-medium w-32">1차 금액</th>
-                <th className="text-right pb-2 font-medium w-36">1차 지급일</th>
-                <th className="text-right pb-2 font-medium w-32">2차 금액</th>
-                <th className="text-right pb-2 font-medium w-36">2차 지급일</th>
-                <th className="w-10" />
+                <th className="text-center pb-2 font-medium">팀계정</th>
+                <th className="text-left pb-2 font-medium">담당 업무</th>
+                <th className="text-right pb-2 font-medium">기여도(%)</th>
+                <th className="text-right pb-2 font-medium">1차 금액</th>
+                <th className="text-right pb-2 font-medium">2차 금액</th>
+                <th />
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="text-center py-8 text-gray-400">
+                  <td colSpan={9} className="text-center py-8 text-gray-400">
                     멤버가 없습니다. 아래 [멤버 추가]를 눌러 행을 추가하세요.
                   </td>
                 </tr>
               ) : (
-                rows.map(r => (
+                rows.map(r => {
+                  const contrib = Number(r.contribution) || 0;
+                  const autoFirst = computeFirst(contrib);
+                  const autoSecond = computeSecond(contrib);
+                  return (
                   <tr key={r.uid} className="border-t border-gray-100">
                     <td className="py-2 pr-2">
                       <select
                         value={r.role}
                         onChange={e => updateRow(r.uid, { role: e.target.value })}
-                        className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                        className="w-full pl-1.5 pr-1 py-1.5 text-xs border border-gray-200 rounded-md bg-white truncate focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                       >
                         <option value="">선택</option>
                         <option value="PL">PL</option>
@@ -604,7 +646,7 @@ function MembersEditModal({
                       <select
                         value={r.team_name}
                         onChange={e => updateRow(r.uid, { team_name: e.target.value })}
-                        className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                        className="w-full pl-1.5 pr-1 py-1.5 text-xs border border-gray-200 rounded-md bg-white truncate focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                       >
                         <option value="">선택</option>
                         {ADMIN_TEAM_OPTIONS.map(t => (
@@ -618,11 +660,11 @@ function MembersEditModal({
                         type="text"
                         value={r.member_name}
                         onChange={e => updateRow(r.uid, { member_name: e.target.value })}
-                        placeholder="이름 또는 팀 계정"
-                        className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                        placeholder="이름"
+                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                       />
                     </td>
-                    <td className="py-2 px-2 text-center">
+                    <td className="py-2 px-1 text-center">
                       <input
                         type="checkbox"
                         checked={r.is_team_account}
@@ -636,7 +678,7 @@ function MembersEditModal({
                         value={r.duty}
                         onChange={e => updateRow(r.uid, { duty: e.target.value })}
                         placeholder="예: 전략 수립, RFP 분석"
-                        className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                       />
                     </td>
                     <td className="py-2 pr-2">
@@ -649,52 +691,14 @@ function MembersEditModal({
                         min={0}
                         max={100}
                         step="0.1"
-                        className="w-full px-2 py-1.5 text-sm text-right border border-gray-200 rounded-md tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                        className="w-full px-2 py-1.5 text-xs text-right border border-gray-200 rounded-md tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                       />
                     </td>
-                    <td className="py-2 pr-2">
-                      <input
-                        type="number"
-                        value={r.first_amount}
-                        onChange={e =>
-                          updateRow(r.uid, { first_amount: Number(e.target.value) })
-                        }
-                        min={0}
-                        step="1"
-                        className="w-full px-2 py-1.5 text-sm text-right border border-gray-200 rounded-md tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                      />
+                    <td className="py-2 pr-2 text-right text-xs text-gray-700 tabular-nums">
+                      {formatKRWFull(autoFirst)}
                     </td>
-                    <td className="py-2 pr-2">
-                      <input
-                        type="date"
-                        value={r.first_paid_at ?? ''}
-                        onChange={e =>
-                          updateRow(r.uid, { first_paid_at: e.target.value || null })
-                        }
-                        className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                      />
-                    </td>
-                    <td className="py-2 pr-2">
-                      <input
-                        type="number"
-                        value={r.second_amount}
-                        onChange={e =>
-                          updateRow(r.uid, { second_amount: Number(e.target.value) })
-                        }
-                        min={0}
-                        step="1"
-                        className="w-full px-2 py-1.5 text-sm text-right border border-gray-200 rounded-md tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                      />
-                    </td>
-                    <td className="py-2 pr-2">
-                      <input
-                        type="date"
-                        value={r.second_paid_at ?? ''}
-                        onChange={e =>
-                          updateRow(r.uid, { second_paid_at: e.target.value || null })
-                        }
-                        className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                      />
+                    <td className="py-2 pr-2 text-right text-xs text-gray-700 tabular-nums">
+                      {formatKRWFull(autoSecond)}
                     </td>
                     <td className="py-2 text-center">
                       <button
@@ -706,7 +710,8 @@ function MembersEditModal({
                       </button>
                     </td>
                   </tr>
-                ))
+                );
+                })
               )}
             </tbody>
           </table>
