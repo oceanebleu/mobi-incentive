@@ -9,7 +9,22 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { logProjectChange } from '@/lib/audit';
 
+// Vercel CDN / Next.js fetch cache 우회 — 매 요청 fresh
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
+
+const NO_CACHE = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+  Pragma: 'no-cache',
+  Expires: '0',
+};
+function json(body: any, init?: ResponseInit) {
+  return NextResponse.json(body, {
+    ...init,
+    headers: { ...NO_CACHE, ...(init?.headers as any) },
+  });
+}
 
 const normalize = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
 
@@ -113,10 +128,10 @@ export async function GET(
   const { searchParams } = new URL(req.url);
   const empId = (searchParams.get('emp') ?? '').trim();
   const code = (searchParams.get('code') ?? '').trim();
-  if (!empId) return NextResponse.json({ error: 'emp 필요' }, { status: 400 });
+  if (!empId) return json({ error: 'emp 필요' }, { status: 400 });
 
   const r = await authorize(empId, params.id, code);
-  if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status });
+  if ('error' in r) return json({ error: r.error }, { status: r.status });
   const { supabase } = r;
 
   // 프로젝트 본체 + 멤버 + PL 양식
@@ -138,11 +153,11 @@ export async function GET(
       .eq('project_id', params.id)
       .maybeSingle(),
   ]);
-  if (projRes.error) return NextResponse.json({ error: projRes.error.message }, { status: 500 });
-  if (memRes.error) return NextResponse.json({ error: memRes.error.message }, { status: 500 });
-  if (formRes.error) return NextResponse.json({ error: formRes.error.message }, { status: 500 });
+  if (projRes.error) return json({ error: projRes.error.message }, { status: 500 });
+  if (memRes.error) return json({ error: memRes.error.message }, { status: 500 });
+  if (formRes.error) return json({ error: formRes.error.message }, { status: 500 });
 
-  return NextResponse.json({
+  return json({
     project: projRes.data,
     members: memRes.data ?? [],
     form: formRes.data ?? null,
@@ -156,17 +171,17 @@ export async function PUT(
   const { searchParams } = new URL(req.url);
   const empId = (searchParams.get('emp') ?? '').trim();
   const code = (searchParams.get('code') ?? '').trim();
-  if (!empId) return NextResponse.json({ error: 'emp 필요' }, { status: 400 });
+  if (!empId) return json({ error: 'emp 필요' }, { status: 400 });
 
   const r = await authorize(empId, params.id, code);
-  if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status });
+  if ('error' in r) return json({ error: r.error }, { status: r.status });
   const { supabase, user, project } = r;
 
   let body: any;
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: 'invalid body' }, { status: 400 });
+    return json({ error: 'invalid body' }, { status: 400 });
   }
 
   const members: any[] = Array.isArray(body?.members) ? body.members : [];
@@ -183,7 +198,7 @@ export async function PUT(
     .from('project_members')
     .delete()
     .eq('project_id', params.id);
-  if (delErr) return NextResponse.json({ error: delErr.message, stage: 'members-delete' }, { status: 500 });
+  if (delErr) return json({ error: delErr.message, stage: 'members-delete' }, { status: 500 });
 
   if (members.length > 0) {
     const rows = members
@@ -214,7 +229,7 @@ export async function PUT(
         insErr = retry.error;
       }
       if (insErr) {
-        return NextResponse.json(
+        return json(
           {
             error: insErr.message,
             stage: 'members-insert',
@@ -289,7 +304,7 @@ export async function PUT(
     }
   }
   if (formErr) {
-    return NextResponse.json(
+    return json(
       {
         error: formErr.message,
         stage: 'pl-form',
@@ -382,7 +397,7 @@ export async function PUT(
       .eq('id', params.id);
     updErr = retry.error;
   }
-  if (updErr) return NextResponse.json({ error: updErr.message, stage: 'pl-completed' }, { status: 500 });
+  if (updErr) return json({ error: updErr.message, stage: 'pl-completed' }, { status: 500 });
 
   // 4) 감사 로그 — PL 셀프 작성 추적
   await logProjectChange(
@@ -458,7 +473,7 @@ export async function PUT(
     last_saved_by_name: user.name,
   };
 
-  return NextResponse.json({
+  return json({
     ok: true,
     project: projAfter.data ?? { id: params.id, pl_completed: true, ...projectsPatch },
     members: finalMembers,

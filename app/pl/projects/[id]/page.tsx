@@ -341,8 +341,8 @@ function PLProjectFormPageInner() {
     setError(null);
     try {
       const r = await fetch(
-        `/api/pl/projects/${encodeURIComponent(projectId)}?emp=${encodeURIComponent(empId)}&code=${encodeURIComponent(code)}`,
-        { cache: 'no-store' }
+        `/api/pl/projects/${encodeURIComponent(projectId)}?emp=${encodeURIComponent(empId)}&code=${encodeURIComponent(code)}&_=${Date.now()}`,
+        { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }
       );
       const j = await r.json();
       if (!r.ok) throw new Error(j?.error ?? '조회 실패');
