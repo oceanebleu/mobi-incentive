@@ -260,28 +260,23 @@ function PLProjectFormPageInner() {
   const router = useRouter();
   const projectId = params.id;
   const empIdFromQuery = search?.get('emp') ?? '';
+  const codeFromQuery = (search?.get('code') ?? '').toUpperCase();
 
-  // 사번 — 쿼리에 없으면 localStorage → 그래도 없으면 모달
+  // 사번 + 고유코드 — 쿼리에 둘 다 있어야만 직접 진입 가능. 없으면 인증 모달
   const [empId, setEmpId] = useState<string>(empIdFromQuery);
-  const [askEmp, setAskEmp] = useState(false);
+  const [code, setCode] = useState<string>(codeFromQuery);
+  const [askAuth, setAskAuth] = useState(false);
   const [empInput, setEmpInput] = useState('');
+  const [codeInput, setCodeInput] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (empIdFromQuery) {
-      try {
-        localStorage.setItem('mobi-pl-emp', empIdFromQuery);
-      } catch {}
+    if (empIdFromQuery && codeFromQuery) {
+      // 정상 진입 — localStorage 캐싱은 보안상 하지 않음
       return;
     }
-    try {
-      const cached = localStorage.getItem('mobi-pl-emp');
-      if (cached) {
-        setEmpId(cached);
-        return;
-      }
-    } catch {}
-    setAskEmp(true);
-  }, [empIdFromQuery]);
+    setAskAuth(true);
+  }, [empIdFromQuery, codeFromQuery]);
 
   // 데이터 로드
   const [project, setProject] = useState<any>(null);
@@ -341,12 +336,12 @@ function PLProjectFormPageInner() {
   }
 
   async function loadData() {
-    if (!empId) return;
+    if (!empId || !code) return;
     setLoading(true);
     setError(null);
     try {
       const r = await fetch(
-        `/api/pl/projects/${encodeURIComponent(projectId)}?emp=${encodeURIComponent(empId)}`,
+        `/api/pl/projects/${encodeURIComponent(projectId)}?emp=${encodeURIComponent(empId)}&code=${encodeURIComponent(code)}`,
         { cache: 'no-store' }
       );
       const j = await r.json();
@@ -362,7 +357,7 @@ function PLProjectFormPageInner() {
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, empId]);
+  }, [projectId, empId, code]);
 
   const totalContribution = useMemo(
     () => members.reduce((s, r) => s + (Number.isFinite(r.contribution) ? r.contribution : 0), 0),
@@ -510,7 +505,7 @@ function PLProjectFormPageInner() {
         },
       };
       const res = await fetch(
-        `/api/pl/projects/${encodeURIComponent(projectId)}?emp=${encodeURIComponent(empId)}`,
+        `/api/pl/projects/${encodeURIComponent(projectId)}?emp=${encodeURIComponent(empId)}&code=${encodeURIComponent(code)}`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -544,29 +539,45 @@ function PLProjectFormPageInner() {
     }
   }
 
-  // 사번 인증 모달 (고유 링크로 진입했는데 쿼리·캐시 모두 없을 때)
-  if (askEmp) {
+  // 사번 + 고유코드 인증 모달 — 고유 링크로 진입했는데 쿼리가 없을 때
+  if (askAuth) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
         <div className="w-full max-w-sm bg-white border border-gray-200 rounded-2xl p-7 shadow-sm">
           <div className="flex items-center gap-2 mb-1">
             <ShieldCheck size={18} className="text-blue-600" />
-            <h1 className="text-base font-bold text-gray-900">사번 확인</h1>
+            <h1 className="text-base font-bold text-gray-900">본인 확인</h1>
           </div>
           <p className="text-xs text-gray-500 mb-5">
-            본인 확인을 위해 사번을 입력해 주세요.
+            본인 사번과 개인 고유코드를 입력해 주세요.
           </p>
           <form
-            onSubmit={e => {
+            onSubmit={async e => {
               e.preventDefault();
-              const v = empInput.trim();
-              if (!v) return;
+              setAuthError(null);
+              const emp = empInput.trim();
+              const c = codeInput.trim().toUpperCase();
+              if (!emp || !c) {
+                setAuthError('사번과 고유코드 모두 필요합니다.');
+                return;
+              }
               try {
-                localStorage.setItem('mobi-pl-emp', v);
-              } catch {}
-              router.replace(
-                `/pl/projects/${encodeURIComponent(projectId)}?emp=${encodeURIComponent(v)}`
-              );
+                const res = await fetch('/api/pl/auth', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ emp_id: emp, code: c }),
+                });
+                const j = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                  setAuthError(j?.error ?? '확인 실패');
+                  return;
+                }
+                router.replace(
+                  `/pl/projects/${encodeURIComponent(projectId)}?emp=${encodeURIComponent(emp)}&code=${encodeURIComponent(c)}`
+                );
+              } catch {
+                setAuthError('네트워크 오류');
+              }
             }}
             className="space-y-3"
           >
@@ -579,6 +590,18 @@ function PLProjectFormPageInner() {
               placeholder="사번"
               className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
             />
+            <input
+              type="text"
+              autoComplete="off"
+              maxLength={5}
+              value={codeInput}
+              onChange={e => setCodeInput(e.target.value.toUpperCase())}
+              placeholder="개인 고유코드 (예: ABC23)"
+              className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 tracking-widest uppercase"
+            />
+            {authError && (
+              <p className="text-xs text-red-700">{authError}</p>
+            )}
             <button
               type="submit"
               className="w-full px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
@@ -595,7 +618,7 @@ function PLProjectFormPageInner() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto px-5 py-8 space-y-6">
         <Link
-          href={`/pl/projects?emp=${encodeURIComponent(empId)}`}
+          href={`/pl/projects?emp=${encodeURIComponent(empId)}&code=${encodeURIComponent(code)}`}
           className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700"
         >
           <ArrowLeft size={12} /> 내 프로젝트 목록

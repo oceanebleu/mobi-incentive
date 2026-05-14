@@ -1,35 +1,32 @@
 'use client';
 
 // ─────────────────────────────────────────────────────────────
-// /pl — PL 양식 입력 진입 페이지
-//   사번 입력 → 검증 → /pl/projects?emp=... 로 이동
-//   localStorage('mobi-pl-emp') 에 사번을 기억해 다음 진입 시 자동 채워줌
+// /pl — PL 양식 입력 진입
+//   사번 + 개인 고유코드(5자, 알파벳3 + 숫자2) 동시 입력 → 검증 후 본인 프로젝트 목록으로 이동
+//   보안상 사번/코드 둘 다 localStorage 에 저장하지 않습니다 (매번 입력)
 // ─────────────────────────────────────────────────────────────
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { AlertCircle, ArrowRight, Loader2, ShieldCheck } from 'lucide-react';
 
 export default function PLEntryPage() {
-  const router = useRouter();
   const [empId, setEmpId] = useState('');
+  const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    try {
-      const cached = localStorage.getItem('mobi-pl-emp');
-      if (cached) setEmpId(cached);
-    } catch {}
-  }, []);
 
   async function submit(e?: React.FormEvent) {
     e?.preventDefault();
     if (submitting) return;
     setError(null);
-    const trimmed = empId.trim();
-    if (!trimmed) {
+    const empTrim = empId.trim();
+    const codeTrim = code.trim().toUpperCase();
+    if (!empTrim) {
       setError('사번을 입력하세요.');
+      return;
+    }
+    if (!codeTrim) {
+      setError('개인 고유코드를 입력하세요.');
       return;
     }
     setSubmitting(true);
@@ -37,17 +34,15 @@ export default function PLEntryPage() {
       const res = await fetch('/api/pl/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emp_id: trimmed }),
+        body: JSON.stringify({ emp_id: empTrim, code: codeTrim }),
       });
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error ?? '확인 실패');
-      try {
-        localStorage.setItem('mobi-pl-emp', trimmed);
-      } catch {}
-      router.push(`/pl/projects?emp=${encodeURIComponent(trimmed)}`);
+      // 페이지 transition 안정성을 위해 hard navigation 사용
+      const url = `/pl/projects?emp=${encodeURIComponent(empTrim)}&code=${encodeURIComponent(codeTrim)}`;
+      window.location.assign(url);
     } catch (e: any) {
       setError(e?.message ?? '오류가 발생했습니다.');
-    } finally {
       setSubmitting(false);
     }
   }
@@ -60,14 +55,14 @@ export default function PLEntryPage() {
           <h1 className="text-base font-bold text-gray-900">PL 양식 입력</h1>
         </div>
         <p className="text-xs text-gray-500 mb-6">
-          본인 사번을 입력하면 배정된 프로젝트의 양식 페이지로 이동합니다.
+          본인 사번과 개인 고유코드를 입력해 주세요.
+          <br />
+          고유코드는 운영팀 / 사용자관리에서 확인할 수 있습니다.
         </p>
 
         <form onSubmit={submit} className="space-y-3">
           <div>
-            <label className="text-[11px] font-semibold text-gray-500 mb-1 block">
-              사번
-            </label>
+            <label className="text-[11px] font-semibold text-gray-500 mb-1 block">사번</label>
             <input
               type="text"
               inputMode="numeric"
@@ -77,6 +72,21 @@ export default function PLEntryPage() {
               onChange={e => setEmpId(e.target.value)}
               placeholder="예: 12345"
               className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+            />
+          </div>
+
+          <div>
+            <label className="text-[11px] font-semibold text-gray-500 mb-1 block">
+              개인 고유코드 <span className="text-[10px] text-gray-400 font-normal">(5자 · 알파벳 3 + 숫자 2)</span>
+            </label>
+            <input
+              type="text"
+              autoComplete="off"
+              maxLength={5}
+              value={code}
+              onChange={e => setCode(e.target.value.toUpperCase())}
+              placeholder="예: ABC23"
+              className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 tracking-widest tabular-nums uppercase"
             />
           </div>
 

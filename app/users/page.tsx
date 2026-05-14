@@ -9,6 +9,9 @@ import {
   AlertCircle,
   Undo2,
   Save,
+  Copy,
+  Check,
+  KeyRound,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { ROLE_LABELS, type UserRole } from '@/lib/roles';
@@ -24,6 +27,7 @@ interface UserRow {
   email: string | null;
   role: UserRole;
   role_overridden: boolean;
+  access_code: string | null;
   synced_at: string;
   updated_at: string;
 }
@@ -365,7 +369,7 @@ export default function UsersPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/50">
-                {['사원', '이메일', '소속(법인/소속1/소속2)', '재직상태', '역할', '동기화'].map(
+                {['사원', '이메일', '소속(법인/소속1/소속2)', '재직상태', '역할', 'PL 고유코드', '동기화'].map(
                   h => (
                     <th
                       key={h}
@@ -380,13 +384,13 @@ export default function UsersPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-12 text-sm text-gray-400">
+                  <td colSpan={7} className="text-center py-12 text-sm text-gray-400">
                     불러오는 중...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-12 text-sm text-gray-400">
+                  <td colSpan={7} className="text-center py-12 text-sm text-gray-400">
                     표시할 사용자가 없습니다. 우측 상단 [시트와 동기화] 버튼을 눌러주세요.
                   </td>
                 </tr>
@@ -468,6 +472,21 @@ export default function UsersPage() {
                           )}
                         </div>
                       </td>
+                      <td className="px-4 py-3">
+                        <AccessCodeCell
+                          employeeId={u.employee_id}
+                          code={u.access_code}
+                          onUpdated={code =>
+                            setUsers(prev =>
+                              prev.map(x =>
+                                x.employee_id === u.employee_id
+                                  ? { ...x, access_code: code }
+                                  : x
+                              )
+                            )
+                          }
+                        />
+                      </td>
                       <td className="px-4 py-3 text-[11px] text-gray-400">
                         {u.synced_at ? new Date(u.synced_at).toLocaleString('ko-KR') : '-'}
                       </td>
@@ -541,5 +560,81 @@ function TabButton({
       </span>
       {hint && <span className="text-[10px] text-gray-400">· {hint}</span>}
     </button>
+  );
+}
+
+// PL 고유코드 셀 — 표시 + 복사 + 재발급
+function AccessCodeCell({
+  employeeId,
+  code,
+  onUpdated,
+}: {
+  employeeId: string;
+  code: string | null;
+  onUpdated: (newCode: string) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  function copy() {
+    if (!code) return;
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(code).catch(() => {});
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  async function regenerate() {
+    if (busy) return;
+    if (
+      !confirm(
+        `이 사용자의 PL 고유코드를 새로 발급할까요?\n기존 코드는 즉시 무효화됩니다.`
+      )
+    )
+      return;
+    setBusy(true);
+    try {
+      const res = await fetch(
+        `/api/users/${encodeURIComponent(employeeId)}/access-code`,
+        { method: 'POST' }
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j?.error ?? '재발급 실패');
+      onUpdated(j.access_code);
+    } catch (e: any) {
+      alert(e?.message ?? '재발급 중 오류');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      {code ? (
+        <code className="text-xs font-bold tracking-widest tabular-nums px-2 py-1 bg-gray-50 border border-gray-200 rounded text-gray-800">
+          {code}
+        </code>
+      ) : (
+        <span className="text-[11px] text-gray-400">-</span>
+      )}
+      {code && (
+        <button
+          onClick={copy}
+          title="클립보드에 복사"
+          className="text-gray-400 hover:text-gray-700 transition-colors p-1"
+        >
+          {copied ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+        </button>
+      )}
+      <button
+        onClick={regenerate}
+        disabled={busy}
+        title={code ? '새 코드 발급 (기존 무효화)' : '코드 발급'}
+        className="text-gray-400 hover:text-blue-600 transition-colors p-1 disabled:opacity-50"
+      >
+        <KeyRound size={12} />
+      </button>
+    </div>
   );
 }

@@ -18,6 +18,7 @@ import { authOptions } from '@/lib/authOptions';
 import { canManageUsers, defaultRoleFromAffiliation, type UserRole } from '@/lib/roles';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { fetchEmployees } from '@/lib/google-sheets';
+import { generateAccessCode } from '@/lib/access-code';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -41,10 +42,11 @@ export async function POST() {
 
   const supabase = getSupabaseAdmin();
 
-  // 기존 row 일괄 로드 (employee_id → {role, role_overridden})
+  // 기존 row 일괄 로드 (employee_id → {role, role_overridden, access_code})
+  //   access_code 컬럼이 아직 없는 환경도 안전하게 동작시키기 위해 '*' 로 select
   const { data: existing, error: exErr } = await supabase
     .from('users')
-    .select('employee_id, role, role_overridden');
+    .select('employee_id, role, role_overridden, access_code');
   if (exErr) {
     return NextResponse.json({ error: exErr.message }, { status: 500 });
   }
@@ -75,6 +77,10 @@ export async function POST() {
       ? (existed.role as UserRole)        // 수동 설정 보존
       : defaultRole;
 
+    // PL 본인 인증용 고유코드 — 기존 코드가 있으면 보존, 없으면 새로 발급
+    const existingCode = (existed as any)?.access_code as string | null | undefined;
+    const accessCode = existingCode && existingCode.trim() !== '' ? existingCode : generateAccessCode();
+
     upserts.push({
       employee_id: emp.employee_id,
       name: emp.name,
@@ -88,6 +94,7 @@ export async function POST() {
       email: emp.email,
       role: finalRole,
       role_overridden: existed?.role_overridden ?? false,
+      access_code: accessCode,
       synced_at: now,
     });
 

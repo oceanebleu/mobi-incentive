@@ -56,6 +56,7 @@ function PLProjectsPageInner() {
   const search = useSearchParams();
   const router = useRouter();
   const empId = search?.get('emp') ?? '';
+  const code = search?.get('code') ?? '';
 
   const [name, setName] = useState<string | null>(null);
   const [projects, setProjects] = useState<ProjectRow[]>([]);
@@ -63,13 +64,16 @@ function PLProjectsPageInner() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!empId) {
+    if (!empId || !code) {
       router.replace('/pl');
       return;
     }
     setLoading(true);
     setError(null);
-    fetch(`/api/pl/projects?emp=${encodeURIComponent(empId)}`, { cache: 'no-store' })
+    fetch(
+      `/api/pl/projects?emp=${encodeURIComponent(empId)}&code=${encodeURIComponent(code)}`,
+      { cache: 'no-store' }
+    )
       .then(async r => {
         const j = await r.json();
         if (!r.ok) throw new Error(j?.error ?? '조회 실패');
@@ -135,6 +139,7 @@ function PLProjectsPageInner() {
               hint="멤버 기여도와 판단 사유 9개 항목을 입력해 주세요."
               projects={grouped.pending}
               empId={empId}
+              code={code}
             />
             <Section
               title="작성 완료"
@@ -142,6 +147,7 @@ function PLProjectsPageInner() {
               hint="저장된 내용을 보거나 수정할 수 있습니다."
               projects={grouped.done}
               empId={empId}
+              code={code}
             />
           </div>
         )}
@@ -163,12 +169,14 @@ function Section({
   hint,
   projects,
   empId,
+  code,
 }: {
   title: string;
   tone: 'amber' | 'emerald';
   hint: string;
   projects: ProjectRow[];
   empId: string;
+  code: string;
 }) {
   const badgeCls =
     tone === 'amber'
@@ -193,7 +201,7 @@ function Section({
           {projects.map(p => (
             <Link
               key={p.id}
-              href={`/pl/projects/${encodeURIComponent(p.id)}?emp=${encodeURIComponent(empId)}`}
+              href={`/pl/projects/${encodeURIComponent(p.id)}?emp=${encodeURIComponent(empId)}&code=${encodeURIComponent(code)}`}
               className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-gray-100 hover:bg-gray-50/70 hover:border-gray-200 transition-colors group"
             >
               <div className="flex-1 min-w-0">

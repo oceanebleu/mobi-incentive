@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────────────────
-// GET /api/pl/projects?emp=<employee_id>
-// 사번으로 본인에게 배정된 (= projects.pl 과 이름 일치) 프로젝트 리스트 반환.
+// GET /api/pl/projects?emp=<employee_id>&code=<access_code>
+// 사번 + 고유코드 검증 후 본인에게 배정된 (= projects.pl 과 이름 일치) 프로젝트 리스트 반환.
 // 응답: { name, projects: [{ id, campaign_name, submitted_at, pl_completed, acquisition_status }] }
 // ─────────────────────────────────────────────────────────────
 
@@ -14,16 +14,20 @@ const normalize = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const empId = (searchParams.get('emp') ?? '').trim();
+  const codeInput = (searchParams.get('code') ?? '').trim().toUpperCase();
   if (!empId) {
     return NextResponse.json({ error: 'emp 쿼리 파라미터가 필요합니다.' }, { status: 400 });
+  }
+  if (!codeInput) {
+    return NextResponse.json({ error: 'code 쿼리 파라미터가 필요합니다.' }, { status: 400 });
   }
 
   const supabase = getSupabaseAdmin();
 
-  // 1) 사번 → 이름
+  // 1) 사번 + 고유코드 매칭
   const { data: user, error: userErr } = await supabase
     .from('users')
-    .select('employee_id, name, status')
+    .select('employee_id, name, status, access_code')
     .eq('employee_id', empId)
     .maybeSingle();
   if (userErr) return NextResponse.json({ error: userErr.message }, { status: 500 });
@@ -32,6 +36,19 @@ export async function GET(req: Request) {
   }
   if ((user as any).status === '퇴사') {
     return NextResponse.json({ error: '퇴사한 사용자 사번입니다.' }, { status: 403 });
+  }
+  const dbCode = ((user as any).access_code ?? '').toString().trim().toUpperCase();
+  if (!dbCode) {
+    return NextResponse.json(
+      { error: '아직 고유코드가 발급되지 않았습니다. 운영팀에 문의해 주세요.' },
+      { status: 403 }
+    );
+  }
+  if (dbCode !== codeInput) {
+    return NextResponse.json(
+      { error: '사번과 고유코드가 일치하지 않습니다.' },
+      { status: 401 }
+    );
   }
   const userName: string = (user as any).name;
   const userNameKey = normalize(userName);

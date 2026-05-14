@@ -13,14 +13,19 @@ export const dynamic = 'force-dynamic';
 
 const normalize = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
 
-// 사번 → { name } 조회 + 권한 검증 (projects.pl 이름과 매칭되는지)
-async function authorize(empId: string, projectId: string) {
+// 사번 + 고유코드 → 본인 확인 후 projects.pl 매칭 검증
+async function authorize(empId: string, projectId: string, code: string) {
   const supabase = getSupabaseAdmin();
+
+  const codeInput = (code ?? '').trim().toUpperCase();
+  if (!codeInput) {
+    return { error: '개인 고유코드가 필요합니다.', status: 400 };
+  }
 
   const [userRes, projRes] = await Promise.all([
     supabase
       .from('users')
-      .select('employee_id, name, status')
+      .select('employee_id, name, status, access_code')
       .eq('employee_id', empId)
       .maybeSingle(),
     supabase
@@ -33,6 +38,17 @@ async function authorize(empId: string, projectId: string) {
   if (!userRes.data) return { error: '사번을 찾을 수 없습니다.', status: 404 };
   if ((userRes.data as any).status === '퇴사') {
     return { error: '퇴사한 사용자 사번입니다.', status: 403 };
+  }
+  // 사번 + 고유코드 매칭
+  const dbCode = ((userRes.data as any).access_code ?? '').toString().trim().toUpperCase();
+  if (!dbCode) {
+    return {
+      error: '아직 고유코드가 발급되지 않았습니다. 운영팀에 문의해 주세요.',
+      status: 403,
+    };
+  }
+  if (dbCode !== codeInput) {
+    return { error: '사번과 고유코드가 일치하지 않습니다.', status: 401 };
   }
   if (projRes.error) return { error: projRes.error.message, status: 500 };
   if (!projRes.data) return { error: '프로젝트를 찾을 수 없습니다.', status: 404 };
@@ -96,9 +112,10 @@ export async function GET(
 ) {
   const { searchParams } = new URL(req.url);
   const empId = (searchParams.get('emp') ?? '').trim();
+  const code = (searchParams.get('code') ?? '').trim();
   if (!empId) return NextResponse.json({ error: 'emp 필요' }, { status: 400 });
 
-  const r = await authorize(empId, params.id);
+  const r = await authorize(empId, params.id, code);
   if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status });
   const { supabase } = r;
 
@@ -138,9 +155,10 @@ export async function PUT(
 ) {
   const { searchParams } = new URL(req.url);
   const empId = (searchParams.get('emp') ?? '').trim();
+  const code = (searchParams.get('code') ?? '').trim();
   if (!empId) return NextResponse.json({ error: 'emp 필요' }, { status: 400 });
 
-  const r = await authorize(empId, params.id);
+  const r = await authorize(empId, params.id, code);
   if ('error' in r) return NextResponse.json({ error: r.error }, { status: r.status });
   const { supabase, user, project } = r;
 
