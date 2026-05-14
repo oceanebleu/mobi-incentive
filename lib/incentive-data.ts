@@ -198,8 +198,14 @@ function todayIso(): string {
  *     lastWorkDate — 멤버 마지막 근무일
  *     today        — 오늘 (YYYY-MM-DD)
  *     skipped      — 회차 자체 미지급
- *     payable      — 멤버별 지급 대상 여부 (false 면 excluded)
- *   분류 우선순위: skipped > !payable > excluded > paid > pending
+ *     payable      — 멤버별 지급 대상 (true=명시적 지급, false=명시적 미지급, null=자동 판단)
+ *
+ *   우선순위:
+ *     1) skipped 면 → skipped
+ *     2) payable === false (명시적 미지급) → excluded
+ *     3) payable === true (명시적 지급) → lwd 비교 건너뛰고 paid/pending 분류
+ *        (사용자가 "퇴직 후라도 지급" 으로 수동 토글한 경우)
+ *     4) payable === null/undefined (자동) → lwd 비교 후 excluded/paid/pending 분류
  */
 function phaseStatus(
   paidAt: string | null,
@@ -207,17 +213,17 @@ function phaseStatus(
   lastWorkDate: string | null | undefined,
   today: string,
   skipped: boolean,
-  payable: boolean = true
+  payable: boolean | null | undefined = null
 ): PhaseStatus {
   if (skipped) return 'skipped';
-  if (!payable) return 'excluded';
-  // 시트의 다양한 날짜 표기(예: '2026. 5. 4')를 YYYY-MM-DD 로 정규화해서 안전하게 비교
+  if (payable === false) return 'excluded';
   const lwdN = normalizeDate(lastWorkDate);
   const paidN = normalizeDate(paidAt);
-  // excluded 판단은 paid_at 우선, 없으면 planned_date 도 함께 본다
-  //   → 멤버 paid_at 이 아직 없고 회차 계획일만 정해진 경우에도 lwd 초과면 excluded
   const effectiveDate = paidN ?? normalizeDate(plannedDate);
-  if (lwdN && effectiveDate && effectiveDate > lwdN) return 'excluded';
+  // 명시적 true 가 아니라 자동 판단인 경우에만 lwd 비교
+  if (payable !== true && lwdN && effectiveDate && effectiveDate > lwdN) {
+    return 'excluded';
+  }
   if (paidN && paidN <= today) return 'paid';
   return 'pending';
 }
@@ -314,21 +320,11 @@ export function calcMemberSummariesV2(
       //   - 프로젝트가 LOST(수주실패) 면 두 회차 모두 자동으로 skipped 취급
       //   - 또는 명시적인 first/second_payment_skipped 플래그
       const projectLost = p.acquisition_status === 'LOST';
-      // 지급 대상 여부 — DB 값이 명시되어 있으면 그것, 없으면 자동 (회차 계획일이 lwd 이후면 false)
-      const autoPayable = (planned: string | null): boolean => {
-        const lwdN = normalizeDate(s.last_work_date);
-        const dN = normalizeDate(planned);
-        if (!lwdN || !dN) return true;
-        return dN <= lwdN;
-      };
+      // 지급 대상 — DB 값(true/false) 그대로 전달, null/undefined 면 phaseStatus 가 자동 판단
       const firstPayable =
-        typeof (m as any).first_payable === 'boolean'
-          ? (m as any).first_payable
-          : autoPayable(p.first_payment_date);
+        typeof (m as any).first_payable === 'boolean' ? (m as any).first_payable : null;
       const secondPayable =
-        typeof (m as any).second_payable === 'boolean'
-          ? (m as any).second_payable
-          : autoPayable(p.second_payment_date);
+        typeof (m as any).second_payable === 'boolean' ? (m as any).second_payable : null;
       const firstStatus = phaseStatus(
         m.first_paid_at,
         p.first_payment_date,
