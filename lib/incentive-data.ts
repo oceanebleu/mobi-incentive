@@ -568,8 +568,9 @@ export function paymentStageOf(p: SupabaseProject): PaymentStage {
   // skipped 도 "해당 회차는 더 이상 발생하지 않음" 이라는 의미에서 done 취급
   const firstDone = p.first_payment_completed || p.first_payment_skipped;
   const secondDone = p.second_payment_completed || p.second_payment_skipped;
-  // 2차만 완료 = 사실상 전체완료(실무상 1차 없이 2차만 완료되는 케이스는 거의 없음)
-  if (secondDone) return 'ALL_PAID';
+  // ALL_PAID 는 1차·2차 모두 done 일 때만
+  //   (예: 1차 대기 + 2차 미지급(skipped) 같은 케이스는 1차가 아직 안 끝난 상태 → ALL_PAID 아님)
+  if (firstDone && secondDone) return 'ALL_PAID';
   if (firstDone) return 'FIRST_PAID';
   if (p.fund_confirmed) return 'FUND_CONFIRMED';
   if (p.pl_completed) return 'PL_COMPLETED';

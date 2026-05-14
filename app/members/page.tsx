@@ -123,9 +123,10 @@ export default function MembersPage() {
   );
 
   // 미지급 합계 — 프로젝트 단위로 "미지급"으로 표시된 회차의 합계
+  //   탭과 무관 — 재직자/퇴사자 모두 포함 (사용자 정책)
   const totalSkipped = useMemo(
-    () => sorted.reduce((s, m) => s + m.total_skipped, 0),
-    [sorted]
+    () => summaries.reduce((s, m) => s + m.total_skipped, 0),
+    [summaries]
   );
 
   const aggTotals = useMemo(() => {

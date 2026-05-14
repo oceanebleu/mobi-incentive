@@ -24,6 +24,13 @@
       "static/chunks/main-app-12c9b103377e570f.js",
       "static/chunks/app/admin/import/page-41a379fd7a30b65b.js"
     ],
+    "/archive/page": [
+      "static/chunks/webpack-91b2d14d0f678b80.js",
+      "static/chunks/fd9d1056-2c328419f3c759d8.js",
+      "static/chunks/23-fe16fe2fb171698b.js",
+      "static/chunks/main-app-12c9b103377e570f.js",
+      "static/chunks/app/archive/page-4af7a2b23b77693c.js"
+    ],
     "/login/page": [
       "static/chunks/webpack-91b2d14d0f678b80.js",
       "static/chunks/fd9d1056-2c328419f3c759d8.js",
@@ -32,20 +39,13 @@
       "static/chunks/998-2f86f2d3bc01a004.js",
       "static/chunks/app/login/page-4c5e5335d662a05f.js"
     ],
-    "/archive/page": [
-      "static/chunks/webpack-91b2d14d0f678b80.js",
-      "static/chunks/fd9d1056-2c328419f3c759d8.js",
-      "static/chunks/23-fe16fe2fb171698b.js",
-      "static/chunks/main-app-12c9b103377e570f.js",
-      "static/chunks/app/archive/page-4af7a2b23b77693c.js"
-    ],
     "/members/page": [
       "static/chunks/webpack-91b2d14d0f678b80.js",
       "static/chunks/fd9d1056-2c328419f3c759d8.js",
       "static/chunks/23-fe16fe2fb171698b.js",
       "static/chunks/main-app-12c9b103377e570f.js",
-      "static/chunks/305-2fe2a21985db3cff.js",
-      "static/chunks/app/members/page-3f6158ee74ba08f3.js"
+      "static/chunks/305-106082eb6248d8fe.js",
+      "static/chunks/app/members/page-fda05efada8faf6e.js"
     ],
     "/page": [
       "static/chunks/webpack-91b2d14d0f678b80.js",
@@ -53,7 +53,7 @@
       "static/chunks/23-fe16fe2fb171698b.js",
       "static/chunks/main-app-12c9b103377e570f.js",
       "static/chunks/584-0cded577c7fd19fb.js",
-      "static/chunks/305-2fe2a21985db3cff.js",
+      "static/chunks/305-106082eb6248d8fe.js",
       "static/chunks/app/page-597c986b4e3ea87d.js"
     ],
     "/pl/page": [
@@ -85,7 +85,7 @@
       "static/chunks/23-fe16fe2fb171698b.js",
       "static/chunks/main-app-12c9b103377e570f.js",
       "static/chunks/998-2f86f2d3bc01a004.js",
-      "static/chunks/305-2fe2a21985db3cff.js",
+      "static/chunks/305-106082eb6248d8fe.js",
       "static/chunks/app/projects/[id]/page-cf9ee6739d90ace4.js"
     ],
     "/projects/page": [
@@ -94,7 +94,7 @@
       "static/chunks/23-fe16fe2fb171698b.js",
       "static/chunks/main-app-12c9b103377e570f.js",
       "static/chunks/584-0cded577c7fd19fb.js",
-      "static/chunks/305-2fe2a21985db3cff.js",
+      "static/chunks/305-106082eb6248d8fe.js",
       "static/chunks/app/projects/page-d46cde9c9409fc80.js"
     ],
     "/unauthorized/page": [
