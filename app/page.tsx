@@ -72,9 +72,10 @@ export default function DashboardPage() {
     return list;
   }, [memberSummaries, memberSortBy, memberScope]);
 
-  // 단계별 카운트 + 프로젝트 분류 (PL 작성대기 / 재원확정 필요 리스트용 + 단계 박스 드릴다운용)
-  //   · PL 작성대기 : 수주실패·대행종료 제외 (PL 기여도 더 받을 이유 없음)
-  //   · 재원확정 필요: 수주성공(WON) 한정 — 재원은 수주가 확정돼야 의미가 있으므로
+  // 단계별 카운트 + 프로젝트 분류
+  //   · 모든 카운트와 byStage 에서 수주실패·대행종료(=비활성) 프로젝트 제외 — 운영 진행 보드 의미에 맞춤
+  //     (수주여부 분포 카드에 별도 표시되므로 정보 손실 없음)
+  //   · 재원확정 필요 리스트는 추가로 수주성공(WON) 한정
   const stageGroups = useMemo(() => {
     const c: Record<PaymentStage, number> = {
       PL_PENDING: 0,
@@ -83,7 +84,6 @@ export default function DashboardPage() {
       FIRST_PAID: 0,
       ALL_PAID: 0,
     };
-    // 단계별 전체 프로젝트 — 박스 클릭 시 노출용 (분포 그대로 보여줘야 함, 필터 X)
     const byStage: Record<PaymentStage, SupabaseProject[]> = {
       PL_PENDING: [],
       PL_COMPLETED: [],
@@ -95,11 +95,14 @@ export default function DashboardPage() {
     const plDoneFundNeeded: SupabaseProject[] = [];
     const isInactive = (p: SupabaseProject) =>
       p.acquisition_status === 'LOST' || p.acquisition_status === 'CANCELLED';
+    let activeTotal = 0;
     for (const p of projects) {
+      if (isInactive(p)) continue;
       const stage = paymentStageOf(p);
       c[stage]++;
       byStage[stage].push(p);
-      if (stage === 'PL_PENDING' && !isInactive(p)) {
+      activeTotal++;
+      if (stage === 'PL_PENDING') {
         plPending.push(p);
       } else if (stage === 'PL_COMPLETED' && p.acquisition_status === 'WON') {
         plDoneFundNeeded.push(p);
@@ -111,28 +114,27 @@ export default function DashboardPage() {
     plPending.sort(byOldest);
     plDoneFundNeeded.sort(byOldest);
     for (const s of Object.keys(byStage) as PaymentStage[]) byStage[s].sort(byOldest);
-    return { counts: c, byStage, plPending, plDoneFundNeeded };
+    return { counts: c, byStage, plPending, plDoneFundNeeded, activeTotal };
   }, [projects]);
   const stageCounts = stageGroups.counts;
 
-  // 클릭한 단계(또는 '전체')의 프로젝트를 보여주는 모달
-  //   · PL 작성대기 단계는 수주실패·대행종료 제외 (PL 기여도 받을 이유 없음)
+  // 클릭한 단계(또는 '전체')의 프로젝트를 보여주는 모달 — 모든 단계 활성만
   type DrillKey = PaymentStage | 'ALL';
   const [drillStage, setDrillStage] = useState<DrillKey | null>(null);
   const drillProjects: SupabaseProject[] = useMemo(() => {
     if (!drillStage) return [];
     if (drillStage === 'ALL') {
-      return [...projects].sort((a, b) =>
+      // 활성 프로젝트만 — 타일 합과 일치
+      const all: SupabaseProject[] = [];
+      for (const s of Object.keys(stageGroups.byStage) as PaymentStage[]) {
+        all.push(...stageGroups.byStage[s]);
+      }
+      return all.sort((a, b) =>
         (a.submitted_at ?? '').localeCompare(b.submitted_at ?? '')
       );
     }
-    if (drillStage === 'PL_PENDING') {
-      return stageGroups.byStage[drillStage].filter(
-        p => p.acquisition_status !== 'LOST' && p.acquisition_status !== 'CANCELLED'
-      );
-    }
     return stageGroups.byStage[drillStage];
-  }, [drillStage, projects, stageGroups]);
+  }, [drillStage, stageGroups]);
   const drillLabel = drillStage === 'ALL' ? '전체 프로젝트' : drillStage ? PAYMENT_STAGE_LABEL[drillStage] : '';
 
   // 인센티브 지급 예정 — 회차 단위(1차/2차)로 펼쳐서 가까운 일자부터 정렬
@@ -356,11 +358,12 @@ export default function DashboardPage() {
             <h2 className="text-sm font-semibold text-gray-800">지급 단계별 진행</h2>
           </div>
 
-          {/* 3 × 2 — 전체 / PL작성대기 / PL작성완료 / 재원확정완료 / 1차 지급완료 / 전체 지급완료 */}
+          {/* 3 × 2 — 전체(활성) / PL작성대기 / PL작성완료 / 재원확정완료 / 1차 지급완료 / 전체 지급완료
+             수주실패·대행종료 제외한 활성 운영 진행 보드 */}
           <div className="grid grid-cols-3 gap-3">
             <StageTile
               label="전체"
-              value={stats.totalProjects}
+              value={stageGroups.activeTotal}
               highlight
               onClick={() => setDrillStage('ALL')}
             />
