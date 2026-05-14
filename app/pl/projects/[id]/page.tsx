@@ -523,14 +523,68 @@ function PLProjectFormPageInner() {
       }
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2500);
-      // 저장 직후 PUT 응답에 실린 최신 상태를 그대로 화면에 적용 — 별도 GET 호출하지 않음
-      //   (별도 GET 시 권한 fallback / 동기화 지연으로 빈 값이 돌아오는 경우 차단)
-      if (json && json.project) {
-        applyServerData({
-          project: json.project,
-          members: json.members ?? [],
-          form: json.form ?? null,
-        });
+
+      // 저장 직후 처리:
+      //   ① 응답에 project 가 있으면 그것으로 갱신 (pl_completed=true 가 사용자 화면에도 반영됨)
+      //   ② 응답에 members/form 데이터가 의미 있으면 화면에 적용
+      //   ③ 응답이 비어 와도 사용자가 방금 입력한 form 은 그대로 유지 (절대 빈 값으로 초기화하지 않음)
+      const respHasMembers = Array.isArray(json?.members) && json.members.length > 0;
+      const respHasForm = json?.form && Object.keys(json.form).some(k => {
+        const v = (json.form as any)[k];
+        return v != null && v !== '' && v !== false;
+      });
+      if (json?.project) {
+        // project 정보만 새 상태로 (pl_completed/r_value/commission/일정 등 정확히 반영)
+        setProject((prev: any) => ({ ...prev, ...json.project }));
+      }
+      if (respHasMembers) {
+        setMembers(
+          (json.members as any[]).map(m => ({
+            member_name: m.member_name ?? '',
+            is_team_account: !!m.is_team_account,
+            contribution: Number(m.contribution) || 0,
+            first_amount: Number(m.first_amount) || 0,
+            first_paid_at: m.first_paid_at ?? null,
+            second_amount: Number(m.second_amount) || 0,
+            second_paid_at: m.second_paid_at ?? null,
+            role: m.role ?? '',
+            team_name: m.team_name ?? '',
+            duty: m.duty ?? '',
+          }))
+        );
+      }
+      // form 응답이 비어있으면 사용자 입력 그대로 유지 — 절대 초기화하지 않음
+      if (respHasForm) {
+        // 응답에 새로 저장된 form 이 있으면 케이스/의견 필드만 서버 값으로 sync
+        const f = json.form as any;
+        setForm(prev => ({
+          ...prev,
+          budget_note: f.budget_note ?? prev.budget_note,
+          client_importance_case:
+            f.client_importance_case != null ? String(f.client_importance_case) : prev.client_importance_case,
+          client_importance: f.client_importance ?? prev.client_importance,
+          rfp_route_case:
+            f.rfp_route_case != null ? String(f.rfp_route_case) : prev.rfp_route_case,
+          rfp_route: f.rfp_route ?? prev.rfp_route,
+          prep_effort_case:
+            f.prep_effort_case != null ? String(f.prep_effort_case) : prev.prep_effort_case,
+          prep_effort: f.prep_effort ?? prev.prep_effort,
+          bidding_difficulty_case:
+            f.bidding_difficulty_case != null
+              ? String(f.bidding_difficulty_case)
+              : prev.bidding_difficulty_case,
+          bidding_difficulty: f.bidding_difficulty ?? prev.bidding_difficulty,
+          proposal_resource_case:
+            f.proposal_resource_case != null
+              ? String(f.proposal_resource_case)
+              : prev.proposal_resource_case,
+          proposal_resource: f.proposal_resource ?? prev.proposal_resource,
+          external_expert_case: f.external_expert_case ?? prev.external_expert_case,
+          external_expert: f.external_expert ?? prev.external_expert,
+          stop_risk_case:
+            f.stop_risk_case != null ? String(f.stop_risk_case) : prev.stop_risk_case,
+          stop_risk: f.stop_risk ?? prev.stop_risk,
+        }));
       }
     } catch (e: any) {
       setError(e?.message ?? '저장 중 오류');

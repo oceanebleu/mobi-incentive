@@ -398,6 +398,7 @@ export async function PUT(
 
   // 5) 저장 직후의 최종 상태를 그대로 응답에 포함 — 클라이언트는 별도 GET 없이 이 결과를 화면에 반영
   //    (별도 GET 호출 시 권한 fallback / 동기화 race condition 등으로 빈 값이 돌아오는 사례 차단)
+  //    혹시 select 가 빈 결과를 반환해도 사용자 입력이 사라지지 않도록, 그 경우엔 보낸 페이로드를 echo
   const [projAfter, memAfter, formAfter] = await Promise.all([
     supabase.from('projects').select('*').eq('id', params.id).single(),
     supabase
@@ -412,10 +413,55 @@ export async function PUT(
       .maybeSingle(),
   ]);
 
+  const finalMembers =
+    memAfter.data && memAfter.data.length > 0
+      ? memAfter.data
+      : members.filter((m: any) => String(m?.member_name ?? '').trim() !== '');
+
+  const finalForm = formAfter.data ?? {
+    project_id: params.id,
+    budget_note: formInput?.budget_note ?? null,
+    client_importance_case:
+      formInput?.client_importance_case !== '' && formInput?.client_importance_case != null
+        ? Number(formInput.client_importance_case)
+        : null,
+    client_importance: formInput?.client_importance ?? null,
+    rfp_route_case:
+      formInput?.rfp_route_case !== '' && formInput?.rfp_route_case != null
+        ? Number(formInput.rfp_route_case)
+        : null,
+    rfp_route: formInput?.rfp_route ?? null,
+    prep_effort_case:
+      formInput?.prep_effort_case !== '' && formInput?.prep_effort_case != null
+        ? Number(formInput.prep_effort_case)
+        : null,
+    prep_effort: formInput?.prep_effort ?? null,
+    bidding_difficulty_case:
+      formInput?.bidding_difficulty_case !== '' && formInput?.bidding_difficulty_case != null
+        ? Number(formInput.bidding_difficulty_case)
+        : null,
+    bidding_difficulty: formInput?.bidding_difficulty ?? null,
+    proposal_resource_case:
+      formInput?.proposal_resource_case !== '' && formInput?.proposal_resource_case != null
+        ? Number(formInput.proposal_resource_case)
+        : null,
+    proposal_resource: formInput?.proposal_resource ?? null,
+    external_expert_case: formInput?.external_expert_case ?? null,
+    external_expert: formInput?.external_expert ?? null,
+    stop_risk_case:
+      formInput?.stop_risk_case !== '' && formInput?.stop_risk_case != null
+        ? Number(formInput.stop_risk_case)
+        : null,
+    stop_risk: formInput?.stop_risk ?? null,
+    last_saved_at: new Date().toISOString(),
+    last_saved_by_emp: user.employee_id,
+    last_saved_by_name: user.name,
+  };
+
   return NextResponse.json({
     ok: true,
-    project: projAfter.data ?? null,
-    members: memAfter.data ?? [],
-    form: formAfter.data ?? null,
+    project: projAfter.data ?? { id: params.id, pl_completed: true, ...projectsPatch },
+    members: finalMembers,
+    form: finalForm,
   });
 }
