@@ -217,14 +217,20 @@ export async function PUT(
             ? m.team_name.trim()
             : null,
         duty: typeof m?.duty === 'string' && m.duty.trim() !== '' ? m.duty : null,
+        first_payable:
+          typeof m?.first_payable === 'boolean' ? m.first_payable : null,
+        second_payable:
+          typeof m?.second_payable === 'boolean' ? m.second_payable : null,
       }))
       .filter(r => r.member_name !== '');
     if (rows.length > 0) {
       // 1차 시도 — 전체 컬럼 포함
       let { error: insErr } = await supabase.from('project_members').insert(rows);
-      // 새 컬럼(role/team_name/duty)이 DB에 없으면 그 컬럼 빼고 재시도 (마이그레이션 미실행 환경 보호)
-      if (insErr && /role|team_name|duty/.test(insErr.message ?? '')) {
-        const stripped = rows.map(({ role, team_name, duty, ...rest }) => rest);
+      // 새 컬럼(role/team_name/duty/*_payable)이 DB에 없으면 그 컬럼 빼고 재시도
+      if (insErr && /role|team_name|duty|payable/.test(insErr.message ?? '')) {
+        const stripped = rows.map(
+          ({ role, team_name, duty, first_payable, second_payable, ...rest }) => rest
+        );
         const retry = await supabase.from('project_members').insert(stripped);
         insErr = retry.error;
       }

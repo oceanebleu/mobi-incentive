@@ -105,8 +105,19 @@ export async function PATCH(
         first_paid_at: m.first_paid_at ?? null,
         second_amount: m.second_amount ?? 0,
         second_paid_at: m.second_paid_at ?? null,
+        role: m.role ?? null,
+        team_name: m.team_name ?? null,
+        duty: m.duty ?? null,
+        first_payable: typeof m.first_payable === 'boolean' ? m.first_payable : null,
+        second_payable: typeof m.second_payable === 'boolean' ? m.second_payable : null,
       }));
-      const { error: insErr } = await supabase.from('project_members').insert(rows);
+      // 1차: 전체 컬럼 / 미존재 환경에서는 새 컬럼 빼고 재시도
+      let { error: insErr } = await supabase.from('project_members').insert(rows);
+      if (insErr && /first_payable|second_payable|role|team_name|duty/.test(insErr.message ?? '')) {
+        const stripped = rows.map(({ first_payable, second_payable, role, team_name, duty, ...rest }) => rest);
+        const retry = await supabase.from('project_members').insert(stripped);
+        insErr = retry.error;
+      }
       if (insErr) {
         return NextResponse.json(
           { error: insErr.message, stage: 'members-insert' },

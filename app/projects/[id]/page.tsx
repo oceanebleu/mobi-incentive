@@ -348,6 +348,9 @@ type MemberDraft = {
   role: string;
   team_name: string;
   duty: string;
+  // 지급 대상 — null 이면 자동 (지급일 기준 재직 중이면 지급)
+  first_payable: boolean | null;
+  second_payable: boolean | null;
 };
 
 // PL 양식과 동일한 팀 옵션
@@ -383,6 +386,8 @@ function toDraft(m: SupabaseProjectMember): MemberDraft {
     role: m.role ?? '',
     team_name: m.team_name ?? '',
     duty: m.duty ?? '',
+    first_payable: typeof (m as any).first_payable === 'boolean' ? (m as any).first_payable : null,
+    second_payable: typeof (m as any).second_payable === 'boolean' ? (m as any).second_payable : null,
   };
 }
 
@@ -471,6 +476,8 @@ function MembersEditModal({
         role: 'PJ',
         team_name: '',
         duty: '',
+        first_payable: null,
+        second_payable: null,
       },
     ]);
   }
@@ -514,15 +521,15 @@ function MembersEditModal({
           member_name: r.member_name,
           is_team_account: !!r.is_team_account,
           contribution: contrib,
-          // 1차/2차 금액은 기여도 × 인센티브 재원 × 지급 비율 로 자동 계산해서 저장
           first_amount: computeFirst(contrib),
           second_amount: computeSecond(contrib),
-          // 지급일은 멤버 편집에서 다루지 않음 — 기존 값 보존 또는 null
           first_paid_at: r.first_paid_at || null,
           second_paid_at: r.second_paid_at || null,
           role: r.role || null,
           team_name: r.team_name || null,
           duty: r.duty || null,
+          first_payable: r.first_payable,
+          second_payable: r.second_payable,
         };
       }),
     };
@@ -594,15 +601,17 @@ function MembersEditModal({
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <table className="w-full text-sm table-fixed">
             <colgroup>
-              <col className="w-[88px]" />   {/* 구분 */}
-              <col className="w-[120px]" />  {/* 팀 */}
-              <col className="w-[120px]" />  {/* 이름 */}
-              <col className="w-[44px]" />   {/* 팀계정 */}
+              <col className="w-[80px]" />   {/* 구분 */}
+              <col className="w-[108px]" />  {/* 팀 */}
+              <col className="w-[100px]" />  {/* 이름 */}
+              <col className="w-[40px]" />   {/* 팀계정 */}
               <col />                         {/* 담당업무 (가변) */}
-              <col className="w-[80px]" />   {/* 기여도 */}
-              <col className="w-[110px]" />  {/* 1차 금액 (자동) */}
-              <col className="w-[110px]" />  {/* 2차 금액 (자동) */}
-              <col className="w-[28px]" />   {/* 삭제 */}
+              <col className="w-[68px]" />   {/* 기여도 */}
+              <col className="w-[100px]" />  {/* 1차 금액 */}
+              <col className="w-[52px]" />   {/* 1차 지급? */}
+              <col className="w-[100px]" />  {/* 2차 금액 */}
+              <col className="w-[52px]" />   {/* 2차 지급? */}
+              <col className="w-[24px]" />   {/* 삭제 */}
             </colgroup>
             <thead>
               <tr className="text-[11px] text-gray-400 uppercase tracking-wide">
@@ -613,14 +622,16 @@ function MembersEditModal({
                 <th className="text-left pb-2 font-medium">담당 업무</th>
                 <th className="text-right pb-2 font-medium">기여도(%)</th>
                 <th className="text-right pb-2 font-medium">1차 금액</th>
+                <th className="text-center pb-2 font-medium" title="1차 지급 대상 (체크 시 지급)">1차 지급</th>
                 <th className="text-right pb-2 font-medium">2차 금액</th>
+                <th className="text-center pb-2 font-medium" title="2차 지급 대상 (체크 시 지급)">2차 지급</th>
                 <th />
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-8 text-gray-400">
+                  <td colSpan={11} className="text-center py-8 text-gray-400">
                     멤버가 없습니다. 아래 [멤버 추가]를 눌러 행을 추가하세요.
                   </td>
                 </tr>
@@ -629,6 +640,10 @@ function MembersEditModal({
                   const contrib = Number(r.contribution) || 0;
                   const autoFirst = computeFirst(contrib);
                   const autoSecond = computeSecond(contrib);
+                  // 지급 대상 자동 디폴트 — last_work_date(우리는 모달에서 못 가져옴) 보다는
+                  //   project.first_payment_date 와 단순 비교 어려움. 디폴트 'true' 로 두고 사용자가 토글.
+                  const firstPay = r.first_payable ?? true;
+                  const secondPay = r.second_payable ?? true;
                   return (
                   <tr key={r.uid} className="border-t border-gray-100">
                     <td className="py-2 pr-2">
@@ -697,8 +712,26 @@ function MembersEditModal({
                     <td className="py-2 pr-2 text-right text-xs text-gray-700 tabular-nums">
                       {formatKRWFull(autoFirst)}
                     </td>
+                    <td className="py-2 px-1 text-center">
+                      <input
+                        type="checkbox"
+                        checked={firstPay}
+                        onChange={e => updateRow(r.uid, { first_payable: e.target.checked })}
+                        title="1차 지급 대상 (체크 해제 시 미지급)"
+                        className="w-4 h-4 accent-blue-600"
+                      />
+                    </td>
                     <td className="py-2 pr-2 text-right text-xs text-gray-700 tabular-nums">
                       {formatKRWFull(autoSecond)}
+                    </td>
+                    <td className="py-2 px-1 text-center">
+                      <input
+                        type="checkbox"
+                        checked={secondPay}
+                        onChange={e => updateRow(r.uid, { second_payable: e.target.checked })}
+                        title="2차 지급 대상 (체크 해제 시 미지급)"
+                        className="w-4 h-4 accent-blue-600"
+                      />
                     </td>
                     <td className="py-2 text-center">
                       <button

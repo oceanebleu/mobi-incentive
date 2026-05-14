@@ -15,10 +15,34 @@ import { useEffect, useState, useCallback } from 'react';
 // ─── 타입 (Supabase 행을 그대로 반영) ──────────────────────────
 
 /**
+ * 시트에서 들어오는 다양한 날짜 표기를 `YYYY-MM-DD` 로 정규화.
+ *   '2026. 5. 4' / '2026.5.4' / '2026/5/4' / '2026-5-4' / '2026-05-04' 등 모두 지원.
+ *   파싱 실패 시 null.
+ */
+export function normalizeDate(s: string | null | undefined): string | null {
+  if (!s) return null;
+  const t = String(s).trim();
+  if (!t) return null;
+  // YYYY-MM-DD or YYYY.MM.DD or YYYY/MM/DD (구분자 +공백 허용)
+  const m = t.match(/^(\d{4})[\s.\-\/]+(\d{1,2})[\s.\-\/]+(\d{1,2})\b/);
+  if (!m) return null;
+  const y = m[1];
+  const mo = m[2].padStart(2, '0');
+  const d = m[3].padStart(2, '0');
+  return `${y}-${mo}-${d}`;
+}
+
+/** 한국 기준 오늘(YYYY-MM-DD) */
+function todayKST(): string {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+/**
  * 멤버가 퇴사자인지 판단 — 두 조건 중 하나만 만족해도 퇴사자
  *   1) status === '퇴사' (시트 F열 명시적 표기)
  *   2) last_work_date 가 오늘보다 이전 (시트 H열, 마지막 근무일이 지난 사람)
  * 팀 계정(Creative.Lab 등)은 항상 false.
+ * last_work_date 는 시트에서 들어온 다양한 표기를 정규화해서 비교.
  */
 export function isRetiredMember(m: {
   is_team_account: boolean;
@@ -27,10 +51,8 @@ export function isRetiredMember(m: {
 }): boolean {
   if (m.is_team_account) return false;
   if (m.status === '퇴사') return true;
-  if (m.last_work_date) {
-    const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    if (m.last_work_date < today) return true;
-  }
+  const lwd = normalizeDate(m.last_work_date);
+  if (lwd && lwd < todayKST()) return true;
   return false;
 }
 
@@ -69,6 +91,9 @@ export interface SupabaseProjectMember {
   role: string | null;       // 'PL' | 'PJ'
   team_name: string | null;  // 마케팅1팀, Creative.Lab 등
   duty: string | null;       // 담당 업무 상세
+  // 지급 대상 여부 (수동 토글) — null 이면 자동 (지급일 기준 재직 중이면 지급)
+  first_payable: boolean | null;
+  second_payable: boolean | null;
 }
 
 export interface SupabaseProject {
@@ -162,15 +187,35 @@ function todayIso(): string {
   return kst.toISOString().slice(0, 10);
 }
 
+/**
+ * 회차 상태 결정
+ *   인자:
+ *     paidAt       — 멤버의 실제 지급일 (member.first_paid_at)
+ *     plannedDate  — 회차 계획 지급일 (project.first_payment_date)
+ *     lastWorkDate — 멤버 마지막 근무일
+ *     today        — 오늘 (YYYY-MM-DD)
+ *     skipped      — 회차 자체 미지급
+ *     payable      — 멤버별 지급 대상 여부 (false 면 excluded)
+ *   분류 우선순위: skipped > !payable > excluded > paid > pending
+ */
 function phaseStatus(
   paidAt: string | null,
+  plannedDate: string | null,
   lastWorkDate: string | null | undefined,
   today: string,
-  skipped: boolean
+  skipped: boolean,
+  payable: boolean = true
 ): PhaseStatus {
   if (skipped) return 'skipped';
-  if (lastWorkDate && paidAt && paidAt > lastWorkDate) return 'excluded';
-  if (paidAt && paidAt <= today) return 'paid';
+  if (!payable) return 'excluded';
+  // 시트의 다양한 날짜 표기(예: '2026. 5. 4')를 YYYY-MM-DD 로 정규화해서 안전하게 비교
+  const lwdN = normalizeDate(lastWorkDate);
+  const paidN = normalizeDate(paidAt);
+  // excluded 판단은 paid_at 우선, 없으면 planned_date 도 함께 본다
+  //   → 멤버 paid_at 이 아직 없고 회차 계획일만 정해진 경우에도 lwd 초과면 excluded
+  const effectiveDate = paidN ?? normalizeDate(plannedDate);
+  if (lwdN && effectiveDate && effectiveDate > lwdN) return 'excluded';
+  if (paidN && paidN <= today) return 'paid';
   return 'pending';
 }
 
@@ -266,17 +311,36 @@ export function calcMemberSummariesV2(
       //   - 프로젝트가 LOST(수주실패) 면 두 회차 모두 자동으로 skipped 취급
       //   - 또는 명시적인 first/second_payment_skipped 플래그
       const projectLost = p.acquisition_status === 'LOST';
+      // 지급 대상 여부 — DB 값이 명시되어 있으면 그것, 없으면 자동 (회차 계획일이 lwd 이후면 false)
+      const autoPayable = (planned: string | null): boolean => {
+        const lwdN = normalizeDate(s.last_work_date);
+        const dN = normalizeDate(planned);
+        if (!lwdN || !dN) return true;
+        return dN <= lwdN;
+      };
+      const firstPayable =
+        typeof (m as any).first_payable === 'boolean'
+          ? (m as any).first_payable
+          : autoPayable(p.first_payment_date);
+      const secondPayable =
+        typeof (m as any).second_payable === 'boolean'
+          ? (m as any).second_payable
+          : autoPayable(p.second_payment_date);
       const firstStatus = phaseStatus(
         m.first_paid_at,
+        p.first_payment_date,
         s.last_work_date,
         today,
-        projectLost || !!p.first_payment_skipped
+        projectLost || !!p.first_payment_skipped,
+        firstPayable
       );
       const secondStatus = phaseStatus(
         m.second_paid_at,
+        p.second_payment_date,
         s.last_work_date,
         today,
-        projectLost || !!p.second_payment_skipped
+        projectLost || !!p.second_payment_skipped,
+        secondPayable
       );
 
       // 회차 금액 — CSV 임포트로 0 이 들어간 행은 effectivePhaseAmount 로 자동 환산
@@ -403,11 +467,15 @@ export function getDashboardStatsV2(
           continue;
         }
       }
-      const lwd = directory && !m.is_team_account
+      const lwdRaw = directory && !m.is_team_account
         ? directory.lastWorkDateByName[m.member_name] ?? null
         : null;
-      const afterLwd = (paidAt: string | null) =>
-        !!(lwd && paidAt && paidAt > lwd);
+      const lwd = normalizeDate(lwdRaw);
+      const afterLwd = (paidAt: string | null) => {
+        if (!lwd || !paidAt) return false;
+        const pn = normalizeDate(paidAt) ?? paidAt;
+        return pn > lwd;
+      };
 
       // 회차 금액 — CSV 임포트로 0 이 들어간 행은 자동 환산
       const firstAmt = effectivePhaseAmount(m, p, 1);
