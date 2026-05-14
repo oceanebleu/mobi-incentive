@@ -30,6 +30,7 @@ import {
   PAYMENT_STAGE_LABEL,
   ACQUISITION_LABEL,
   effectivePhaseAmount,
+  normalizeDate,
   type SupabaseProject,
   type SupabaseProjectMember,
 } from '@/lib/incentive-data';
@@ -436,13 +437,22 @@ function MembersEditModal({
     return Math.round(secondPhaseTotal * (contribution / 100));
   }
 
+  // 합계 — 미지급(payable=false) 행은 제외
   const firstTotal = useMemo(
-    () => rows.reduce((s, r) => s + computeFirst(Number(r.contribution) || 0), 0),
+    () =>
+      rows.reduce((s, r) => {
+        if (r.first_payable === false) return s;
+        return s + computeFirst(Number(r.contribution) || 0);
+      }, 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [rows, firstPhaseTotal]
   );
   const secondTotal = useMemo(
-    () => rows.reduce((s, r) => s + computeSecond(Number(r.contribution) || 0), 0),
+    () =>
+      rows.reduce((s, r) => {
+        if (r.second_payable === false) return s;
+        return s + computeSecond(Number(r.contribution) || 0);
+      }, 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [rows, secondPhaseTotal]
   );
@@ -640,10 +650,20 @@ function MembersEditModal({
                   const contrib = Number(r.contribution) || 0;
                   const autoFirst = computeFirst(contrib);
                   const autoSecond = computeSecond(contrib);
-                  // 지급 대상 자동 디폴트 — last_work_date(우리는 모달에서 못 가져옴) 보다는
-                  //   project.first_payment_date 와 단순 비교 어려움. 디폴트 'true' 로 두고 사용자가 토글.
-                  const firstPay = r.first_payable ?? true;
-                  const secondPay = r.second_payable ?? true;
+                  // 지급 대상 자동 디폴트 — 회차 계획일 ≤ 마지막 근무일 이면 지급(true), 그 외 미지급(false)
+                  //   1) 팀 계정은 항상 지급 대상
+                  //   2) lwd 정보가 없으면 안전하게 true
+                  const lwdRaw = r.is_team_account
+                    ? null
+                    : directory.lastWorkDateByName[r.member_name] ?? null;
+                  const lwd = normalizeDate(lwdRaw);
+                  const autoPay = (planned: string | null): boolean => {
+                    const dN = normalizeDate(planned);
+                    if (!lwd || !dN) return true;
+                    return dN <= lwd;
+                  };
+                  const firstPay = r.first_payable ?? autoPay(project.first_payment_date);
+                  const secondPay = r.second_payable ?? autoPay(project.second_payment_date);
                   return (
                   <tr key={r.uid} className="border-t border-gray-100">
                     <td className="py-2 pr-2">
