@@ -116,6 +116,7 @@ export default function DashboardPage() {
   const stageCounts = stageGroups.counts;
 
   // 클릭한 단계(또는 '전체')의 프로젝트를 보여주는 모달
+  //   · PL 작성대기 단계는 수주실패·대행종료 제외 (PL 기여도 받을 이유 없음)
   type DrillKey = PaymentStage | 'ALL';
   const [drillStage, setDrillStage] = useState<DrillKey | null>(null);
   const drillProjects: SupabaseProject[] = useMemo(() => {
@@ -123,6 +124,11 @@ export default function DashboardPage() {
     if (drillStage === 'ALL') {
       return [...projects].sort((a, b) =>
         (a.submitted_at ?? '').localeCompare(b.submitted_at ?? '')
+      );
+    }
+    if (drillStage === 'PL_PENDING') {
+      return stageGroups.byStage[drillStage].filter(
+        p => p.acquisition_status !== 'LOST' && p.acquisition_status !== 'CANCELLED'
       );
     }
     return stageGroups.byStage[drillStage];

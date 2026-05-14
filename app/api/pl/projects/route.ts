@@ -76,9 +76,12 @@ export async function GET(req: Request) {
   const userNameKey = normalize(userName);
 
   // 2) projects 전체에서 pl 이름이 매칭되는 것만 추림 (PL 이름은 자유 텍스트라 정규화 비교)
+  //    위원회 결과 노출에 필요한 컬럼들 모두 포함
   const { data: projects, error: projErr } = await supabase
     .from('projects')
-    .select('id, campaign_name, submitted_at, pl, pl_completed, acquisition_status')
+    .select(
+      'id, campaign_name, submitted_at, pl, pl_completed, acquisition_status, fund_confirmed, first_payment_date, first_payment_ratio, second_payment_date, second_payment_ratio, first_payment_completed, second_payment_completed, incentive_fund'
+    )
     .order('submitted_at', { ascending: false });
   if (projErr)
     return NextResponse.json({ error: projErr.message }, { status: 500, headers: NO_CACHE });
@@ -88,6 +91,27 @@ export async function GET(req: Request) {
     if (!plName) return false;
     return normalize(plName) === userNameKey;
   });
+
+  // 위원회 결과 표시용 — 재원확정 이상 단계의 멤버 데이터 한 번에 로드
+  const committeeIds = mine
+    .filter(
+      (p: any) => p.fund_confirmed || p.first_payment_completed || p.second_payment_completed
+    )
+    .map((p: any) => p.id);
+
+  let membersByProject = new Map<string, any[]>();
+  if (committeeIds.length > 0) {
+    const { data: memRows } = await supabase
+      .from('project_members')
+      .select('project_id, member_name, contribution, first_amount, second_amount, is_team_account, team_name, role')
+      .in('project_id', committeeIds)
+      .order('contribution', { ascending: false });
+    for (const m of memRows ?? []) {
+      const pid = (m as any).project_id;
+      if (!membersByProject.has(pid)) membersByProject.set(pid, []);
+      membersByProject.get(pid)!.push(m);
+    }
+  }
 
   return NextResponse.json(
     {
@@ -99,6 +123,15 @@ export async function GET(req: Request) {
         submitted_at: (p as any).submitted_at,
         pl_completed: (p as any).pl_completed,
         acquisition_status: (p as any).acquisition_status,
+        fund_confirmed: (p as any).fund_confirmed,
+        first_payment_date: (p as any).first_payment_date,
+        first_payment_ratio: (p as any).first_payment_ratio,
+        second_payment_date: (p as any).second_payment_date,
+        second_payment_ratio: (p as any).second_payment_ratio,
+        first_payment_completed: (p as any).first_payment_completed,
+        second_payment_completed: (p as any).second_payment_completed,
+        incentive_fund: (p as any).incentive_fund,
+        members: membersByProject.get((p as any).id) ?? [],
       })),
     },
     { headers: NO_CACHE }

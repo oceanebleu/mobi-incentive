@@ -19,12 +19,30 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 
+interface MemberLite {
+  member_name: string;
+  contribution: number;
+  first_amount: number;
+  second_amount: number;
+  is_team_account: boolean;
+  team_name: string | null;
+  role: string | null;
+}
 interface ProjectRow {
   id: string;
   campaign_name: string;
   submitted_at: string | null;
   pl_completed: boolean;
   acquisition_status: string | null;
+  fund_confirmed: boolean;
+  first_payment_date: string | null;
+  first_payment_ratio: number | null;
+  second_payment_date: string | null;
+  second_payment_ratio: number | null;
+  first_payment_completed: boolean;
+  second_payment_completed: boolean;
+  incentive_fund: number;
+  members: MemberLite[];
 }
 
 const ACQ_LABEL: Record<string, string> = {
@@ -87,19 +105,34 @@ function PLProjectsPageInner() {
       .finally(() => setLoading(false));
   }, [empId, router]);
 
+  // 분류
+  //   · 작성 대기 — pl_completed=false 이면서 수주실패 제외 (수주실패는 작성 의미 없음)
+  //   · 작성 완료 — pl_completed=true 인데 위원회 검토 단계로 넘어가지 않은 건
+  //   · 위원회 결과 — fund_confirmed 이상 단계 (재원확정/1차지급/전체지급)
   const grouped = useMemo(() => {
     const pending: ProjectRow[] = [];
     const done: ProjectRow[] = [];
+    const committee: ProjectRow[] = [];
+    const isCommittee = (p: ProjectRow) =>
+      p.fund_confirmed || p.first_payment_completed || p.second_payment_completed;
     for (const p of projects) {
-      if (p.pl_completed) done.push(p);
-      else pending.push(p);
+      if (isCommittee(p)) {
+        committee.push(p);
+        continue;
+      }
+      if (!p.pl_completed) {
+        if (p.acquisition_status === 'LOST') continue; // 수주실패는 작성대기에서 제외
+        pending.push(p);
+      } else {
+        done.push(p);
+      }
     }
-    // 오래된 순
     const byOld = (a: ProjectRow, b: ProjectRow) =>
       (a.submitted_at ?? '').localeCompare(b.submitted_at ?? '');
     pending.sort(byOld);
     done.sort(byOld);
-    return { pending, done };
+    committee.sort(byOld);
+    return { pending, done, committee };
   }, [projects]);
 
   return (
@@ -149,6 +182,9 @@ function PLProjectsPageInner() {
               empId={empId}
               code={code}
             />
+            {grouped.committee.length > 0 && (
+              <CommitteeResultSection projects={grouped.committee} />
+            )}
           </div>
         )}
 
@@ -214,12 +250,21 @@ function Section({
                       {ACQ_LABEL[p.acquisition_status] ?? p.acquisition_status}
                     </span>
                   )}
-                  {p.pl_completed && (
-                    <span className="inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 whitespace-nowrap">
-                      <CheckCircle2 size={9} />
-                      완료
-                    </span>
-                  )}
+                  {(() => {
+                    const lbl = statusLabel(p);
+                    if (!lbl) return null;
+                    return (
+                      <span
+                        className={clsx(
+                          'inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap',
+                          lbl.tone
+                        )}
+                      >
+                        <CheckCircle2 size={9} />
+                        {lbl.text}
+                      </span>
+                    );
+                  })()}
                 </div>
                 <div className="text-[11px] text-gray-400 mt-0.5">
                   {p.id}
@@ -231,6 +276,135 @@ function Section({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// 행 우측 상태 라벨 결정
+//   · 수주실패 + 작성완료 → 수주실패 - 완료
+//   · 작성완료 + 재원확정 전 → 운영위원회 진행 중
+//   · 작성완료 + 재원확정 후 → 위원회 검토 완료
+function statusLabel(p: ProjectRow): { text: string; tone: string } | null {
+  if (!p.pl_completed) return null;
+  if (p.acquisition_status === 'LOST') {
+    return { text: '수주실패 - 완료', tone: 'bg-red-100 text-red-700' };
+  }
+  if (p.fund_confirmed || p.first_payment_completed || p.second_payment_completed) {
+    return { text: '위원회 검토 완료', tone: 'bg-indigo-100 text-indigo-700' };
+  }
+  return { text: '운영위원회 진행 중', tone: 'bg-amber-100 text-amber-700' };
+}
+
+// 위원회 결과 섹션 — 재원확정 이상 단계 프로젝트의 결과 표시
+function CommitteeResultSection({ projects }: { projects: ProjectRow[] }) {
+  const fmt = (n: number) =>
+    Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className="flex items-center gap-2 mb-1">
+        <h2 className="text-sm font-semibold text-gray-800">위원회 결과</h2>
+        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+          {projects.length}건
+        </span>
+      </div>
+      <p className="text-[11px] text-gray-400 mb-3">
+        재원이 확정된 프로젝트의 지급 일정과 본인을 포함한 팀원별 배분 결과입니다.
+      </p>
+
+      <div className="space-y-4">
+        {projects.map(p => {
+          const firstRatio = p.first_payment_ratio ?? 60;
+          const secondRatio = p.second_payment_ratio ?? 40;
+          return (
+            <div
+              key={p.id}
+              className="border border-gray-100 rounded-lg px-4 py-3 bg-gray-50/50"
+            >
+              {/* 헤더 — 캠페인명 + 상태 */}
+              <div className="flex items-center gap-1.5 mb-2">
+                <span className="text-sm font-semibold text-gray-900">{p.campaign_name}</span>
+                <span className="text-[10px] text-gray-400">· {p.id}</span>
+                {p.second_payment_completed ? (
+                  <span className="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                    전체 지급 완료
+                  </span>
+                ) : p.first_payment_completed ? (
+                  <span className="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                    1차 지급 완료
+                  </span>
+                ) : (
+                  <span className="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                    재원확정 완료
+                  </span>
+                )}
+              </div>
+
+              {/* 지급 일정 */}
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div className="bg-white rounded-md border border-gray-100 px-3 py-2">
+                  <p className="text-[10px] text-gray-400 uppercase">1차 지급</p>
+                  <p className="text-sm font-semibold text-gray-800 mt-0.5">
+                    {p.first_payment_date ?? '미정'}
+                  </p>
+                  <p className="text-[11px] text-gray-500">비율 {firstRatio}%</p>
+                </div>
+                <div className="bg-white rounded-md border border-gray-100 px-3 py-2">
+                  <p className="text-[10px] text-gray-400 uppercase">2차 지급</p>
+                  <p className="text-sm font-semibold text-gray-800 mt-0.5">
+                    {p.second_payment_date ?? '미정'}
+                  </p>
+                  <p className="text-[11px] text-gray-500">비율 {secondRatio}%</p>
+                </div>
+              </div>
+
+              {/* 팀원별 확정 배분 */}
+              {p.members.length > 0 ? (
+                <div className="bg-white rounded-md border border-gray-100 overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50/70 text-[10px] text-gray-400 uppercase">
+                      <tr>
+                        <th className="text-left px-3 py-1.5 font-medium">이름</th>
+                        <th className="text-left px-2 py-1.5 font-medium">팀</th>
+                        <th className="text-right px-2 py-1.5 font-medium">기여도</th>
+                        <th className="text-right px-2 py-1.5 font-medium">1차</th>
+                        <th className="text-right px-2 py-1.5 font-medium">2차</th>
+                        <th className="text-right px-3 py-1.5 font-medium">합계</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {p.members.map((m, i) => (
+                        <tr key={`${m.member_name}-${i}`} className="border-t border-gray-100">
+                          <td className="px-3 py-1.5 font-medium text-gray-800">
+                            {m.member_name}
+                            {m.is_team_account && (
+                              <span className="ml-1 text-[9px] text-emerald-700">[팀]</span>
+                            )}
+                          </td>
+                          <td className="px-2 py-1.5 text-gray-500">{m.team_name ?? '-'}</td>
+                          <td className="px-2 py-1.5 text-right text-blue-700 font-semibold tabular-nums">
+                            {m.contribution}%
+                          </td>
+                          <td className="px-2 py-1.5 text-right text-gray-700 tabular-nums">
+                            {fmt(m.first_amount)}원
+                          </td>
+                          <td className="px-2 py-1.5 text-right text-gray-700 tabular-nums">
+                            {fmt(m.second_amount)}원
+                          </td>
+                          <td className="px-3 py-1.5 text-right font-bold text-gray-900 tabular-nums">
+                            {fmt((m.first_amount || 0) + (m.second_amount || 0))}원
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-[11px] text-gray-400">멤버 정보가 없습니다.</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
