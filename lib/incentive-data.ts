@@ -144,7 +144,10 @@ export function useIncentiveData(): UseIncentiveData {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetch('/api/projects', { cache: 'no-store' })
+    fetch(`/api/projects?_=${Date.now()}`, {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache' },
+    })
       .then(r => (r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`)))
       .then(j => {
         if (cancelled) return;

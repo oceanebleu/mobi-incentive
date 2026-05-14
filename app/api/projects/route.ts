@@ -11,13 +11,22 @@ import { canAccessApp, canManageUsers, type UserRole } from '@/lib/roles';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { logProjectChange } from '@/lib/audit';
 
+// Vercel CDN / Next.js fetch cache 우회 — 매 요청 fresh
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
+
+const NO_CACHE = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+  Pragma: 'no-cache',
+  Expires: '0',
+};
 
 export async function GET() {
   const session = await getServerSession(authOptions);
   const role = (session?.user as any)?.role as UserRole | undefined;
   if (!canAccessApp(role)) {
-    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    return NextResponse.json({ error: 'forbidden' }, { status: 403, headers: NO_CACHE });
   }
 
   const supabase = getSupabaseAdmin();
@@ -30,10 +39,10 @@ export async function GET() {
   ]);
 
   if (projectsRes.error) {
-    return NextResponse.json({ error: projectsRes.error.message }, { status: 500 });
+    return NextResponse.json({ error: projectsRes.error.message }, { status: 500, headers: NO_CACHE });
   }
   if (membersRes.error) {
-    return NextResponse.json({ error: membersRes.error.message }, { status: 500 });
+    return NextResponse.json({ error: membersRes.error.message }, { status: 500, headers: NO_CACHE });
   }
 
   const byProject = new Map<string, any[]>();
@@ -48,7 +57,7 @@ export async function GET() {
     members: byProject.get(p.id) ?? [],
   }));
 
-  return NextResponse.json({ projects });
+  return NextResponse.json({ projects }, { headers: NO_CACHE });
 }
 
 // ─── POST: 신규 프로젝트 ────────────────────────────────────────
