@@ -42,6 +42,8 @@ interface ProjectRow {
   second_payment_ratio: number | null;
   first_payment_completed: boolean;
   second_payment_completed: boolean;
+  first_payment_skipped: boolean;
+  second_payment_skipped: boolean;
   incentive_fund: number;
   members: MemberLite[];
 }
@@ -281,14 +283,14 @@ function Section({
 }
 
 // 행 우측 상태 라벨 결정
-//   · 수주실패 + 작성완료 → 수주실패 - 완료
-//   · 1차 지급 후 대행종료 → 대행종료 - 1차 지급 후
-//   · 작성완료 + 재원확정 전 → 운영위원회 진행 중
-//   · 작성완료 + 재원확정 후 → 위원회 검토 완료
+//   · 수주실패 + 작성완료     → 위원회 미진행 (amber)
+//   · 1차 지급 후 대행종료    → 대행종료 - 1차 지급 후 (gray)
+//   · 작성완료 + 재원확정 후 → 위원회 검토 완료 (indigo)
+//   · 작성완료 + 재원확정 전 → 운영위원회 진행 중 (amber)
 function statusLabel(p: ProjectRow): { text: string; tone: string } | null {
   if (!p.pl_completed) return null;
   if (p.acquisition_status === 'LOST') {
-    return { text: '수주실패 - 완료', tone: 'bg-red-100 text-red-700' };
+    return { text: '위원회 미진행', tone: 'bg-amber-100 text-amber-700' };
   }
   if (p.acquisition_status === 'CANCELLED' && p.first_payment_completed) {
     return { text: '대행종료 - 1차 지급 후', tone: 'bg-gray-200 text-gray-700' };
@@ -307,7 +309,10 @@ function CommitteeResultSection({ projects }: { projects: ProjectRow[] }) {
     Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
   // CSV 임포트로 first_amount=0 인 행은 자동 환산
+  //   단, 그 회차가 skipped(미지급) 면 0 반환 — 실제 지급되지 않으니까
   const memberAmount = (m: MemberLite, p: ProjectRow, phase: 1 | 2): number => {
+    if (phase === 1 && p.first_payment_skipped) return 0;
+    if (phase === 2 && p.second_payment_skipped) return 0;
     const stored = phase === 1 ? m.first_amount : m.second_amount;
     if (stored && stored > 0) return stored;
     const ratio = phase === 1 ? (p.first_payment_ratio ?? 60) : (p.second_payment_ratio ?? 40);
@@ -381,22 +386,20 @@ function CommitteeResultSection({ projects }: { projects: ProjectRow[] }) {
               {/* 펼침 상세 */}
               {open && (
                 <div className="border-t border-gray-100 px-4 py-3 bg-gray-50/30 space-y-3">
-                  {/* 지급 일정 */}
+                  {/* 지급 일정 — skipped(미지급) 회차는 그대로 표기 */}
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-white rounded-md border border-gray-100 px-3 py-2">
-                      <p className="text-[10px] text-gray-400 uppercase">1차 지급</p>
-                      <p className="text-sm font-semibold text-gray-800 mt-0.5">
-                        {p.first_payment_date ?? '미정'}
-                      </p>
-                      <p className="text-[11px] text-gray-500">비율 {firstRatio}%</p>
-                    </div>
-                    <div className="bg-white rounded-md border border-gray-100 px-3 py-2">
-                      <p className="text-[10px] text-gray-400 uppercase">2차 지급</p>
-                      <p className="text-sm font-semibold text-gray-800 mt-0.5">
-                        {p.second_payment_date ?? '미정'}
-                      </p>
-                      <p className="text-[11px] text-gray-500">비율 {secondRatio}%</p>
-                    </div>
+                    <PhaseCard
+                      label="1차 지급"
+                      date={p.first_payment_date}
+                      ratio={firstRatio}
+                      skipped={p.first_payment_skipped}
+                    />
+                    <PhaseCard
+                      label="2차 지급"
+                      date={p.second_payment_date}
+                      ratio={secondRatio}
+                      skipped={p.second_payment_skipped}
+                    />
                   </div>
 
                   {/* 팀원별 확정 배분 — 팀 컬럼 제거 */}
@@ -427,11 +430,19 @@ function CommitteeResultSection({ projects }: { projects: ProjectRow[] }) {
                                 <td className="px-2 py-1.5 text-right text-blue-700 font-semibold tabular-nums">
                                   {m.contribution}%
                                 </td>
-                                <td className="px-2 py-1.5 text-right text-gray-700 tabular-nums">
-                                  {fmt(a1)}원
+                                <td className="px-2 py-1.5 text-right tabular-nums">
+                                  {p.first_payment_skipped ? (
+                                    <span className="text-gray-400">미지급</span>
+                                  ) : (
+                                    <span className="text-gray-700">{fmt(a1)}원</span>
+                                  )}
                                 </td>
-                                <td className="px-2 py-1.5 text-right text-gray-700 tabular-nums">
-                                  {fmt(a2)}원
+                                <td className="px-2 py-1.5 text-right tabular-nums">
+                                  {p.second_payment_skipped ? (
+                                    <span className="text-gray-400">미지급</span>
+                                  ) : (
+                                    <span className="text-gray-700">{fmt(a2)}원</span>
+                                  )}
                                 </td>
                                 <td className="px-3 py-1.5 text-right font-bold text-gray-900 tabular-nums">
                                   {fmt(a1 + a2)}원
@@ -451,6 +462,36 @@ function CommitteeResultSection({ projects }: { projects: ProjectRow[] }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// 회차 카드 — skipped 이면 '미지급' 강조 표시
+function PhaseCard({
+  label,
+  date,
+  ratio,
+  skipped,
+}: {
+  label: string;
+  date: string | null;
+  ratio: number;
+  skipped: boolean;
+}) {
+  if (skipped) {
+    return (
+      <div className="bg-amber-50/60 rounded-md border border-amber-100 px-3 py-2">
+        <p className="text-[10px] text-amber-600 uppercase">{label}</p>
+        <p className="text-sm font-semibold text-amber-700 mt-0.5">미지급</p>
+        <p className="text-[11px] text-amber-600/70">대행종료로 인한 미지급</p>
+      </div>
+    );
+  }
+  return (
+    <div className="bg-white rounded-md border border-gray-100 px-3 py-2">
+      <p className="text-[10px] text-gray-400 uppercase">{label}</p>
+      <p className="text-sm font-semibold text-gray-800 mt-0.5">{date ?? '미정'}</p>
+      <p className="text-[11px] text-gray-500">비율 {ratio}%</p>
     </div>
   );
 }

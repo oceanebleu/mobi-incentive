@@ -73,8 +73,8 @@ export default function DashboardPage() {
   }, [memberSummaries, memberSortBy, memberScope]);
 
   // 단계별 카운트 + 프로젝트 분류
-  //   · 모든 카운트와 byStage 에서 수주실패·대행종료(=비활성) 프로젝트 제외 — 운영 진행 보드 의미에 맞춤
-  //     (수주여부 분포 카드에 별도 표시되므로 정보 손실 없음)
+  //   · 수주실패·대행종료 프로젝트는 단계별 보드에서 일반적으로 제외 (운영 진행 의미)
+  //   · 단, 1차 지급 완료 후 대행종료된 건은 1차 지급 완료 단계 리스트에 포함 — 이미 지급이 발생했으므로
   //   · 재원확정 필요 리스트는 추가로 수주성공(WON) 한정
   const stageGroups = useMemo(() => {
     const c: Record<PaymentStage, number> = {
@@ -95,9 +95,13 @@ export default function DashboardPage() {
     const plDoneFundNeeded: SupabaseProject[] = [];
     const isInactive = (p: SupabaseProject) =>
       p.acquisition_status === 'LOST' || p.acquisition_status === 'CANCELLED';
+    // 비활성이라도 '1차 지급 완료' 단계까지 진행됐다면 단계별 보드에는 노출
+    const isInactiveButPaidAtLeastOnce = (p: SupabaseProject) =>
+      isInactive(p) &&
+      (p.first_payment_completed || p.second_payment_completed);
     let activeTotal = 0;
     for (const p of projects) {
-      if (isInactive(p)) continue;
+      if (isInactive(p) && !isInactiveButPaidAtLeastOnce(p)) continue;
       const stage = paymentStageOf(p);
       c[stage]++;
       byStage[stage].push(p);
@@ -355,7 +359,7 @@ export default function DashboardPage() {
         <div className="col-span-2 bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex items-center gap-2 mb-5">
             <BarChart3 size={16} className="text-blue-600" />
-            <h2 className="text-sm font-semibold text-gray-800">지급 단계별 진행</h2>
+            <h2 className="text-sm font-semibold text-gray-800">단계별 현황</h2>
           </div>
 
           {/* 3 × 2 — 전체(활성) / PL작성대기 / PL작성완료 / 재원확정완료 / 1차 지급완료 / 전체 지급완료

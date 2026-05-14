@@ -80,7 +80,7 @@ export async function GET(req: Request) {
   const { data: projects, error: projErr } = await supabase
     .from('projects')
     .select(
-      'id, campaign_name, submitted_at, pl, pl_completed, acquisition_status, fund_confirmed, first_payment_date, first_payment_ratio, second_payment_date, second_payment_ratio, first_payment_completed, second_payment_completed, incentive_fund'
+      'id, campaign_name, submitted_at, pl, pl_completed, acquisition_status, fund_confirmed, first_payment_date, first_payment_ratio, second_payment_date, second_payment_ratio, first_payment_completed, second_payment_completed, first_payment_skipped, second_payment_skipped, incentive_fund'
     )
     .order('submitted_at', { ascending: false });
   if (projErr)
@@ -139,6 +139,8 @@ export async function GET(req: Request) {
         second_payment_ratio: (p as any).second_payment_ratio,
         first_payment_completed: (p as any).first_payment_completed,
         second_payment_completed: (p as any).second_payment_completed,
+        first_payment_skipped: (p as any).first_payment_skipped,
+        second_payment_skipped: (p as any).second_payment_skipped,
         incentive_fund: (p as any).incentive_fund,
         members: membersByProject.get((p as any).id) ?? [],
       })),
