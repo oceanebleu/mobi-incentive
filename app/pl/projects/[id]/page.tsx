@@ -364,14 +364,14 @@ function PLProjectFormPageInner() {
     [members]
   );
 
-  // 인센티브 총 재원 = R값 × 수수료 × fund_rate (구분에 따라 1%/2%)
-  //   PL 화면에선 자동 계산만 표시. 수정 권한은 관리자.
-  const fundRate = useMemo(() => {
-    if (project && typeof (project as any).fund_rate === 'number') {
-      return (project as any).fund_rate as number;
-    }
-    return defaultFundRate(project?.category);
-  }, [project]);
+  // 인센티브 총 재원율 — PL 화면에선 항상 카테고리 정책 그대로 표시
+  //   · 신규 → 2% / 연장 → 1%
+  //   DB에 저장된 fund_rate 값은 무시 (default 0.01 로 남아있는 과거 데이터 영향 차단)
+  //   관리자가 예외 적용하고 싶으면 프로젝트 편집 모달에서 수정 가능 (incentive_fund 에 즉시 반영)
+  const fundRate = useMemo(
+    () => defaultFundRate(project?.category),
+    [project?.category]
+  );
   const incentiveFund = useMemo(() => {
     const rv = Number(onlyDigits(form.r_value));
     const cm = form.commission_pct === '' ? NaN : Number(form.commission_pct);
