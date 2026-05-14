@@ -7,7 +7,16 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
 
+// Vercel CDN/Next.js fetch cache 모두 우회 — 매 요청 fresh
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
+
+const NO_CACHE = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+  Pragma: 'no-cache',
+  Expires: '0',
+};
 
 const normalize = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
 
@@ -16,10 +25,16 @@ export async function GET(req: Request) {
   const empId = (searchParams.get('emp') ?? '').trim();
   const codeInput = (searchParams.get('code') ?? '').trim().toUpperCase();
   if (!empId) {
-    return NextResponse.json({ error: 'emp 쿼리 파라미터가 필요합니다.' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'emp 쿼리 파라미터가 필요합니다.' },
+      { status: 400, headers: NO_CACHE }
+    );
   }
   if (!codeInput) {
-    return NextResponse.json({ error: 'code 쿼리 파라미터가 필요합니다.' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'code 쿼리 파라미터가 필요합니다.' },
+      { status: 400, headers: NO_CACHE }
+    );
   }
 
   const supabase = getSupabaseAdmin();
@@ -30,24 +45,31 @@ export async function GET(req: Request) {
     .select('employee_id, name, status, access_code')
     .eq('employee_id', empId)
     .maybeSingle();
-  if (userErr) return NextResponse.json({ error: userErr.message }, { status: 500 });
+  if (userErr)
+    return NextResponse.json({ error: userErr.message }, { status: 500, headers: NO_CACHE });
   if (!user) {
-    return NextResponse.json({ error: '사번을 찾을 수 없습니다.' }, { status: 404 });
+    return NextResponse.json(
+      { error: '사번을 찾을 수 없습니다.' },
+      { status: 404, headers: NO_CACHE }
+    );
   }
   if ((user as any).status === '퇴사') {
-    return NextResponse.json({ error: '퇴사한 사용자 사번입니다.' }, { status: 403 });
+    return NextResponse.json(
+      { error: '퇴사한 사용자 사번입니다.' },
+      { status: 403, headers: NO_CACHE }
+    );
   }
   const dbCode = ((user as any).access_code ?? '').toString().trim().toUpperCase();
   if (!dbCode) {
     return NextResponse.json(
       { error: '아직 고유코드가 발급되지 않았습니다. 운영팀에 문의해 주세요.' },
-      { status: 403 }
+      { status: 403, headers: NO_CACHE }
     );
   }
   if (dbCode !== codeInput) {
     return NextResponse.json(
       { error: '사번과 고유코드가 일치하지 않습니다.' },
-      { status: 401 }
+      { status: 401, headers: NO_CACHE }
     );
   }
   const userName: string = (user as any).name;
@@ -58,7 +80,8 @@ export async function GET(req: Request) {
     .from('projects')
     .select('id, campaign_name, submitted_at, pl, pl_completed, acquisition_status')
     .order('submitted_at', { ascending: false });
-  if (projErr) return NextResponse.json({ error: projErr.message }, { status: 500 });
+  if (projErr)
+    return NextResponse.json({ error: projErr.message }, { status: 500, headers: NO_CACHE });
 
   const mine = (projects ?? []).filter(p => {
     const plName: string | null = (p as any).pl ?? null;
@@ -66,15 +89,18 @@ export async function GET(req: Request) {
     return normalize(plName) === userNameKey;
   });
 
-  return NextResponse.json({
-    employee_id: (user as any).employee_id,
-    name: userName,
-    projects: mine.map(p => ({
-      id: (p as any).id,
-      campaign_name: (p as any).campaign_name,
-      submitted_at: (p as any).submitted_at,
-      pl_completed: (p as any).pl_completed,
-      acquisition_status: (p as any).acquisition_status,
-    })),
-  });
+  return NextResponse.json(
+    {
+      employee_id: (user as any).employee_id,
+      name: userName,
+      projects: mine.map(p => ({
+        id: (p as any).id,
+        campaign_name: (p as any).campaign_name,
+        submitted_at: (p as any).submitted_at,
+        pl_completed: (p as any).pl_completed,
+        acquisition_status: (p as any).acquisition_status,
+      })),
+    },
+    { headers: NO_CACHE }
+  );
 }

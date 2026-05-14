@@ -71,8 +71,8 @@ function PLProjectsPageInner() {
     setLoading(true);
     setError(null);
     fetch(
-      `/api/pl/projects?emp=${encodeURIComponent(empId)}&code=${encodeURIComponent(code)}`,
-      { cache: 'no-store' }
+      `/api/pl/projects?emp=${encodeURIComponent(empId)}&code=${encodeURIComponent(code)}&_=${Date.now()}`,
+      { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } }
     )
       .then(async r => {
         const j = await r.json();
