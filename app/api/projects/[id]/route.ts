@@ -28,6 +28,7 @@ const ALLOWED_FIELDS = new Set([
   'pl_completed',
   'fund_confirmed',
   'incentive_fund',
+  'fund_rate',
   'first_payment_date',
   'first_payment_ratio',
   'first_payment_completed',
