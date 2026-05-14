@@ -89,7 +89,16 @@ export async function GET(req: Request) {
   const mine = (projects ?? []).filter(p => {
     const plName: string | null = (p as any).pl ?? null;
     if (!plName) return false;
-    return normalize(plName) === userNameKey;
+    if (normalize(plName) !== userNameKey) return false;
+    // 1차 지급 완료 전에 대행종료된 건은 PL 페이지에서 노출하지 않음
+    //   (1차 지급 완료 후 대행종료된 건은 결과 확인 위해 그대로 노출)
+    if (
+      (p as any).acquisition_status === 'CANCELLED' &&
+      !(p as any).first_payment_completed
+    ) {
+      return false;
+    }
+    return true;
   });
 
   // 위원회 결과 표시용 — 재원확정 이상 단계의 멤버 데이터 한 번에 로드

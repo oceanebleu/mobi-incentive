@@ -282,12 +282,16 @@ function Section({
 
 // 행 우측 상태 라벨 결정
 //   · 수주실패 + 작성완료 → 수주실패 - 완료
+//   · 1차 지급 후 대행종료 → 대행종료 - 1차 지급 후
 //   · 작성완료 + 재원확정 전 → 운영위원회 진행 중
 //   · 작성완료 + 재원확정 후 → 위원회 검토 완료
 function statusLabel(p: ProjectRow): { text: string; tone: string } | null {
   if (!p.pl_completed) return null;
   if (p.acquisition_status === 'LOST') {
     return { text: '수주실패 - 완료', tone: 'bg-red-100 text-red-700' };
+  }
+  if (p.acquisition_status === 'CANCELLED' && p.first_payment_completed) {
+    return { text: '대행종료 - 1차 지급 후', tone: 'bg-gray-200 text-gray-700' };
   }
   if (p.fund_confirmed || p.first_payment_completed || p.second_payment_completed) {
     return { text: '위원회 검토 완료', tone: 'bg-indigo-100 text-indigo-700' };
@@ -347,7 +351,11 @@ function CommitteeResultSection({ projects }: { projects: ProjectRow[] }) {
                     <span className="text-sm font-semibold text-gray-900 truncate">
                       {p.campaign_name}
                     </span>
-                    {p.second_payment_completed ? (
+                    {p.acquisition_status === 'CANCELLED' && p.first_payment_completed ? (
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-700 whitespace-nowrap">
+                        대행종료 (1차 지급 후)
+                      </span>
+                    ) : p.second_payment_completed ? (
                       <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 whitespace-nowrap">
                         전체 지급 완료
                       </span>
