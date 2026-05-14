@@ -15,6 +15,26 @@ import { useEffect, useState, useCallback } from 'react';
 // ─── 타입 (Supabase 행을 그대로 반영) ──────────────────────────
 
 /**
+ * 멤버가 퇴사자인지 판단 — 두 조건 중 하나만 만족해도 퇴사자
+ *   1) status === '퇴사' (시트 F열 명시적 표기)
+ *   2) last_work_date 가 오늘보다 이전 (시트 H열, 마지막 근무일이 지난 사람)
+ * 팀 계정(Creative.Lab 등)은 항상 false.
+ */
+export function isRetiredMember(m: {
+  is_team_account: boolean;
+  status?: string | null;
+  last_work_date?: string | null;
+}): boolean {
+  if (m.is_team_account) return false;
+  if (m.status === '퇴사') return true;
+  if (m.last_work_date) {
+    const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    if (m.last_work_date < today) return true;
+  }
+  return false;
+}
+
+/**
  * 표시용 회차 금액 — DB에 저장된 first_amount/second_amount 가 0(=과거 CSV 임포트 시 비어있던 행)이면
  *   `프로젝트.incentive_fund × 지급비율 × 기여도/100` 공식으로 자동 환산해서 보여준다.
  * 저장된 값이 0이 아니면 그 값을 그대로 신뢰.
@@ -371,9 +391,17 @@ export function getDashboardStatsV2(
     const projectLost = p.acquisition_status === 'LOST';
     for (const m of p.members) {
       // 디렉토리가 있을 땐 퇴사자(팀 계정은 제외 대상 아님) 회차 통째로 스킵
+      //   퇴사 판단: status==='퇴사' OR last_work_date < 오늘
       if (directory && !m.is_team_account) {
-        const status = directory.statusByName[m.member_name];
-        if (status === '퇴사') continue;
+        if (
+          isRetiredMember({
+            is_team_account: false,
+            status: directory.statusByName[m.member_name],
+            last_work_date: directory.lastWorkDateByName[m.member_name],
+          })
+        ) {
+          continue;
+        }
       }
       const lwd = directory && !m.is_team_account
         ? directory.lastWorkDateByName[m.member_name] ?? null

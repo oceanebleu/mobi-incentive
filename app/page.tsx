@@ -17,7 +17,7 @@ import {
   ChevronRight,
   CalendarClock,
 } from 'lucide-react';
-import { effectivePhaseAmount, type SupabaseProject } from '@/lib/incentive-data';
+import { effectivePhaseAmount, isRetiredMember, type SupabaseProject } from '@/lib/incentive-data';
 import clsx from 'clsx';
 import { formatKRW, formatKRWFull } from '@/lib/utils';
 import {
@@ -61,8 +61,8 @@ export default function DashboardPage() {
   const sortedMembers = useMemo(() => {
     let list = [...memberSummaries].filter(m => m.total_paid + m.total_pending > 0);
     if (memberScope === 'ACTIVE') {
-      // 퇴사자 제외 (팀 계정은 status 없음 → 항상 포함)
-      list = list.filter(m => m.is_team_account || m.status !== '퇴사');
+      // 퇴사자 제외 — status==='퇴사' 또는 last_work_date < 오늘
+      list = list.filter(m => !isRetiredMember(m));
     }
     list.sort((a, b) => {
       if (memberSortBy === 'PAID') return b.total_paid - a.total_paid;
@@ -102,7 +102,16 @@ export default function DashboardPage() {
     let activeTotal = 0;
     for (const p of projects) {
       if (isInactive(p) && !isInactiveButPaidAtLeastOnce(p)) continue;
-      const stage = paymentStageOf(p);
+      // 기본 분류 — paymentStageOf 는 second_payment_skipped 도 done 취급해 ALL_PAID 로 보내므로,
+      // '1차만 실제로 지급되고 그 후 대행종료된 건' 은 1차 지급 완료 단계로 강제 보정
+      let stage = paymentStageOf(p);
+      if (
+        p.acquisition_status === 'CANCELLED' &&
+        p.first_payment_completed &&
+        !p.second_payment_completed
+      ) {
+        stage = 'FIRST_PAID';
+      }
       c[stage]++;
       byStage[stage].push(p);
       activeTotal++;

@@ -8,6 +8,7 @@ import {
   useIncentiveData,
   useUserDirectory,
   calcMemberSummariesV2,
+  isRetiredMember,
   type MemberSummary,
 } from '@/lib/incentive-data';
 
@@ -18,6 +19,8 @@ export default function MembersPage() {
 
   const [filterYear, setFilterYear] = useState<number | 'ALL'>('ALL');
   const [filterScope, setFilterScope] = useState<'ALL' | 'INDIVIDUAL' | 'TEAM'>('ALL');
+  // 상단 탭 — 재직자 / 퇴사자
+  const [statusTab, setStatusTab] = useState<'ACTIVE' | 'RETIRED'>('ACTIVE');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const summaries = useMemo(
@@ -46,12 +49,25 @@ export default function MembersPage() {
     return [...ys].filter(y => y > 0).sort((a, b) => b - a);
   }, [projects]);
 
+  // 탭별 카운트 — 재직자 / 퇴사자 (팀 계정은 항상 재직자에 포함)
+  const counts = useMemo(() => {
+    let active = 0;
+    let retired = 0;
+    for (const m of summaries) {
+      if (isRetiredMember(m)) retired++;
+      else active++;
+    }
+    return { active, retired };
+  }, [summaries]);
+
   // 필터 적용 + 정렬
-  //   - 퇴사자(status==='퇴사')는 명시적으로 제외 (퇴사예정·휴직은 포함)
-  //   - 팀 계정은 status 가 없으므로 항상 포함
+  //   - 상단 탭: 재직자/퇴사자 분류 (last_work_date < 오늘 또는 status === '퇴사')
+  //   - 팀 계정은 status·last_work_date 없으므로 항상 재직자 탭
   const sorted = useMemo(() => {
+    const matchesTab = (m: MemberSummary) =>
+      statusTab === 'RETIRED' ? isRetiredMember(m) : !isRetiredMember(m);
     return summaries
-      .filter(m => m.status !== '퇴사') // 퇴사자 제외 (퇴사예정·휴직·재직은 통과)
+      .filter(matchesTab)
       .map(m => {
         if (filterYear === 'ALL') return m;
         const yb = m.yearly_breakdown[filterYear] ?? { paid: 0, pending: 0 };
@@ -59,7 +75,6 @@ export default function MembersPage() {
           ...m,
           total_paid: yb.paid,
           total_pending: yb.pending,
-          // 회차 단위 연도(=지급일/예정일 기준)로 필터
           projects: m.projects.filter(
             p => p.first_year === filterYear || p.second_year === filterYear
           ),
@@ -72,7 +87,34 @@ export default function MembersPage() {
         return true;
       })
       .sort((a, b) => b.total_paid + b.total_pending - (a.total_paid + a.total_pending));
-  }, [summaries, filterYear, filterScope]);
+  }, [summaries, filterYear, filterScope, statusTab]);
+
+  // 요약 카드 합계 — 재직자 기준만 산출 (퇴사자 영향 없음)
+  //   사용자 정책: 두 제외 케이스(LWD 초과·skipped)만 빼고, 퇴사자 통째 제외는 합계에 영향 X
+  const activeOnly = useMemo(
+    () => summaries.filter(m => !isRetiredMember(m)),
+    [summaries]
+  );
+  const activeAgg = useMemo(() => {
+    const yearFiltered =
+      filterYear === 'ALL'
+        ? activeOnly
+        : activeOnly.map(m => {
+            const yb = m.yearly_breakdown[filterYear] ?? { paid: 0, pending: 0 };
+            return { ...m, total_paid: yb.paid, total_pending: yb.pending };
+          });
+    const scoped = yearFiltered.filter(m => {
+      if (filterScope === 'INDIVIDUAL' && m.is_team_account) return false;
+      if (filterScope === 'TEAM' && !m.is_team_account) return false;
+      if (filterYear !== 'ALL' && m.total_paid + m.total_pending === 0) return false;
+      return true;
+    });
+    return {
+      paid: scoped.reduce((s, m) => s + m.total_paid, 0),
+      pending: scoped.reduce((s, m) => s + m.total_pending, 0),
+      count: scoped.length,
+    };
+  }, [activeOnly, filterYear, filterScope]);
 
   // 제외 합계는 퇴사자(=화면에서 사라진 사람들)의 마지막근무일 이후 paid_at 분 — 사용자에게 컨텍스트 제공용
   const totalExcluded = useMemo(
@@ -164,11 +206,28 @@ export default function MembersPage() {
         </div>
       )}
 
-      {/* 요약 카드 */}
+      {/* 요약 카드 — 항상 재직자 기준 (퇴사자 영향 없음) */}
       <div className="grid grid-cols-3 gap-4">
-        <SummaryCard label="총 지급 완료액" value={formatKRWFull(aggTotals.paid)} color="blue" />
-        <SummaryCard label="총 수령 예정액" value={formatKRWFull(aggTotals.pending)} color="amber" />
-        <SummaryCard label="대상 인원/팀" value={`${sorted.length}건`} color="gray" />
+        <SummaryCard label="총 지급 완료액" value={formatKRWFull(activeAgg.paid)} color="blue" />
+        <SummaryCard label="총 수령 예정액" value={formatKRWFull(activeAgg.pending)} color="amber" />
+        <SummaryCard label="대상 인원/팀" value={`${activeAgg.count}건`} color="gray" />
+      </div>
+
+      {/* 상단 탭 — 재직자 / 퇴사자 */}
+      <div className="flex items-end gap-1 border-b border-gray-200">
+        <TabButton
+          active={statusTab === 'ACTIVE'}
+          onClick={() => setStatusTab('ACTIVE')}
+          label="재직자"
+          count={counts.active}
+        />
+        <TabButton
+          active={statusTab === 'RETIRED'}
+          onClick={() => setStatusTab('RETIRED')}
+          label="퇴사자"
+          hint="마지막 근무일 < 오늘"
+          count={counts.retired}
+        />
       </div>
 
       {/* 멤버 테이블 (아코디언) */}
@@ -497,5 +556,42 @@ function SummaryCard({
       <p className="text-xs text-gray-500 mb-2">{label}</p>
       <p className={clsx('text-xl font-bold', cls.text)}>{value}</p>
     </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  label,
+  hint,
+  count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  hint?: string;
+  count: number;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={clsx(
+        'px-4 py-2.5 -mb-px border-b-2 transition-colors flex items-center gap-2',
+        active
+          ? 'border-blue-600 text-blue-700'
+          : 'border-transparent text-gray-500 hover:text-gray-800'
+      )}
+    >
+      <span className="text-sm font-semibold">{label}</span>
+      <span
+        className={clsx(
+          'text-[11px] px-1.5 py-0.5 rounded-full font-medium',
+          active ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
+        )}
+      >
+        {count}
+      </span>
+      {hint && <span className="text-[10px] text-gray-400">· {hint}</span>}
+    </button>
   );
 }
