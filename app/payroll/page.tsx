@@ -504,12 +504,18 @@ function CampaignCardView({ c }: { c: CampaignCard }) {
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-5">
-      <div className="flex items-center gap-2 mb-1">
-        <h3 className="text-sm font-bold text-gray-900">{c.campaign_name}</h3>
+      <div className="flex items-center gap-2 mb-1 min-w-0">
+        {/* 캠페인명 — 길면 말줄임. hover 시 title 로 전체 노출, 복사는 전체값 사용 */}
+        <h3
+          className="text-sm font-bold text-gray-900 truncate min-w-0"
+          title={c.campaign_name}
+        >
+          {c.campaign_name}
+        </h3>
         {c.category && (
           <span
             className={clsx(
-              'text-[10px] font-medium px-1.5 py-0.5 rounded-full',
+              'text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap flex-shrink-0',
               c.category === '신규'
                 ? 'bg-emerald-100 text-emerald-700'
                 : c.category === '연장'
@@ -522,27 +528,27 @@ function CampaignCardView({ c }: { c: CampaignCard }) {
         )}
         <span
           className={clsx(
-            'text-[10px] font-semibold px-1.5 py-0.5 rounded whitespace-nowrap',
+            'text-[10px] font-semibold px-1.5 py-0.5 rounded whitespace-nowrap flex-shrink-0',
             c.phase === 1 ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'
           )}
         >
           {phaseLabel}
         </span>
         {c.phase_completed ? (
-          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 whitespace-nowrap">
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 whitespace-nowrap flex-shrink-0">
             지급 완료
           </span>
         ) : (
-          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 whitespace-nowrap">
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 whitespace-nowrap flex-shrink-0">
             지급 예정
           </span>
         )}
-        {/* 급여명세서 라벨 복사 — 아이콘만 노출, 클릭 시 클립보드에 복사 */}
+        {/* 급여명세서 라벨 복사 — 아이콘만 노출, 클릭 시 전체 paystubLabel 클립보드에 복사 */}
         <button
           onClick={copyLabel}
           title={`'${paystubLabel}' 복사`}
           className={clsx(
-            'p-1 rounded transition-colors',
+            'p-1 rounded transition-colors flex-shrink-0',
             copied
               ? 'text-emerald-600 bg-emerald-50'
               : 'text-gray-400 hover:text-rose-600 hover:bg-rose-50'
@@ -550,7 +556,7 @@ function CampaignCardView({ c }: { c: CampaignCard }) {
         >
           {copied ? <Check size={12} /> : <Copy size={12} />}
         </button>
-        <span className="ml-auto text-[11px] text-gray-400">
+        <span className="ml-auto text-[11px] text-gray-400 whitespace-nowrap flex-shrink-0">
           {c.project_id} · {c.phase_completed ? '지급' : '지급예정'} {c.pay_date ?? '미정'}
         </span>
       </div>
