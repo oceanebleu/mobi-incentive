@@ -537,29 +537,23 @@ function CampaignCardView({ c }: { c: CampaignCard }) {
             지급 예정
           </span>
         )}
+        {/* 급여명세서 라벨 복사 — 아이콘만 노출, 클릭 시 클립보드에 복사 */}
+        <button
+          onClick={copyLabel}
+          title={`'${paystubLabel}' 복사`}
+          className={clsx(
+            'p-1 rounded transition-colors',
+            copied
+              ? 'text-emerald-600 bg-emerald-50'
+              : 'text-gray-400 hover:text-rose-600 hover:bg-rose-50'
+          )}
+        >
+          {copied ? <Check size={12} /> : <Copy size={12} />}
+        </button>
         <span className="ml-auto text-[11px] text-gray-400">
           {c.project_id} · {c.phase_completed ? '지급' : '지급예정'} {c.pay_date ?? '미정'}
         </span>
       </div>
-
-      {/* 급여명세서 표기용 라벨 — 복사 가능 */}
-      <button
-        onClick={copyLabel}
-        title="클립보드에 복사"
-        className={clsx(
-          'group flex items-center gap-1.5 px-3 py-1.5 mb-2 rounded-md border text-[12px] font-mono tabular-nums transition-colors w-full text-left',
-          copied
-            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-            : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-rose-200 hover:bg-rose-50'
-        )}
-      >
-        {copied ? (
-          <Check size={12} className="text-emerald-600 flex-shrink-0" />
-        ) : (
-          <Copy size={12} className="text-gray-400 group-hover:text-rose-500 flex-shrink-0" />
-        )}
-        <span className="break-all">{paystubLabel}</span>
-      </button>
 
       {/* 재원 산식 안내 — Creative.Lab 은 별도 문구, 그 외는 R값×마크업×재원 산식 */}
       {c.is_creative_lab ? (
