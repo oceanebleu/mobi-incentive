@@ -2,8 +2,9 @@ import { withAuth } from 'next-auth/middleware';
 import { NextResponse } from 'next/server';
 
 // Edge Runtime 호환을 위해 roles 로직 인라인 처리
-const ALLOWED_ROLES = ['EXEC', 'ADMIN'];
+const ALLOWED_ROLES = ['EXEC', 'ADMIN', 'PAYROLL'];
 const USER_MGMT_ROLES = ['EXEC', 'ADMIN'];
+const PAYROLL_ROLES = ['ADMIN', 'PAYROLL'];
 
 function canAccessApp(role?: string): boolean {
   if (!role) return false;
@@ -13,6 +14,11 @@ function canAccessApp(role?: string): boolean {
 function canManageUsers(role?: string): boolean {
   if (!role) return false;
   return USER_MGMT_ROLES.includes(role);
+}
+
+function canViewPayroll(role?: string): boolean {
+  if (!role) return false;
+  return PAYROLL_ROLES.includes(role);
 }
 
 export default withAuth(
@@ -33,11 +39,25 @@ export default withAuth(
       pathname.startsWith('/users') ||
       pathname.startsWith('/api/users') ||
       pathname.startsWith('/admin') ||
-      pathname.startsWith('/api/import');
+      pathname.startsWith('/api/import') ||
+      pathname.startsWith('/archive') ||
+      pathname.startsWith('/api/proposal-archive');
     if (isAdminPath) {
       if (!canManageUsers(role)) {
         return NextResponse.redirect(new URL('/unauthorized', req.url));
       }
+    }
+
+    // /payroll 페이지 + API는 ADMIN/PAYROLL 만
+    const isPayrollPath =
+      pathname.startsWith('/payroll') || pathname.startsWith('/api/payroll');
+    if (isPayrollPath && !canViewPayroll(role)) {
+      return NextResponse.redirect(new URL('/unauthorized', req.url));
+    }
+
+    // PAYROLL 전용 사용자는 /payroll 외 경로는 모두 /payroll 로 리다이렉트
+    if (role === 'PAYROLL' && !isPayrollPath) {
+      return NextResponse.redirect(new URL('/payroll', req.url));
     }
 
     return NextResponse.next();

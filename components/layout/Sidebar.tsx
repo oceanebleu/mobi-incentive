@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   Upload,
   Archive,
+  Wallet,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { ROLE_LABELS } from '@/lib/roles';
@@ -26,11 +27,16 @@ interface NavItem {
   roles?: UserRole[];
 }
 
-// EXEC(경영진)에게는 운영 도구(아카이브·사용자관리·데이터 import)는 노출 안 함
+// 메뉴별 노출 정책
+//   · 기본 메뉴(대시보드/프로젝트/개인별 지급): EXEC + ADMIN
+//   · 운영 도구(아카이브·사용자관리·데이터 import): ADMIN 만
+//   · 월별 인센티브 실지급액: PAYROLL + ADMIN
+//   · PAYROLL 사용자는 '월별 인센티브 실지급액' 외 메뉴 모두 가려짐
 const NAV_ITEMS: NavItem[] = [
-  { href: '/', label: '대시보드', icon: LayoutDashboard },
-  { href: '/projects', label: '프로젝트 관리', icon: FolderKanban },
-  { href: '/members', label: '개인별 지급 관리', icon: Users },
+  { href: '/', label: '대시보드', icon: LayoutDashboard, roles: ['EXEC', 'ADMIN'] },
+  { href: '/projects', label: '프로젝트 관리', icon: FolderKanban, roles: ['EXEC', 'ADMIN'] },
+  { href: '/members', label: '개인별 지급 관리', icon: Users, roles: ['EXEC', 'ADMIN'] },
+  { href: '/payroll', label: '월별 인센티브 실지급액', icon: Wallet, roles: ['ADMIN', 'PAYROLL'] },
   { href: '/archive', label: '제안 자료 아카이브', icon: Archive, roles: ['ADMIN'] },
   { href: '/users', label: '사용자관리', icon: ShieldCheck, roles: ['ADMIN'] },
   { href: '/admin/import', label: '데이터 Import', icon: Upload, roles: ['ADMIN'] },

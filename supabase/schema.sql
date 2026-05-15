@@ -15,7 +15,7 @@ create table if not exists public.users (
   resignation_date   text,                        -- I: 서류상 퇴사일
   email              text,                        -- J: 회사이메일 (소문자 저장)
   role               text not null default 'NORMAL'
-                       check (role in ('EXEC','ADMIN','NORMAL')),
+                       check (role in ('EXEC','ADMIN','PAYROLL','NORMAL')),
   role_overridden    boolean not null default false,  -- true면 sync 시 role 덮어쓰지 않음
   -- PL 양식 입력 페이지 본인 인증용 고유 코드 (영문3 + 숫자2)
   -- sync 시점에 NULL이면 자동 발급 (한 번 발급되면 재발급 전까지 유지)

@@ -39,6 +39,7 @@ type StatusTab = 'ACTIVE' | 'RESIGNED';
 const ROLE_BADGE: Record<UserRole, string> = {
   EXEC: 'bg-violet-100 text-violet-700',
   ADMIN: 'bg-blue-100 text-blue-700',
+  PAYROLL: 'bg-rose-100 text-rose-700',
   NORMAL: 'bg-gray-100 text-gray-600',
   NONE: 'bg-red-100 text-red-700',
 };
@@ -449,6 +450,7 @@ export default function UsersPage() {
                           >
                             <option value="EXEC">{ROLE_LABELS.EXEC}</option>
                             <option value="ADMIN">{ROLE_LABELS.ADMIN}</option>
+                            <option value="PAYROLL">{ROLE_LABELS.PAYROLL}</option>
                             <option value="NORMAL">{ROLE_LABELS.NORMAL}</option>
                           </select>
                           {(u.role_overridden || isDirty) && (
