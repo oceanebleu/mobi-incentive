@@ -36,8 +36,8 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/', label: '대시보드', icon: LayoutDashboard, roles: ['EXEC', 'ADMIN'] },
   { href: '/projects', label: '프로젝트 관리', icon: FolderKanban, roles: ['EXEC', 'ADMIN'] },
   { href: '/members', label: '개인별 지급 관리', icon: Users, roles: ['EXEC', 'ADMIN'] },
-  { href: '/payroll', label: '월별 인센티브 실지급액', icon: Wallet, roles: ['ADMIN', 'PAYROLL'] },
   { href: '/archive', label: '제안 자료 아카이브', icon: Archive, roles: ['ADMIN'] },
+  { href: '/payroll', label: '월별 인센티브 실지급액', icon: Wallet, roles: ['ADMIN', 'PAYROLL'] },
   { href: '/users', label: '사용자관리', icon: ShieldCheck, roles: ['ADMIN'] },
   { href: '/admin/import', label: '데이터 Import', icon: Upload, roles: ['ADMIN'] },
 ];

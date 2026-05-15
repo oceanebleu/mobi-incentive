@@ -179,27 +179,27 @@ export default function PayrollPage() {
                 </div>
               </div>
 
-              {/* 인원별 합계 */}
+              {/* 인원별 합계 — 3 컬럼 그리드 */}
               <div className="bg-white border border-gray-200 rounded-xl p-5">
                 <h2 className="text-sm font-semibold text-gray-800 mb-3">
                   인원별 총 수령액 ({active.by_person.length}명)
                 </h2>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   {active.by_person.map(p => (
                     <div
                       key={p.name}
-                      className="flex items-center justify-between px-3 py-2 bg-gray-50/60 rounded-lg"
+                      className="flex items-center justify-between gap-2 px-3 py-2 bg-gray-50/60 rounded-lg"
                     >
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900">{p.name}</p>
-                        <p className="text-[11px] text-gray-400 mt-0.5">
-                          {p.lines.length}건 ·{' '}
-                          {p.lines
-                            .map(l => `${l.campaign_name}(${l.phase}차)`)
-                            .join(' / ')}
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{p.name}</p>
+                        <p
+                          className="text-[11px] text-gray-400 mt-0.5 truncate"
+                          title={p.lines.map(l => `${l.campaign_name}(${l.phase}차)`).join(' / ')}
+                        >
+                          {p.lines.length}건
                         </p>
                       </div>
-                      <p className="text-sm font-bold text-gray-900 tabular-nums">
+                      <p className="text-sm font-bold text-gray-900 tabular-nums whitespace-nowrap">
                         {formatKRWFull(p.total)}
                       </p>
                     </div>
@@ -207,14 +207,16 @@ export default function PayrollPage() {
                 </div>
               </div>
 
-              {/* 캠페인별 카드 */}
+              {/* 캠페인별 카드 — 2 컬럼 그리드 */}
               <div className="space-y-3">
                 <h2 className="text-sm font-semibold text-gray-800">
                   캠페인별 지급 내역 ({active.campaigns.length}건)
                 </h2>
-                {active.campaigns.map((c, i) => (
-                  <CampaignCardView key={`${c.project_id}-${c.phase}-${i}`} c={c} />
-                ))}
+                <div className="grid grid-cols-2 gap-3">
+                  {active.campaigns.map((c, i) => (
+                    <CampaignCardView key={`${c.project_id}-${c.phase}-${i}`} c={c} />
+                  ))}
+                </div>
               </div>
             </div>
           )}
