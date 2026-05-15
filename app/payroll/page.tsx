@@ -561,7 +561,7 @@ function CampaignCardView({ c }: { c: CampaignCard }) {
         </span>
       </div>
 
-      {/* 재원 산식 안내 — Creative.Lab 은 별도 문구, 그 외는 R값×마크업×재원 산식 */}
+      {/* 재원 산식 안내 — Creative.Lab 은 별도 문구, 그 외는 총 예산×마크업×재원 산식 */}
       {c.is_creative_lab ? (
         <p className="text-[12px] text-gray-600 mb-3 leading-relaxed bg-gray-50 rounded-md px-3 py-2">
           Creative.Lab 수주인센티브 — 멤버별 지급액 수동 입력 (총 재원{' '}
@@ -569,7 +569,7 @@ function CampaignCardView({ c }: { c: CampaignCard }) {
         </p>
       ) : (
         <p className="text-[12px] text-gray-600 mb-3 leading-relaxed bg-gray-50 rounded-md px-3 py-2">
-          R값 <b className="tabular-nums">{c.r_value != null ? formatKRWFull(c.r_value) : '-'}</b>
+          총 예산 <b className="tabular-nums">{c.r_value != null ? formatKRWFull(c.r_value) : '-'}</b>
           {c.commission != null && (
             <> , 마크업 <b>{commissionPct}%</b></>
           )}
