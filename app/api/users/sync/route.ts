@@ -15,7 +15,12 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
-import { canManageUsers, defaultRoleFromAffiliation, type UserRole } from '@/lib/roles';
+import {
+  canManageUsers,
+  defaultRoleFromAffiliation,
+  isTestAccount,
+  type UserRole,
+} from '@/lib/roles';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { fetchEmployees } from '@/lib/google-sheets';
 import { generateAccessCode } from '@/lib/access-code';
@@ -86,9 +91,16 @@ export async function POST() {
     const existed = existingMap.get(emp.employee_id);
 
     const defaultRole = defaultRoleFromAffiliation(emp.affiliation1, emp.affiliation2);
-    const finalRole: UserRole = existed?.role_overridden
+    // 테스트 계정(recruit@mobidays.com 등) — 역할 자유 전환을 위해 sync 가 절대 덮어쓰지 않음
+    //   role_overridden 값과 무관하게 기존 DB 역할을 보존
+    const isTest = isTestAccount(emp.email);
+    const finalRole: UserRole = isTest
+      ? ((existed?.role as UserRole) ?? defaultRole)
+      : existed?.role_overridden
       ? (existed.role as UserRole)        // 수동 설정 보존
       : defaultRole;
+    // 테스트 계정은 항상 override 상태로 마킹 (혼동 방지)
+    const finalOverridden = isTest ? true : (existed?.role_overridden ?? false);
 
     // PL 본인 인증용 고유코드 우선순위
     //   1) 시트 K열에 값이 있으면 그 값을 그대로 사용 (운영팀이 시트를 진실의 원천으로 관리)
@@ -114,7 +126,7 @@ export async function POST() {
       resignation_date: emp.resignation_date,
       email: emp.email,
       role: finalRole,
-      role_overridden: existed?.role_overridden ?? false,
+      role_overridden: finalOverridden,
       access_code: accessCode,
       synced_at: now,
     });

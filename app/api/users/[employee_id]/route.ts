@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────
 // PATCH /api/users/[employee_id]
 // 사용자의 역할(role)을 수동으로 변경 → role_overridden=true 로 마킹
-//   body: { role: 'EXEC' | 'ADMIN' | 'NORMAL', clearOverride?: boolean }
+//   body: { role: 'EXEC' | 'ADMIN' | 'PAYROLL' | 'NORMAL', clearOverride?: boolean }
 //   - clearOverride=true 면 override 해제 + role은 무시 (다음 sync 때 기본 규칙으로 복귀)
 // ─────────────────────────────────────────────────────────────
 
@@ -13,7 +13,7 @@ import { getSupabaseAdmin } from '@/lib/supabase-server';
 
 export const dynamic = 'force-dynamic';
 
-const VALID_ROLES: UserRole[] = ['EXEC', 'ADMIN', 'NORMAL'];
+const VALID_ROLES: UserRole[] = ['EXEC', 'ADMIN', 'PAYROLL', 'NORMAL'];
 
 export async function PATCH(
   req: Request,

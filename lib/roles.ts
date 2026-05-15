@@ -26,6 +26,14 @@ export function isSuperAdmin(email: string): boolean {
   return list.includes(email.toLowerCase());
 }
 
+// 테스트용 계정 — 어떤 역할로도 자유 전환 가능, 시트 동기화로 역할이 덮어쓰여지지 않음
+//   사용자관리에서 EXEC/ADMIN/PAYROLL/NORMAL 어떤 값으로 저장하든 보존됨
+const TEST_ACCOUNT_EMAILS = ['recruit@mobidays.com'];
+export function isTestAccount(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return TEST_ACCOUNT_EMAILS.includes(email.toLowerCase());
+}
+
 // 앱 자체에 진입 가능한 역할 (사이드바 메뉴 보임)
 export const ALLOWED_ROLES: UserRole[] = ['EXEC', 'ADMIN', 'PAYROLL'];
 
