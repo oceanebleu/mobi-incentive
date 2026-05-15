@@ -303,6 +303,9 @@ export async function GET() {
       b.subtotal += Number((r as any).amount);
     }
 
+    const todayKst = new Date(Date.now() + 9 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
     for (const b of batchMap.values()) {
       const target = payrollMonthFor(b.pay_date);
       if (!target) continue;
@@ -313,7 +316,8 @@ export async function GET() {
         campaign_name: 'Creative.Lab 수주인센티브',
         phase: 1,
         phase_ratio: 100,
-        phase_completed: false,
+        // 지급예정일 ≤ 오늘 → 지급 완료, 그 외 → 지급 예정
+        phase_completed: b.pay_date <= todayKst,
         category: 'Creative.Lab',
         r_value: null,
         commission: null,

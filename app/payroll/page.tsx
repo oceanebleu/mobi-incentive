@@ -17,6 +17,8 @@ import {
   X,
   Trash2,
   Save,
+  Copy,
+  Check,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { formatKRWFull } from '@/lib/utils';
@@ -483,9 +485,23 @@ function formatKoreanShort(n: number | null): string {
 }
 
 function CampaignCardView({ c }: { c: CampaignCard }) {
-  const ratePct = c.fund_rate != null ? (c.fund_rate * 100).toFixed(0) : '-';
   const commissionPct = c.commission != null ? (c.commission * 100).toFixed(2) : '-';
   const phaseLabel = c.phase === 1 ? '1차' : '2차';
+  // 급여명세서 표기용 라벨
+  //   · Creative.Lab — 그대로 `Creative.Lab 수주인센티브`
+  //   · 그 외 — `캠페인명_N차_수주인센티브` (공백 → 언더스코어)
+  const paystubLabel = c.is_creative_lab
+    ? 'Creative.Lab 수주인센티브'
+    : `${c.campaign_name.replace(/\s+/g, '_')}_${phaseLabel}_수주인센티브`;
+  const [copied, setCopied] = useState(false);
+  const copyLabel = () => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(paystubLabel).catch(() => {});
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-5">
       <div className="flex items-center gap-2 mb-1">
@@ -526,6 +542,25 @@ function CampaignCardView({ c }: { c: CampaignCard }) {
         </span>
       </div>
 
+      {/* 급여명세서 표기용 라벨 — 복사 가능 */}
+      <button
+        onClick={copyLabel}
+        title="클립보드에 복사"
+        className={clsx(
+          'group flex items-center gap-1.5 px-3 py-1.5 mb-2 rounded-md border text-[12px] font-mono tabular-nums transition-colors w-full text-left',
+          copied
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+            : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-rose-200 hover:bg-rose-50'
+        )}
+      >
+        {copied ? (
+          <Check size={12} className="text-emerald-600 flex-shrink-0" />
+        ) : (
+          <Copy size={12} className="text-gray-400 group-hover:text-rose-500 flex-shrink-0" />
+        )}
+        <span className="break-all">{paystubLabel}</span>
+      </button>
+
       {/* 재원 산식 안내 — Creative.Lab 은 별도 문구, 그 외는 R값×마크업×재원 산식 */}
       {c.is_creative_lab ? (
         <p className="text-[12px] text-gray-600 mb-3 leading-relaxed bg-gray-50 rounded-md px-3 py-2">
@@ -534,7 +569,7 @@ function CampaignCardView({ c }: { c: CampaignCard }) {
         </p>
       ) : (
         <p className="text-[12px] text-gray-600 mb-3 leading-relaxed bg-gray-50 rounded-md px-3 py-2">
-          R값 <b className="tabular-nums">{formatKoreanShort(c.r_value)}</b>
+          R값 <b className="tabular-nums">{c.r_value != null ? formatKRWFull(c.r_value) : '-'}</b>
           {c.commission != null && (
             <> , 마크업 <b>{commissionPct}%</b></>
           )}
