@@ -7,7 +7,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
-import { canAccessApp, canManageUsers, type UserRole } from '@/lib/roles';
+import { canAccessApp, canManageProjects, type UserRole } from '@/lib/roles';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { logProjectChange } from '@/lib/audit';
 
@@ -68,7 +68,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   const role = (session?.user as any)?.role as UserRole | undefined;
-  if (!canManageUsers(role)) {
+  if (!canManageProjects(role)) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 

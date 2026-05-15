@@ -8,7 +8,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
-import { canViewPayroll, type UserRole } from '@/lib/roles';
+import { canAccessApp, canViewPayroll, type UserRole } from '@/lib/roles';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
 
 export const dynamic = 'force-dynamic';
@@ -22,9 +22,12 @@ const NO_CACHE = {
 };
 
 export async function GET() {
+  // 대시보드·개인별 지급 관리에서 Creative.Lab 실지급 합계로 파싱하므로
+  // 앱 접근 가능한 모든 역할(EXEC·ADMIN·PAYROLL)이 GET 가능해야 함.
+  // 입력(POST)·삭제는 payroll 권한 그대로 유지.
   const session = await getServerSession(authOptions);
   const role = (session?.user as any)?.role as UserRole | undefined;
-  if (!canViewPayroll(role)) {
+  if (!canAccessApp(role)) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403, headers: NO_CACHE });
   }
   const supabase = getSupabaseAdmin();

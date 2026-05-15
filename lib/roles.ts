@@ -46,6 +46,12 @@ export function canManageUsers(role?: UserRole | null): boolean {
   return role === 'ADMIN' || role === 'EXEC';
 }
 
+// '프로젝트 관리' 의 편집/삭제/추가 권한 — ADMIN 전용
+//   경영진(EXEC) 은 프로젝트를 열람만 가능, 데이터 수정 불가
+export function canManageProjects(role?: UserRole | null): boolean {
+  return role === 'ADMIN';
+}
+
 // '월별 인센티브 실지급액' 접근 권한 (ADMIN / PAYROLL)
 export function canViewPayroll(role?: UserRole | null): boolean {
   return role === 'ADMIN' || role === 'PAYROLL';

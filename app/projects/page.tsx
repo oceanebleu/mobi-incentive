@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import {
   Search,
   X,
@@ -23,6 +24,7 @@ import {
   type PaymentStage,
   type SupabaseProject,
 } from '@/lib/incentive-data';
+import { canManageProjects, type UserRole } from '@/lib/roles';
 
 // '진행중'(PENDING) 은 의미가 모호하여 UI 필터 옵션에서 제외 — 데이터는 그대로 유지
 const ACQ_OPTIONS = ['WON', 'LOST', 'CANCELLED', 'REVIEWING', 'RESULT_PENDING'] as const;
@@ -31,6 +33,9 @@ type StageFilter = PaymentStage | 'ALL';
 
 export default function ProjectsPage() {
   const { projects, loading, error, refresh } = useIncentiveData();
+  const { data: session } = useSession();
+  const role = (session?.user as any)?.role as UserRole | undefined;
+  const canEdit = canManageProjects(role);
 
   const [activeTab, setActiveTab] = useState<'WON' | 'ALL'>('WON');
   const [search, setSearch] = useState('');
@@ -96,13 +101,15 @@ export default function ProjectsPage() {
           <h1 className="text-xl font-bold text-gray-900">프로젝트 관리</h1>
           <p className="text-sm text-gray-400 mt-0.5">수주인센티브 프로젝트 관리</p>
         </div>
-        <button
-          onClick={() => setEditing('new')}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
-        >
-          <Plus size={15} />
-          프로젝트 추가
-        </button>
+        {canEdit && (
+          <button
+            onClick={() => setEditing('new')}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+          >
+            <Plus size={15} />
+            프로젝트 추가
+          </button>
+        )}
       </div>
 
       {error && (
@@ -208,7 +215,7 @@ export default function ProjectsPage() {
                   '인센티브 재원',
                   '1차 지급',
                   '2차 지급',
-                  '관리',
+                  ...(canEdit ? ['관리'] : []),
                 ].map(h => (
                   <th
                     key={h}
@@ -222,14 +229,14 @@ export default function ProjectsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={11} className="text-center py-12 text-sm text-gray-400">
+                  <td colSpan={canEdit ? 11 : 10} className="text-center py-12 text-sm text-gray-400">
                     <Loader2 size={20} className="animate-spin mx-auto mb-2 opacity-50" />
                     데이터 불러오는 중...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="text-center py-12 text-sm text-gray-400">
+                  <td colSpan={canEdit ? 11 : 10} className="text-center py-12 text-sm text-gray-400">
                     프로젝트가 없습니다
                   </td>
                 </tr>
@@ -238,6 +245,7 @@ export default function ProjectsPage() {
                   <ProjectRow
                     key={p.id}
                     project={p}
+                    canEdit={canEdit}
                     onEdit={() => setEditing(p)}
                     onDelete={() => handleDelete(p)}
                   />
@@ -265,10 +273,12 @@ export default function ProjectsPage() {
 
 function ProjectRow({
   project: p,
+  canEdit,
   onEdit,
   onDelete,
 }: {
   project: SupabaseProject;
+  canEdit: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -360,24 +370,26 @@ function ProjectRow({
           acquisitionLost={p.acquisition_status === 'LOST'}
         />
       </td>
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-1">
-          <button
-            onClick={onEdit}
-            title="편집"
-            className="p-1.5 rounded hover:bg-blue-50 text-blue-600 hover:text-blue-800"
-          >
-            <Pencil size={13} />
-          </button>
-          <button
-            onClick={onDelete}
-            title="삭제"
-            className="p-1.5 rounded hover:bg-red-50 text-red-400 hover:text-red-600"
-          >
-            <Trash2 size={13} />
-          </button>
-        </div>
-      </td>
+      {canEdit && (
+        <td className="px-4 py-3">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onEdit}
+              title="편집"
+              className="p-1.5 rounded hover:bg-blue-50 text-blue-600 hover:text-blue-800"
+            >
+              <Pencil size={13} />
+            </button>
+            <button
+              onClick={onDelete}
+              title="삭제"
+              className="p-1.5 rounded hover:bg-red-50 text-red-400 hover:text-red-600"
+            >
+              <Trash2 size={13} />
+            </button>
+          </div>
+        </td>
+      )}
     </tr>
   );
 }

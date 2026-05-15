@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import { formatKRWFull, formatCommission, formatDate } from '@/lib/utils';
-import { canManageUsers, type UserRole } from '@/lib/roles';
+import { canManageProjects, type UserRole } from '@/lib/roles';
 import {
   useIncentiveData,
   useUserDirectory,
@@ -41,7 +41,7 @@ export default function ProjectDetailPage() {
   const { projects, loading, error, refresh } = useIncentiveData();
   const { data: session } = useSession();
   const role = (session?.user as any)?.role as UserRole | undefined;
-  const canEdit = canManageUsers(role);
+  const canEdit = canManageProjects(role);
 
   const [editing, setEditing] = useState(false);
 

@@ -7,7 +7,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
-import { canManageUsers, type UserRole } from '@/lib/roles';
+import { canManageProjects, type UserRole } from '@/lib/roles';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { logProjectChange, computeDiff } from '@/lib/audit';
 
@@ -48,7 +48,7 @@ export async function PATCH(
 ) {
   const session = await getServerSession(authOptions);
   const role = (session?.user as any)?.role as UserRole | undefined;
-  if (!canManageUsers(role)) {
+  if (!canManageProjects(role)) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
@@ -156,7 +156,7 @@ export async function DELETE(
 ) {
   const session = await getServerSession(authOptions);
   const role = (session?.user as any)?.role as UserRole | undefined;
-  if (!canManageUsers(role)) {
+  if (!canManageProjects(role)) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
