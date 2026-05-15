@@ -229,6 +229,7 @@ export default function UsersPage() {
       active: active.length,
       activeExec: active.filter(u => u.role === 'EXEC').length,
       activeAdmin: active.filter(u => u.role === 'ADMIN').length,
+      activePayroll: active.filter(u => u.role === 'PAYROLL').length,
       activeNormal: active.filter(u => u.role === 'NORMAL').length,
       resigned: users.length - active.length,
     };
@@ -301,10 +302,11 @@ export default function UsersPage() {
 
       {/* 통계 — 현재 탭에 맞춰 다르게 표시 */}
       {statusTab === 'ACTIVE' ? (
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-5 gap-3">
           <Stat label="재직 인원 (휴직·퇴사예정 포함)" value={counts.active} />
           <Stat label="경영진" value={counts.activeExec} tone="violet" />
           <Stat label="관리자" value={counts.activeAdmin} tone="blue" />
+          <Stat label="급여담당" value={counts.activePayroll} tone="rose" />
           <Stat label="일반" value={counts.activeNormal} tone="gray" />
         </div>
       ) : (
@@ -359,6 +361,7 @@ export default function UsersPage() {
           <option value="ALL">전체 역할</option>
           <option value="EXEC">경영진</option>
           <option value="ADMIN">관리자</option>
+          <option value="PAYROLL">급여담당</option>
           <option value="NORMAL">일반</option>
         </select>
         <span className="ml-auto text-xs text-gray-400">{filtered.length}명</span>
@@ -511,7 +514,7 @@ function Stat({
 }: {
   label: string;
   value: number;
-  tone?: 'default' | 'violet' | 'blue' | 'gray' | 'muted';
+  tone?: 'default' | 'violet' | 'blue' | 'gray' | 'muted' | 'rose';
 }) {
   const toneCls: Record<string, string> = {
     default: 'text-gray-900',
@@ -519,6 +522,7 @@ function Stat({
     blue: 'text-blue-700',
     gray: 'text-gray-700',
     muted: 'text-gray-400',
+    rose: 'text-rose-700',
   };
   return (
     <div className="bg-white rounded-xl border border-gray-200 px-4 py-3">

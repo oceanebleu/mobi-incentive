@@ -84,9 +84,10 @@ export async function GET() {
   }
 
   const supabase = getSupabaseAdmin();
-  const [projRes, memRes] = await Promise.all([
+  const [projRes, memRes, usrRes] = await Promise.all([
     supabase.from('projects').select('*'),
     supabase.from('project_members').select('*'),
+    supabase.from('users').select('name, status, last_work_date'),
   ]);
   if (projRes.error) {
     return NextResponse.json({ error: projRes.error.message }, { status: 500, headers: NO_CACHE });
@@ -94,6 +95,43 @@ export async function GET() {
   if (memRes.error) {
     return NextResponse.json({ error: memRes.error.message }, { status: 500, headers: NO_CACHE });
   }
+  if (usrRes.error) {
+    return NextResponse.json({ error: usrRes.error.message }, { status: 500, headers: NO_CACHE });
+  }
+
+  // 사용자 디렉토리 — 이름 기준 (정규화)
+  const norm = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
+  const userByName = new Map<string, { status: string | null; last_work_date: string | null }>();
+  for (const u of usrRes.data ?? []) {
+    const k = norm((u as any).name ?? '');
+    if (!k) continue;
+    userByName.set(k, {
+      status: (u as any).status ?? null,
+      last_work_date: (u as any).last_work_date ?? null,
+    });
+  }
+  // ⭐ 인센티브·돈이 걸린 정책이므로 엄밀하게:
+  //   '지급일 시점' 기준으로 그 사람이 퇴사자였는지 판단.
+  //   - last_work_date 가 회차 지급일 이전이면 → 그 회차에선 퇴사자로 판단 → 기본 제외
+  //   - last_work_date 가 회차 지급일 이후면(아직 재직 중) → 정상 포함
+  //   - status==='퇴사' 인데 last_work_date 가 없거나 정규화 실패 → 안전하게 퇴사자 처리
+  //   - 명시적 payable === true 면 위 판단을 무시하고 포함 (관리자 수동 결정 우선)
+  const retiredAt = (name: string, isTeam: boolean, paymentDate: string | null): boolean => {
+    if (isTeam) return false;
+    const u = userByName.get(norm(name));
+    if (!u) return false;
+    const lwd = normalizeYmd(u.last_work_date);
+    const pd = normalizeYmd(paymentDate);
+    if (lwd && pd) {
+      // 지급일 ≤ 마지막 근무일 → 아직 재직 시점 (퇴사자 아님)
+      if (pd <= lwd) return false;
+      // 지급일 > 마지막 근무일 → 퇴사 후 지급 시점
+      return true;
+    }
+    // 날짜 비교가 불가능한 경우 status 단독 판단
+    if (u.status === '퇴사') return true;
+    return false;
+  };
 
   // project_id → members
   const membersByPid = new Map<string, MemberRow[]>();
@@ -162,7 +200,7 @@ export async function GET() {
 
     for (const ph of phases) {
       if (ph.skipped) continue;
-      if (ph.completed) continue; // 이미 지급된 회차는 월별 예정에서 제외
+      // completed 회차도 포함 — 과거 지급 이력도 월별 탭에 보이도록
       const dN = normalizeYmd(ph.date);
       if (!dN) continue;
       const target = payrollMonthFor(dN);
@@ -175,6 +213,16 @@ export async function GET() {
       for (const m of members) {
         const payable = ph.n === 1 ? m.first_payable : m.second_payable;
         if (payable === false) continue;
+        // Creative.Lab 등 팀 계정은 default 로 제외 (일정 금액 모이면 한꺼번에 지급)
+        if (m.is_team_account) continue;
+        // 퇴사자는 default 로 제외 — 지급일 시점 기준으로 그 이전 퇴사자면 빼고,
+        // 단 해당 회차 payable === true 로 명시적 체크된 경우는 포함
+        if (
+          retiredAt(m.member_name, m.is_team_account, ph.date) &&
+          payable !== true
+        ) {
+          continue;
+        }
         const amt = memberAmountFor(m, p, ph.n);
         if (amt <= 0) continue;
         memberLines.push({
@@ -204,6 +252,7 @@ export async function GET() {
         campaign_name: p.campaign_name,
         phase: ph.n,
         phase_ratio: ph.ratio,
+        phase_completed: ph.completed,
         category: p.category,
         r_value: p.r_value,
         commission: p.commission,

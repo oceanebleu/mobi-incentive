@@ -23,6 +23,7 @@ interface CampaignCard {
   campaign_name: string;
   phase: 1 | 2;
   phase_ratio: number;
+  phase_completed: boolean;
   category: string | null;
   r_value: number | null;
   commission: number | null; // fraction
@@ -106,7 +107,7 @@ export default function PayrollPage() {
         <div>
           <h1 className="text-xl font-bold text-gray-900">월별 인센티브 실지급액</h1>
           <p className="text-sm text-gray-400 mt-0.5">
-            당월 급여(N월)는 익월 10일(공휴일이면 직전 평일)에 지급됩니다.
+            payroll 담당자와 공유하는 페이지
           </p>
         </div>
       </div>
@@ -184,7 +185,7 @@ export default function PayrollPage() {
                 <h2 className="text-sm font-semibold text-gray-800 mb-3">
                   인원별 총 수령액 ({active.by_person.length}명)
                 </h2>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-5 gap-2">
                   {active.by_person.map(p => (
                     <div
                       key={p.name}
@@ -226,6 +227,17 @@ export default function PayrollPage() {
   );
 }
 
+// 한국식 큰 숫자 축약 — 1.3억 / 5천만 / 1.2조 등 (R값 표기용)
+function formatKoreanShort(n: number | null): string {
+  if (n == null) return '-';
+  const abs = Math.abs(n);
+  const trim = (v: number) => v.toFixed(1).replace(/\.0$/, '');
+  if (abs >= 1_0000_0000_0000) return `${trim(n / 1_0000_0000_0000)}조`;
+  if (abs >= 1_0000_0000) return `${trim(n / 1_0000_0000)}억`;
+  if (abs >= 1_0000) return `${trim(n / 1_0000)}만`;
+  return n.toLocaleString('en-US');
+}
+
 function CampaignCardView({ c }: { c: CampaignCard }) {
   const ratePct = c.fund_rate != null ? (c.fund_rate * 100).toFixed(0) : '-';
   const commissionPct = c.commission != null ? (c.commission * 100).toFixed(2) : '-';
@@ -256,14 +268,23 @@ function CampaignCardView({ c }: { c: CampaignCard }) {
         >
           {phaseLabel}
         </span>
+        {c.phase_completed ? (
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 whitespace-nowrap">
+            지급 완료
+          </span>
+        ) : (
+          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 whitespace-nowrap">
+            지급 예정
+          </span>
+        )}
         <span className="ml-auto text-[11px] text-gray-400">
-          {c.project_id} · 지급예정 {c.pay_date ?? '미정'}
+          {c.project_id} · {c.phase_completed ? '지급' : '지급예정'} {c.pay_date ?? '미정'}
         </span>
       </div>
 
-      {/* 재원 산식 안내 */}
+      {/* 재원 산식 안내 — R값은 한국식 단위 축약(1.3억), 마크업/재원은 그대로 */}
       <p className="text-[12px] text-gray-600 mb-3 leading-relaxed bg-gray-50 rounded-md px-3 py-2">
-        R값 <b className="tabular-nums">{c.r_value != null ? formatKRWFull(c.r_value) : '-'}</b>
+        R값 <b className="tabular-nums">{formatKoreanShort(c.r_value)}</b>
         {c.commission != null && (
           <> , 마크업 <b>{commissionPct}%</b></>
         )}
