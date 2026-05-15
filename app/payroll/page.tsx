@@ -8,7 +8,16 @@
 // ─────────────────────────────────────────────────────────────
 
 import { useEffect, useMemo, useState } from 'react';
-import { Wallet, Loader2, AlertCircle, Calendar } from 'lucide-react';
+import {
+  Wallet,
+  Loader2,
+  AlertCircle,
+  Calendar,
+  Plus,
+  X,
+  Trash2,
+  Save,
+} from 'lucide-react';
 import clsx from 'clsx';
 import { formatKRWFull } from '@/lib/utils';
 
@@ -32,6 +41,8 @@ interface CampaignCard {
   pay_date: string | null;
   subtotal: number;
   members: MemberLine[];
+  is_creative_lab?: boolean;
+  cl_batch_ids?: number[];
 }
 interface PersonLine {
   campaign_name: string;
@@ -57,8 +68,9 @@ export default function PayrollPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeKey, setActiveKey] = useState<string | null>(null);
+  const [clModalOpen, setClModalOpen] = useState(false);
 
-  useEffect(() => {
+  function loadMonths() {
     setLoading(true);
     fetch(`/api/payroll/monthly?_=${Date.now()}`, {
       cache: 'no-store',
@@ -88,6 +100,10 @@ export default function PayrollPage() {
       })
       .catch(e => setError(e?.message ?? '오류'))
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    loadMonths();
   }, []);
 
   const active = useMemo(() => {
@@ -102,14 +118,23 @@ export default function PayrollPage() {
   return (
     <div className="p-8 space-y-6 fade-in">
       {/* 헤더 */}
-      <div className="flex items-center gap-2">
-        <Wallet size={20} className="text-rose-500" />
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">월별 인센티브 실지급액</h1>
-          <p className="text-sm text-gray-400 mt-0.5">
-            payroll 담당자와 공유하는 페이지
-          </p>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Wallet size={20} className="text-rose-500" />
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">월별 인센티브 실지급액</h1>
+            <p className="text-sm text-gray-400 mt-0.5">
+              payroll 담당자와 공유하는 페이지
+            </p>
+          </div>
         </div>
+        <button
+          onClick={() => setClModalOpen(true)}
+          className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-100 rounded-lg transition-colors"
+        >
+          <Plus size={14} />
+          Creative.Lab 지급액 입력
+        </button>
       </div>
 
       {error && (
@@ -232,6 +257,265 @@ export default function PayrollPage() {
           )}
         </div>
       )}
+
+      {clModalOpen && (
+        <CreativeLabModal
+          onClose={() => setClModalOpen(false)}
+          onSaved={() => {
+            setClModalOpen(false);
+            loadMonths();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Creative.Lab 지급액 입력 모달
+//   지급일(공통), 재원(공통) 한 번 입력 + 멤버별 (이름, 기여도)
+//   금액은 재원 × 기여도/100 자동 계산 표시
+// ─────────────────────────────────────────────────────────────
+function CreativeLabModal({
+  onClose,
+  onSaved,
+}: {
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [payDate, setPayDate] = useState('');
+  const [pool, setPool] = useState('');
+  const [rows, setRows] = useState<{ uid: string; name: string; contribution: string }[]>([
+    { uid: 'r1', name: '', contribution: '' },
+  ]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const onlyDigits = (s: string) => s.replace(/[^\d]/g, '');
+  const withCommas = (d: string) => (d ? d.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '');
+  const poolNum = Number(onlyDigits(pool)) || 0;
+
+  const totalContribution = useMemo(
+    () => rows.reduce((s, r) => s + (Number(r.contribution) || 0), 0),
+    [rows]
+  );
+  const totalAmount = useMemo(
+    () => rows.reduce((s, r) => s + Math.round((poolNum * (Number(r.contribution) || 0)) / 100), 0),
+    [rows, poolNum]
+  );
+
+  function updateRow(uid: string, patch: Partial<{ name: string; contribution: string }>) {
+    setRows(prev => prev.map(r => (r.uid === uid ? { ...r, ...patch } : r)));
+  }
+  function addRow() {
+    setRows(prev => [
+      ...prev,
+      { uid: `r${Date.now()}-${prev.length}`, name: '', contribution: '' },
+    ]);
+  }
+  function removeRow(uid: string) {
+    setRows(prev => prev.filter(r => r.uid !== uid));
+  }
+
+  async function save() {
+    setError(null);
+    if (!payDate) {
+      setError('지급일을 입력해 주세요.');
+      return;
+    }
+    if (poolNum <= 0) {
+      setError('재원을 0보다 큰 값으로 입력해 주세요.');
+      return;
+    }
+    const cleaned = rows
+      .map(r => ({ name: r.name.trim(), contribution: Number(r.contribution) }))
+      .filter(r => r.name !== '' && Number.isFinite(r.contribution) && r.contribution > 0);
+    if (cleaned.length === 0) {
+      setError('유효한 멤버를 최소 1명 입력해 주세요.');
+      return;
+    }
+    if (
+      totalContribution !== 100 &&
+      !confirm(`기여도 합계가 ${totalContribution}% 입니다 (보통 100%). 그대로 저장할까요?`)
+    ) {
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/payroll/creative-lab', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          pay_date: payDate,
+          pool: poolNum,
+          members: cleaned.map(c => ({ member_name: c.name, contribution: c.contribution })),
+        }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j?.error ?? '저장 실패');
+      onSaved();
+    } catch (e: any) {
+      setError(e?.message ?? '저장 중 오류');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Creative.Lab 지급액 입력</h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              캠페인명은 'Creative.Lab 수주인센티브' 로 고정 — 지급일과 재원을 한 번 입력하고 멤버를 추가합니다.
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* 공통 입력 — 지급일 / 재원 */}
+        <div className="px-6 py-3 border-b border-gray-100 grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-[11px] font-semibold text-gray-500 mb-1 block">
+              지급일 (공통)
+            </label>
+            <input
+              type="date"
+              value={payDate}
+              onChange={e => setPayDate(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500/30"
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-semibold text-gray-500 mb-1 block">
+              재원 (원, 공통)
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={withCommas(onlyDigits(pool))}
+              onChange={e => setPool(onlyDigits(e.target.value))}
+              placeholder="예: 5,000,000"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md tabular-nums focus:outline-none focus:ring-2 focus:ring-rose-500/30"
+            />
+          </div>
+        </div>
+
+        {/* 합계 요약 */}
+        <div className="px-6 py-3 bg-gray-50/70 border-b border-gray-100 grid grid-cols-3 gap-4 text-sm">
+          <div>
+            <p className="text-[11px] text-gray-400">멤버 수</p>
+            <p className="font-semibold text-gray-800">{rows.length}명</p>
+          </div>
+          <div>
+            <p className="text-[11px] text-gray-400">기여도 합계</p>
+            <p
+              className={clsx(
+                'font-semibold',
+                totalContribution === 100 ? 'text-emerald-700' : 'text-amber-700'
+              )}
+            >
+              {totalContribution}% {totalContribution !== 100 && '(보통 100%)'}
+            </p>
+          </div>
+          <div>
+            <p className="text-[11px] text-gray-400">지급액 합계</p>
+            <p className="font-semibold text-rose-700 tabular-nums">
+              {formatKRWFull(totalAmount)}
+            </p>
+          </div>
+        </div>
+
+        {/* 멤버 행 */}
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-[11px] text-gray-400 uppercase tracking-wide">
+                <th className="text-left pb-2 font-medium">이름</th>
+                <th className="text-right pb-2 font-medium w-28">기여도(%)</th>
+                <th className="text-right pb-2 font-medium w-36">지급액 (자동)</th>
+                <th className="w-8" />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => {
+                const contrib = Number(r.contribution) || 0;
+                const amt = Math.round((poolNum * contrib) / 100);
+                return (
+                  <tr key={r.uid} className="border-t border-gray-100">
+                    <td className="py-2 pr-2">
+                      <input
+                        type="text"
+                        value={r.name}
+                        onChange={e => updateRow(r.uid, { name: e.target.value })}
+                        placeholder="이름"
+                        className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md"
+                      />
+                    </td>
+                    <td className="py-2 pr-2">
+                      <input
+                        type="number"
+                        value={r.contribution}
+                        onChange={e => updateRow(r.uid, { contribution: e.target.value })}
+                        min={0}
+                        max={100}
+                        step="0.1"
+                        className="w-full px-2 py-1.5 text-sm text-right border border-gray-200 rounded-md tabular-nums"
+                      />
+                    </td>
+                    <td className="py-2 pr-2 text-right text-sm text-gray-700 tabular-nums">
+                      {formatKRWFull(amt)}
+                    </td>
+                    <td className="py-2 text-center">
+                      <button
+                        onClick={() => removeRow(r.uid)}
+                        className="text-gray-400 hover:text-red-600 p-1"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <button
+            onClick={addRow}
+            className="mt-3 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-md"
+          >
+            <Plus size={13} />
+            멤버 추가
+          </button>
+        </div>
+
+        {error && (
+          <div className="px-6 pb-2 text-xs text-red-700 flex items-start gap-1.5">
+            <AlertCircle size={13} className="mt-0.5" />
+            <span className="break-all">{error}</span>
+          </div>
+        )}
+
+        <div className="px-6 py-3 border-t border-gray-100 flex items-center justify-end gap-2">
+          <button
+            onClick={onClose}
+            disabled={saving}
+            className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-lg disabled:opacity-60"
+          >
+            취소
+          </button>
+          <button
+            onClick={save}
+            disabled={saving}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-rose-600 text-white rounded-lg hover:bg-rose-700 disabled:opacity-60"
+          >
+            <Save size={14} />
+            {saving ? '저장 중...' : '저장'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

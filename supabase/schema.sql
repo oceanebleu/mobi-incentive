@@ -324,3 +324,27 @@ drop trigger if exists project_pl_forms_set_updated_at on public.project_pl_form
 create trigger project_pl_forms_set_updated_at
 before update on public.project_pl_forms
 for each row execute function public.set_updated_at();
+
+-- ─────────────────────────────────────────────────────────────
+-- Creative.Lab 수주인센티브 (creative_lab_payouts)
+-- 팀 계정 풀이 모이는 캠페인 — 멤버별 기여도 별도 수동 입력
+--   · 한 batch = 같은 pay_date 안에서 같은 pool 을 공유하는 멤버들의 row 묶음
+--   · amount = pool × contribution / 100 (저장 시점에 계산해서 함께 저장)
+-- ─────────────────────────────────────────────────────────────
+create table if not exists public.creative_lab_payouts (
+  id            bigserial primary key,
+  pay_date      date not null,
+  pool          bigint not null,
+  member_name   text not null,
+  contribution  numeric not null,
+  amount        bigint not null,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+
+create index if not exists clp_pay_date_idx on public.creative_lab_payouts (pay_date);
+
+drop trigger if exists creative_lab_payouts_set_updated_at on public.creative_lab_payouts;
+create trigger creative_lab_payouts_set_updated_at
+before update on public.creative_lab_payouts
+for each row execute function public.set_updated_at();

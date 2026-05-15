@@ -88,10 +88,11 @@ export async function GET() {
   }
 
   const supabase = getSupabaseAdmin();
-  const [projRes, memRes, usrRes] = await Promise.all([
+  const [projRes, memRes, usrRes, clRes] = await Promise.all([
     supabase.from('projects').select('*'),
     supabase.from('project_members').select('*'),
     supabase.from('users').select('name, status, last_work_date'),
+    supabase.from('creative_lab_payouts').select('*').order('pay_date', { ascending: false }),
   ]);
   if (projRes.error) {
     return NextResponse.json({ error: projRes.error.message }, { status: 500, headers: NO_CACHE });
@@ -102,6 +103,8 @@ export async function GET() {
   if (usrRes.error) {
     return NextResponse.json({ error: usrRes.error.message }, { status: 500, headers: NO_CACHE });
   }
+  // creative_lab_payouts 테이블이 없는 환경 보호 — error 면 빈 배열로
+  const clRows: any[] = clRes.error ? [] : (clRes.data ?? []);
 
   // 사용자 디렉토리 — 이름 기준 (정규화)
   const norm = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
@@ -267,6 +270,84 @@ export async function GET() {
         members: memberLines.sort((a, b) => b.amount - a.amount),
       });
       bucket.total += campaignSubtotal;
+    }
+  }
+
+  // ─── Creative.Lab 수주인센티브 ───
+  //   같은 (pay_date, pool) 묶음을 batch 로 인식 → 캠페인 카드 하나로 합산
+  {
+    type CLBatch = {
+      pay_date: string;
+      pool: number;
+      ids: number[];
+      members: Array<{ id: number; name: string; contribution: number; amount: number }>;
+      subtotal: number;
+    };
+    const batchMap = new Map<string, CLBatch>();
+    for (const r of clRows) {
+      const pd = normalizeYmd((r as any).pay_date);
+      if (!pd) continue;
+      const pool = Number((r as any).pool ?? 0);
+      const k = `${pd}|${pool}`;
+      if (!batchMap.has(k)) {
+        batchMap.set(k, { pay_date: pd, pool, ids: [], members: [], subtotal: 0 });
+      }
+      const b = batchMap.get(k)!;
+      b.ids.push((r as any).id);
+      b.members.push({
+        id: (r as any).id,
+        name: (r as any).member_name,
+        contribution: Number((r as any).contribution),
+        amount: Number((r as any).amount),
+      });
+      b.subtotal += Number((r as any).amount);
+    }
+
+    for (const b of batchMap.values()) {
+      const target = payrollMonthFor(b.pay_date);
+      if (!target) continue;
+      const bucket = ensureBucket(target.year, target.month);
+
+      bucket.campaigns.push({
+        project_id: `CLAB-${b.pay_date}`,
+        campaign_name: 'Creative.Lab 수주인센티브',
+        phase: 1,
+        phase_ratio: 100,
+        phase_completed: false,
+        category: 'Creative.Lab',
+        r_value: null,
+        commission: null,
+        fund_rate: null,
+        incentive_fund: b.pool,
+        pay_date: b.pay_date,
+        subtotal: b.subtotal,
+        is_creative_lab: true,
+        cl_batch_ids: b.ids,
+        members: b.members
+          .map(m => ({
+            name: m.name,
+            contribution: m.contribution,
+            amount: m.amount,
+            is_team_account: false,
+            cl_row_id: m.id,
+          }))
+          .sort((a, c) => c.amount - a.amount),
+      });
+      bucket.total += b.subtotal;
+
+      // byPerson 합산 (인원별 총 수령액에 포함)
+      for (const m of b.members) {
+        if (!bucket.byPerson.has(m.name)) {
+          bucket.byPerson.set(m.name, { name: m.name, total: 0, lines: [] });
+        }
+        const entry = bucket.byPerson.get(m.name)!;
+        entry.total += m.amount;
+        entry.lines.push({
+          campaign_name: 'Creative.Lab 수주인센티브',
+          phase: 1,
+          amount: m.amount,
+        });
+      }
     }
   }
 
