@@ -308,17 +308,19 @@ function CommitteeResultSection({ projects }: { projects: ProjectRow[] }) {
   const fmt = (n: number) =>
     Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
-  // CSV 임포트로 first_amount=0 인 행은 자동 환산
-  //   단, 그 회차가 skipped(미지급) 면 0 반환 — 실제 지급되지 않으니까
+  // 인센티브 산식 — 항상 incentive_fund × ratio × contribution 으로 계산
+  //   skipped 회차는 0 반환 (실제 지급 없음)
   const memberAmount = (m: MemberLite, p: ProjectRow, phase: 1 | 2): number => {
     if (phase === 1 && p.first_payment_skipped) return 0;
     if (phase === 2 && p.second_payment_skipped) return 0;
-    const stored = phase === 1 ? m.first_amount : m.second_amount;
-    if (stored && stored > 0) return stored;
     const ratio = phase === 1 ? (p.first_payment_ratio ?? 60) : (p.second_payment_ratio ?? 40);
     const fund = p.incentive_fund ?? 0;
-    if (fund <= 0) return 0;
-    return Math.round((fund * ratio / 100) * ((m.contribution ?? 0) / 100));
+    const contrib = m.contribution ?? 0;
+    if (fund > 0 && contrib > 0) {
+      return Math.round((fund * ratio / 100) * (contrib / 100));
+    }
+    const stored = phase === 1 ? m.first_amount : m.second_amount;
+    return stored ?? 0;
   };
 
   return (

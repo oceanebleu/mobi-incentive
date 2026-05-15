@@ -129,43 +129,52 @@ export default function PayrollPage() {
           현재 지급 예정인 인센티브가 없습니다.
         </div>
       ) : (
-        <>
-          {/* 월별 탭 */}
-          <div className="flex items-center gap-1 border-b border-gray-200 overflow-x-auto pb-px">
-            {months.map(m => {
-              const key = `${m.year}-${String(m.month).padStart(2, '0')}`;
-              const isActive = activeKey === key;
-              return (
-                <button
-                  key={key}
-                  onClick={() => setActiveKey(key)}
-                  className={clsx(
-                    '-mb-px px-4 py-2.5 border-b-2 transition-colors whitespace-nowrap flex items-center gap-2',
-                    isActive
-                      ? 'border-rose-500 text-rose-700'
-                      : 'border-transparent text-gray-500 hover:text-gray-800'
-                  )}
-                >
-                  <span className="text-sm font-semibold">
-                    {m.year}년 {m.month}월
-                  </span>
-                  <span className="text-[10px] text-gray-400">지급 {m.pay_date}</span>
-                  <span
-                    className={clsx(
-                      'text-[11px] font-medium px-1.5 py-0.5 rounded-full',
-                      isActive ? 'bg-rose-100 text-rose-700' : 'bg-gray-100 text-gray-500'
-                    )}
-                  >
-                    {m.campaigns.length}건
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+        <div className="grid grid-cols-[200px_1fr] gap-6 items-start">
+          {/* 좌측 세로 월 리스트 — 상하 스크롤 */}
+          <nav className="bg-white border border-gray-200 rounded-xl p-2 max-h-[calc(100vh-180px)] overflow-y-auto sticky top-4">
+            <ul className="space-y-0.5">
+              {months.map(m => {
+                const key = `${m.year}-${String(m.month).padStart(2, '0')}`;
+                const isActive = activeKey === key;
+                return (
+                  <li key={key}>
+                    <button
+                      onClick={() => setActiveKey(key)}
+                      className={clsx(
+                        'w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center justify-between gap-2',
+                        isActive
+                          ? 'bg-rose-50 text-rose-700'
+                          : 'text-gray-600 hover:bg-gray-50'
+                      )}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold whitespace-nowrap">
+                          {m.year}년 {m.month}월
+                        </p>
+                        <p className="text-[10px] text-gray-400 mt-0.5 truncate">
+                          지급 {m.pay_date}
+                        </p>
+                      </div>
+                      <span
+                        className={clsx(
+                          'text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap',
+                          isActive
+                            ? 'bg-rose-100 text-rose-700'
+                            : 'bg-gray-100 text-gray-500'
+                        )}
+                      >
+                        {m.campaigns.length}건
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
 
-          {/* 활성 월 내용 */}
+          {/* 우측 활성 월 내용 */}
           {active && (
-            <div className="space-y-6">
+            <div className="space-y-6 min-w-0">
               {/* 월 요약 */}
               <div className="bg-rose-50/40 border border-rose-100 rounded-xl px-5 py-4 flex items-center gap-4">
                 <Calendar size={18} className="text-rose-500" />
@@ -221,7 +230,7 @@ export default function PayrollPage() {
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );
