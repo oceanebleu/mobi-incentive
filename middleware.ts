@@ -49,13 +49,17 @@ export default withAuth(
     }
 
     // /payroll 페이지 + API는 ADMIN/PAYROLL 만
+    //   예외: /api/payroll/creative-lab — 대시보드·개인별 페이지에서 EXEC 도 합계 파싱이 필요하므로
+    //   미들웨어에서는 통과시키고, 핸들러 측 GET=canAccessApp / POST·DELETE=canViewPayroll 로 분기
+    const isCreativeLabApi = pathname.startsWith('/api/payroll/creative-lab');
     const isPayrollPath =
       pathname.startsWith('/payroll') || pathname.startsWith('/api/payroll');
-    if (isPayrollPath && !canViewPayroll(role)) {
+    if (isPayrollPath && !isCreativeLabApi && !canViewPayroll(role)) {
       return NextResponse.redirect(new URL('/unauthorized', req.url));
     }
 
     // PAYROLL 전용 사용자는 /payroll 외 경로는 모두 /payroll 로 리다이렉트
+    //   (creative-lab API 카브-아웃은 PAYROLL 권한자에게는 영향 없음 — 이미 /payroll 로 가있음)
     if (role === 'PAYROLL' && !isPayrollPath) {
       return NextResponse.redirect(new URL('/payroll', req.url));
     }
