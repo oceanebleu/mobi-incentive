@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   Wallet,
@@ -36,10 +36,32 @@ export default function DashboardPage() {
   const { lastWorkDateByName, teamByName, employeeIdByName, statusByName } =
     useUserDirectory();
 
+  // Creative.Lab 실지급 합계 — 월별 인센티브 실지급액 페이지에 입력된 금액
+  const [creativeLabPaidTotal, setCreativeLabPaidTotal] = useState(0);
+  useEffect(() => {
+    fetch(`/api/payroll/creative-lab?_=${Date.now()}`, {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache' },
+    })
+      .then(r => (r.ok ? r.json() : null))
+      .then(j => {
+        if (!j || !Array.isArray(j.items)) return;
+        const sum = j.items.reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
+        setCreativeLabPaidTotal(sum);
+      })
+      .catch(() => {});
+  }, []);
+
   // 개인별 지급 관리 페이지와 동일 정책으로 합산 (퇴사자 제외 + 마지막 근무일 이후 excluded)
+  // + Creative.Lab 실지급 분리 정책 적용
   const stats = useMemo(
-    () => getDashboardStatsV2(projects, { lastWorkDateByName, statusByName }),
-    [projects, lastWorkDateByName, statusByName]
+    () =>
+      getDashboardStatsV2(
+        projects,
+        { lastWorkDateByName, statusByName },
+        { paidTotal: creativeLabPaidTotal }
+      ),
+    [projects, lastWorkDateByName, statusByName, creativeLabPaidTotal]
   );
   const memberSummaries = useMemo(
     () =>

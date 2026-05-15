@@ -53,38 +53,38 @@ export async function POST(req: Request) {
   }
 
   const payDate: string = (body?.pay_date ?? '').toString().trim();
-  const pool: number = Number(body?.pool ?? 0);
   const members: any[] = Array.isArray(body?.members) ? body.members : [];
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(payDate)) {
     return NextResponse.json({ error: '지급일(YYYY-MM-DD)이 필요합니다.' }, { status: 400, headers: NO_CACHE });
   }
-  if (!Number.isFinite(pool) || pool <= 0) {
-    return NextResponse.json({ error: '재원은 0보다 큰 숫자여야 합니다.' }, { status: 400, headers: NO_CACHE });
-  }
   if (members.length === 0) {
     return NextResponse.json({ error: '멤버를 최소 1명 입력해 주세요.' }, { status: 400, headers: NO_CACHE });
   }
 
-  const rows = members
+  // 입력 정제 — 이름 + 금액 직접 입력
+  const cleaned = members
     .map((m: any) => {
       const name = String(m?.member_name ?? '').trim();
-      const contrib = Number(m?.contribution ?? 0);
-      if (!name || !Number.isFinite(contrib) || contrib <= 0) return null;
-      const amount = Math.round((pool * contrib) / 100);
-      return {
-        pay_date: payDate,
-        pool: Math.round(pool),
-        member_name: name,
-        contribution: contrib,
-        amount,
-      };
+      const amount = Number(m?.amount ?? 0);
+      if (!name || !Number.isFinite(amount) || amount <= 0) return null;
+      return { name, amount: Math.round(amount) };
     })
-    .filter((r): r is NonNullable<typeof r> => r !== null);
+    .filter((r): r is { name: string; amount: number } => r !== null);
 
-  if (rows.length === 0) {
+  if (cleaned.length === 0) {
     return NextResponse.json({ error: '유효한 멤버가 없습니다.' }, { status: 400, headers: NO_CACHE });
   }
+
+  // DB 호환: pool = 합계, contribution = amount/pool*100 (자동) 으로 채워 저장
+  const pool = cleaned.reduce((s, m) => s + m.amount, 0);
+  const rows = cleaned.map(m => ({
+    pay_date: payDate,
+    pool,
+    member_name: m.name,
+    contribution: pool > 0 ? Math.round((m.amount / pool) * 10000) / 100 : 0,
+    amount: m.amount,
+  }));
 
   const supabase = getSupabaseAdmin();
   const { error } = await supabase.from('creative_lab_payouts').insert(rows);

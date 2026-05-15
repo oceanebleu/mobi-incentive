@@ -284,33 +284,27 @@ function CreativeLabModal({
   onSaved: () => void;
 }) {
   const [payDate, setPayDate] = useState('');
-  const [pool, setPool] = useState('');
-  const [rows, setRows] = useState<{ uid: string; name: string; contribution: string }[]>([
-    { uid: 'r1', name: '', contribution: '' },
+  const [rows, setRows] = useState<{ uid: string; name: string; amount: string }[]>([
+    { uid: 'r1', name: '', amount: '' },
   ]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const onlyDigits = (s: string) => s.replace(/[^\d]/g, '');
   const withCommas = (d: string) => (d ? d.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '');
-  const poolNum = Number(onlyDigits(pool)) || 0;
 
-  const totalContribution = useMemo(
-    () => rows.reduce((s, r) => s + (Number(r.contribution) || 0), 0),
+  const totalAmount = useMemo(
+    () => rows.reduce((s, r) => s + (Number(onlyDigits(r.amount)) || 0), 0),
     [rows]
   );
-  const totalAmount = useMemo(
-    () => rows.reduce((s, r) => s + Math.round((poolNum * (Number(r.contribution) || 0)) / 100), 0),
-    [rows, poolNum]
-  );
 
-  function updateRow(uid: string, patch: Partial<{ name: string; contribution: string }>) {
+  function updateRow(uid: string, patch: Partial<{ name: string; amount: string }>) {
     setRows(prev => prev.map(r => (r.uid === uid ? { ...r, ...patch } : r)));
   }
   function addRow() {
     setRows(prev => [
       ...prev,
-      { uid: `r${Date.now()}-${prev.length}`, name: '', contribution: '' },
+      { uid: `r${Date.now()}-${prev.length}`, name: '', amount: '' },
     ]);
   }
   function removeRow(uid: string) {
@@ -323,21 +317,14 @@ function CreativeLabModal({
       setError('지급일을 입력해 주세요.');
       return;
     }
-    if (poolNum <= 0) {
-      setError('재원을 0보다 큰 값으로 입력해 주세요.');
-      return;
-    }
     const cleaned = rows
-      .map(r => ({ name: r.name.trim(), contribution: Number(r.contribution) }))
-      .filter(r => r.name !== '' && Number.isFinite(r.contribution) && r.contribution > 0);
+      .map(r => ({
+        name: r.name.trim(),
+        amount: Number(onlyDigits(r.amount)),
+      }))
+      .filter(r => r.name !== '' && Number.isFinite(r.amount) && r.amount > 0);
     if (cleaned.length === 0) {
-      setError('유효한 멤버를 최소 1명 입력해 주세요.');
-      return;
-    }
-    if (
-      totalContribution !== 100 &&
-      !confirm(`기여도 합계가 ${totalContribution}% 입니다 (보통 100%). 그대로 저장할까요?`)
-    ) {
+      setError('이름과 금액을 모두 입력한 멤버가 최소 1명 필요합니다.');
       return;
     }
     setSaving(true);
@@ -347,8 +334,7 @@ function CreativeLabModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pay_date: payDate,
-          pool: poolNum,
-          members: cleaned.map(c => ({ member_name: c.name, contribution: c.contribution })),
+          members: cleaned.map(c => ({ member_name: c.name, amount: c.amount })),
         }),
       });
       const j = await res.json().catch(() => ({}));
@@ -368,7 +354,7 @@ function CreativeLabModal({
           <div>
             <h2 className="text-base font-semibold text-gray-900">Creative.Lab 지급액 입력</h2>
             <p className="text-xs text-gray-400 mt-0.5">
-              캠페인명은 'Creative.Lab 수주인센티브' 로 고정 — 지급일과 재원을 한 번 입력하고 멤버를 추가합니다.
+              캠페인명은 'Creative.Lab 수주인센티브' 로 고정 — 지급일을 한 번 입력하고 멤버별 금액을 직접 기재합니다.
             </p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700">
@@ -376,50 +362,24 @@ function CreativeLabModal({
           </button>
         </div>
 
-        {/* 공통 입력 — 지급일 / 재원 */}
-        <div className="px-6 py-3 border-b border-gray-100 grid grid-cols-2 gap-4">
-          <div>
-            <label className="text-[11px] font-semibold text-gray-500 mb-1 block">
-              지급일 (공통)
-            </label>
-            <input
-              type="date"
-              value={payDate}
-              onChange={e => setPayDate(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500/30"
-            />
-          </div>
-          <div>
-            <label className="text-[11px] font-semibold text-gray-500 mb-1 block">
-              재원 (원, 공통)
-            </label>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={withCommas(onlyDigits(pool))}
-              onChange={e => setPool(onlyDigits(e.target.value))}
-              placeholder="예: 5,000,000"
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md tabular-nums focus:outline-none focus:ring-2 focus:ring-rose-500/30"
-            />
-          </div>
+        {/* 공통 입력 — 지급일 */}
+        <div className="px-6 py-3 border-b border-gray-100">
+          <label className="text-[11px] font-semibold text-gray-500 mb-1 block">
+            지급일 (공통)
+          </label>
+          <input
+            type="date"
+            value={payDate}
+            onChange={e => setPayDate(e.target.value)}
+            className="w-full max-w-xs px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-rose-500/30"
+          />
         </div>
 
         {/* 합계 요약 */}
-        <div className="px-6 py-3 bg-gray-50/70 border-b border-gray-100 grid grid-cols-3 gap-4 text-sm">
+        <div className="px-6 py-3 bg-gray-50/70 border-b border-gray-100 grid grid-cols-2 gap-4 text-sm">
           <div>
             <p className="text-[11px] text-gray-400">멤버 수</p>
             <p className="font-semibold text-gray-800">{rows.length}명</p>
-          </div>
-          <div>
-            <p className="text-[11px] text-gray-400">기여도 합계</p>
-            <p
-              className={clsx(
-                'font-semibold',
-                totalContribution === 100 ? 'text-emerald-700' : 'text-amber-700'
-              )}
-            >
-              {totalContribution}% {totalContribution !== 100 && '(보통 100%)'}
-            </p>
           </div>
           <div>
             <p className="text-[11px] text-gray-400">지급액 합계</p>
@@ -429,57 +389,48 @@ function CreativeLabModal({
           </div>
         </div>
 
-        {/* 멤버 행 */}
+        {/* 멤버 행 — 이름 + 금액 직접 입력 */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-[11px] text-gray-400 uppercase tracking-wide">
                 <th className="text-left pb-2 font-medium">이름</th>
-                <th className="text-right pb-2 font-medium w-28">기여도(%)</th>
-                <th className="text-right pb-2 font-medium w-36">지급액 (자동)</th>
+                <th className="text-right pb-2 font-medium w-44">지급액 (원)</th>
                 <th className="w-8" />
               </tr>
             </thead>
             <tbody>
-              {rows.map(r => {
-                const contrib = Number(r.contribution) || 0;
-                const amt = Math.round((poolNum * contrib) / 100);
-                return (
-                  <tr key={r.uid} className="border-t border-gray-100">
-                    <td className="py-2 pr-2">
-                      <input
-                        type="text"
-                        value={r.name}
-                        onChange={e => updateRow(r.uid, { name: e.target.value })}
-                        placeholder="이름"
-                        className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md"
-                      />
-                    </td>
-                    <td className="py-2 pr-2">
-                      <input
-                        type="number"
-                        value={r.contribution}
-                        onChange={e => updateRow(r.uid, { contribution: e.target.value })}
-                        min={0}
-                        max={100}
-                        step="0.1"
-                        className="w-full px-2 py-1.5 text-sm text-right border border-gray-200 rounded-md tabular-nums"
-                      />
-                    </td>
-                    <td className="py-2 pr-2 text-right text-sm text-gray-700 tabular-nums">
-                      {formatKRWFull(amt)}
-                    </td>
-                    <td className="py-2 text-center">
-                      <button
-                        onClick={() => removeRow(r.uid)}
-                        className="text-gray-400 hover:text-red-600 p-1"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
+              {rows.map(r => (
+                <tr key={r.uid} className="border-t border-gray-100">
+                  <td className="py-2 pr-2">
+                    <input
+                      type="text"
+                      value={r.name}
+                      onChange={e => updateRow(r.uid, { name: e.target.value })}
+                      placeholder="이름"
+                      className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-md"
+                    />
+                  </td>
+                  <td className="py-2 pr-2">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={withCommas(onlyDigits(r.amount))}
+                      onChange={e => updateRow(r.uid, { amount: onlyDigits(e.target.value) })}
+                      placeholder="예: 1,000,000"
+                      className="w-full px-2 py-1.5 text-sm text-right border border-gray-200 rounded-md tabular-nums"
+                    />
+                  </td>
+                  <td className="py-2 text-center">
+                    <button
+                      onClick={() => removeRow(r.uid)}
+                      className="text-gray-400 hover:text-red-600 p-1"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
           <button
@@ -575,26 +526,35 @@ function CampaignCardView({ c }: { c: CampaignCard }) {
         </span>
       </div>
 
-      {/* 재원 산식 안내 — R값은 한국식 단위 축약(1.3억), 마크업/재원은 그대로 */}
-      <p className="text-[12px] text-gray-600 mb-3 leading-relaxed bg-gray-50 rounded-md px-3 py-2">
-        R값 <b className="tabular-nums">{formatKoreanShort(c.r_value)}</b>
-        {c.commission != null && (
-          <> , 마크업 <b>{commissionPct}%</b></>
-        )}
-        {c.fund_rate != null && (
-          <> 에 따른 재원 <b className="tabular-nums">{formatKRWFull(c.incentive_fund)}</b></>
-        )}
-        {' 중 '}
-        <b>{phaseLabel}({c.phase_ratio}%)</b>를 프로젝트 기여도에 따라 차등 지급함.
-      </p>
+      {/* 재원 산식 안내 — Creative.Lab 은 별도 문구, 그 외는 R값×마크업×재원 산식 */}
+      {c.is_creative_lab ? (
+        <p className="text-[12px] text-gray-600 mb-3 leading-relaxed bg-gray-50 rounded-md px-3 py-2">
+          Creative.Lab 수주인센티브 — 멤버별 지급액 수동 입력 (총 재원{' '}
+          <b className="tabular-nums">{formatKRWFull(c.incentive_fund)}</b>)
+        </p>
+      ) : (
+        <p className="text-[12px] text-gray-600 mb-3 leading-relaxed bg-gray-50 rounded-md px-3 py-2">
+          R값 <b className="tabular-nums">{formatKoreanShort(c.r_value)}</b>
+          {c.commission != null && (
+            <> , 마크업 <b>{commissionPct}%</b></>
+          )}
+          {c.fund_rate != null && (
+            <> 에 따른 재원 <b className="tabular-nums">{formatKRWFull(c.incentive_fund)}</b></>
+          )}
+          {' 중 '}
+          <b>{phaseLabel}({c.phase_ratio}%)</b>를 프로젝트 기여도에 따라 차등 지급함.
+        </p>
+      )}
 
-      {/* 멤버별 배분 */}
+      {/* 멤버별 배분 — Creative.Lab 은 기여도 컬럼 숨김 (금액만 직접 입력했으므로) */}
       <div className="overflow-hidden rounded-md border border-gray-100">
         <table className="w-full text-xs">
           <thead className="bg-gray-50/70 text-[10px] text-gray-400 uppercase">
             <tr>
               <th className="text-left px-3 py-1.5 font-medium">이름</th>
-              <th className="text-right px-2 py-1.5 font-medium">기여도</th>
+              {!c.is_creative_lab && (
+                <th className="text-right px-2 py-1.5 font-medium">기여도</th>
+              )}
               <th className="text-right px-3 py-1.5 font-medium">지급액</th>
             </tr>
           </thead>
@@ -607,16 +567,21 @@ function CampaignCardView({ c }: { c: CampaignCard }) {
                     <span className="ml-1 text-[9px] text-emerald-700">[팀]</span>
                   )}
                 </td>
-                <td className="px-2 py-1.5 text-right text-blue-700 font-semibold tabular-nums">
-                  {m.contribution}%
-                </td>
+                {!c.is_creative_lab && (
+                  <td className="px-2 py-1.5 text-right text-blue-700 font-semibold tabular-nums">
+                    {m.contribution}%
+                  </td>
+                )}
                 <td className="px-3 py-1.5 text-right font-bold text-gray-900 tabular-nums">
                   {formatKRWFull(m.amount)}
                 </td>
               </tr>
             ))}
             <tr className="bg-gray-50/40 border-t-2 border-gray-200">
-              <td className="px-3 py-2 font-semibold text-gray-500" colSpan={2}>
+              <td
+                className="px-3 py-2 font-semibold text-gray-500"
+                colSpan={c.is_creative_lab ? 1 : 2}
+              >
                 소계
               </td>
               <td className="px-3 py-2 text-right font-bold text-rose-700 tabular-nums">

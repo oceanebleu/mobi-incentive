@@ -441,15 +441,19 @@ const FUND_CONFIRMED_OR_LATER = (p: SupabaseProject) =>
 export function getDashboardStatsV2(
   projects: SupabaseProject[],
   /**
-   * 디렉토리 정보 (옵션). 주어지면 개인별 지급 관리 페이지와 동일한 정책으로 합산:
-   *   - status === '퇴사' 인 멤버 회차는 합계 자체에서 제외
-   *   - paid_at > last_work_date 회차는 excluded 로 분류되어 paid/pending 모두에서 제외
-   * 주어지지 않으면 종전(모든 멤버·전 기간) 합산.
+   * 디렉토리 정보 (옵션). 주어지면 개인별 지급 관리 페이지와 동일한 정책으로 합산.
    */
   directory?: {
     lastWorkDateByName: Record<string, string | null | undefined>;
     statusByName: Record<string, string | null | undefined>;
-  }
+  },
+  /**
+   * Creative.Lab 정책 (옵션) — 별도 정산:
+   *   · 프로젝트 관리의 Creative.Lab(팀 계정) 회차 금액은 모두 totalPending 으로 누적
+   *   · creativeLabPaidTotal = 월별 인센티브 실지급액(creative_lab_payouts) 합계
+   *     → 그 금액만큼 pending 에서 빼고 paid 로 옮김
+   */
+  creativeLab?: { paidTotal: number }
 ): DashboardStatsV2 {
   const today = todayIso();
   let totalFirstPaid = 0;
@@ -459,9 +463,19 @@ export function getDashboardStatsV2(
   for (const p of projects) {
     const projectLost = p.acquisition_status === 'LOST';
     for (const m of p.members) {
-      // 디렉토리가 있을 땐 퇴사자(팀 계정은 제외 대상 아님) 회차 통째로 스킵
-      //   퇴사 판단: status==='퇴사' OR last_work_date < 오늘
-      if (directory && !m.is_team_account) {
+      // Creative.Lab(팀 계정) — 프로젝트 풀은 모두 pending 으로 누적 (paid 분류 안 함)
+      //   실지급은 별도로 creativeLab.paidTotal 에서 흡수
+      if (m.is_team_account) {
+        if (projectLost) continue;
+        const f = effectivePhaseAmount(m, p, 1);
+        const s = effectivePhaseAmount(m, p, 2);
+        if (!p.first_payment_skipped) totalPending += f;
+        if (!p.second_payment_skipped) totalPending += s;
+        continue;
+      }
+
+      // 디렉토리가 있을 땐 퇴사자 회차 통째로 스킵
+      if (directory) {
         if (
           isRetiredMember({
             is_team_account: false,
@@ -472,9 +486,7 @@ export function getDashboardStatsV2(
           continue;
         }
       }
-      const lwdRaw = directory && !m.is_team_account
-        ? directory.lastWorkDateByName[m.member_name] ?? null
-        : null;
+      const lwdRaw = directory ? directory.lastWorkDateByName[m.member_name] ?? null : null;
       const lwd = normalizeDate(lwdRaw);
       const afterLwd = (paidAt: string | null) => {
         if (!lwd || !paidAt) return false;
@@ -508,6 +520,16 @@ export function getDashboardStatsV2(
       }
     }
   }
+
+  // Creative.Lab 보정 — 월별 실지급액 합계만큼 pending 에서 빼고 paid 에 더함
+  //   초과 지급(pool 보다 더 많이 지급)된 경우엔 pending 이 음수로 가지 않도록 보호
+  const clPaid = Math.max(0, creativeLab?.paidTotal ?? 0);
+  if (clPaid > 0) {
+    const offset = Math.min(clPaid, totalPending);
+    totalPending -= offset;
+    totalFirstPaid += clPaid; // 실지급은 1차로 분류
+  }
+
   const totalPaid = totalFirstPaid + totalSecondPaid;
 
   const base = projects.filter(FUND_CONFIRMED_OR_LATER);
