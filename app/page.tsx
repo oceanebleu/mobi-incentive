@@ -70,8 +70,9 @@ export default function DashboardPage() {
         teamByName,
         employeeIdByName,
         statusByName,
+        creativeLabPaidTotal,
       }),
-    [projects, lastWorkDateByName, teamByName, employeeIdByName, statusByName]
+    [projects, lastWorkDateByName, teamByName, employeeIdByName, statusByName, creativeLabPaidTotal]
   );
 
   // 개인/팀별 지급 현황 — 정렬 기준 & 명단 필터

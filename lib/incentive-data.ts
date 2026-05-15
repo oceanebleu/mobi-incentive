@@ -279,6 +279,12 @@ export interface MemberSummariesOptions {
   employeeIdByName?: Record<string, string>;
   /** 이름 → 재직상태 ('재직'/'퇴사'/'휴직'/'퇴사예정' …) */
   statusByName?: Record<string, string>;
+  /**
+   * Creative.Lab(팀 계정) 실지급 합계 — 월별 인센티브 실지급액(creative_lab_payouts).
+   * 팀 계정 summary 의 pending 에서 빼서 paid 로 옮긴다.
+   * 개인과 달리 Creative.Lab 은 회차/지급일 기반이 아니라 누적 후 일괄 지급.
+   */
+  creativeLabPaidTotal?: number;
 }
 
 export function calcMemberSummariesV2(
@@ -321,6 +327,42 @@ export function calcMemberSummariesV2(
         });
       }
       const s = map.get(key)!;
+
+      // 팀 계정(Creative.Lab) — 1차/2차 구분 없이 합산
+      //   · 지급일·last_work_date 비교 적용 안 함
+      //   · 프로젝트 풀 전체를 pending 으로 누적 — 실지급은 후처리에서 creativeLabPaidTotal 만큼 paid 로 이동
+      if (m.is_team_account) {
+        const isLost = p.acquisition_status === 'LOST';
+        const f = effectivePhaseAmount(m, p, 1);
+        const s2 = effectivePhaseAmount(m, p, 2);
+        const totalPool = (isLost || p.first_payment_skipped ? 0 : f) +
+                          (isLost || p.second_payment_skipped ? 0 : s2);
+        if (isLost || p.first_payment_skipped) s.total_skipped += f;
+        if (isLost || p.second_payment_skipped) s.total_skipped += s2;
+        if (totalPool > 0) s.total_pending += totalPool;
+        // 연도 — 프로젝트 제출일 기준 단일 회차로 누적
+        if (totalPool > 0 && year > 0) {
+          if (!s.yearly_breakdown[year]) s.yearly_breakdown[year] = { paid: 0, pending: 0 };
+          s.yearly_breakdown[year].pending += totalPool;
+        }
+        s.projects.push({
+          project_id: p.id,
+          campaign_name: p.campaign_name,
+          year,
+          contribution: m.contribution,
+          acquisition_status: p.acquisition_status,
+          // 합계를 first_amount 에 담아 표시 (1차/2차 통합)
+          first_amount: totalPool,
+          first_paid_at: null,
+          first_status: totalPool > 0 ? 'pending' : 'skipped',
+          first_year: year,
+          second_amount: 0,
+          second_paid_at: null,
+          second_status: 'skipped',
+          second_year: 0,
+        });
+        continue;
+      }
 
       // 회차 상태 결정
       //   - 프로젝트가 LOST(수주실패) 면 두 회차 모두 자동으로 skipped 취급
@@ -408,6 +450,34 @@ export function calcMemberSummariesV2(
         second_status: secondStatus,
         second_year: secondYear,
       });
+    }
+  }
+
+  // Creative.Lab(팀 계정) 실지급 보정 — paidTotal 만큼 pending → paid 로 이동
+  //   · 팀 계정이 여러 개일 가능성은 낮지만, 만약 있다면 첫 번째 팀 계정에 모두 적용
+  //   · 초과 지급된 경우 pending 이 음수로 가지 않도록 보호
+  const clPaid = Math.max(0, opts.creativeLabPaidTotal ?? 0);
+  if (clPaid > 0) {
+    for (const s of map.values()) {
+      if (!s.is_team_account) continue;
+      const offset = Math.min(clPaid, s.total_pending);
+      s.total_pending -= offset;
+      s.total_paid += offset;
+      // 연도별 — 단순화: 가장 최근 연도에서 차감 (UI 의 연도별 카드 정합성)
+      const years = Object.keys(s.yearly_breakdown)
+        .map(Number)
+        .filter(n => n > 0)
+        .sort((a, b) => b - a);
+      let remain = offset;
+      for (const yr of years) {
+        if (remain <= 0) break;
+        const bucket = s.yearly_breakdown[yr];
+        const take = Math.min(remain, bucket.pending);
+        bucket.pending -= take;
+        bucket.paid += take;
+        remain -= take;
+      }
+      break;
     }
   }
 

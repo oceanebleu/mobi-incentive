@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Users, ChevronDown, ChevronRight, Info, Loader2, AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
 import { formatKRWFull, formatDate } from '@/lib/utils';
@@ -23,6 +23,22 @@ export default function MembersPage() {
   const [statusTab, setStatusTab] = useState<'ACTIVE' | 'RETIRED'>('ACTIVE');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // Creative.Lab 실지급 합계 — 월별 인센티브 실지급액 페이지에 입력된 금액
+  const [creativeLabPaidTotal, setCreativeLabPaidTotal] = useState(0);
+  useEffect(() => {
+    fetch(`/api/payroll/creative-lab?_=${Date.now()}`, {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache' },
+    })
+      .then(r => (r.ok ? r.json() : null))
+      .then(j => {
+        if (!j || !Array.isArray(j.items)) return;
+        const sum = j.items.reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
+        setCreativeLabPaidTotal(sum);
+      })
+      .catch(() => {});
+  }, []);
+
   const summaries = useMemo(
     () =>
       calcMemberSummariesV2(projects, {
@@ -30,8 +46,9 @@ export default function MembersPage() {
         teamByName,
         employeeIdByName,
         statusByName,
+        creativeLabPaidTotal,
       }),
-    [projects, lastWorkDateByName, teamByName, employeeIdByName, statusByName]
+    [projects, lastWorkDateByName, teamByName, employeeIdByName, statusByName, creativeLabPaidTotal]
   );
 
   // 연도 목록 — 지급일(또는 예정일) 기준으로 수집
@@ -402,87 +419,146 @@ function MemberRow({
             </div>
           )}
 
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-gray-400">
-                <th className="text-left pb-2 font-medium">캠페인명</th>
-                <th className="text-right pb-2 font-medium">기여도</th>
-                <th className="text-right pb-2 font-medium">1차 (지급일)</th>
-                <th className="text-right pb-2 font-medium">2차 (지급일)</th>
-                <th className="text-right pb-2 font-medium">합계</th>
-              </tr>
-            </thead>
-            <tbody>
-              {summary.projects.map(p => {
-                const firstCounts = p.first_status !== 'excluded' && p.first_status !== 'skipped';
-                const secondCounts =
-                  p.second_status !== 'excluded' && p.second_status !== 'skipped';
-                const isLost = p.acquisition_status === 'LOST';
-                const bothSkipped = p.first_status === 'skipped' && p.second_status === 'skipped';
-                return (
-                  <tr key={p.project_id} className="border-t border-gray-100/80">
-                    <td className="py-2 text-gray-700 font-medium">
-                      {p.campaign_name}
-                      {(p.first_status === 'excluded' || p.second_status === 'excluded') && (
-                        <span
-                          title="paid_at 이 마지막 근무일 이후 → 제외"
-                          className="ml-2 text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded"
-                        >
-                          퇴직 제외
-                        </span>
-                      )}
-                      {isLost && bothSkipped && (
-                        <span
-                          title="수주실패로 인한 미지급"
-                          className="ml-2 text-[10px] px-1.5 py-0.5 bg-red-100 text-red-700 rounded"
-                        >
-                          수주실패 미지급
-                        </span>
-                      )}
-                      {!isLost &&
-                        (p.first_status === 'skipped' || p.second_status === 'skipped') && (
+          {summary.is_team_account ? (
+            // Creative.Lab(팀 계정) — 1차/2차 구분 없이 캠페인명·기여도·합계만 표시
+            //   누적 후 일괄 지급 구조 → 회차별 지급일·완료여부 무의미
+            <>
+              <div className="mb-3 px-3 py-2 bg-emerald-50/50 border border-emerald-100 rounded-md text-[11px] text-emerald-800 flex items-center gap-1.5">
+                <Info size={12} className="text-emerald-600 flex-shrink-0" />
+                <span>
+                  Creative.Lab 은 일정 금액이 쌓이면 일괄 지급되는 구조로,
+                  실지급 완료액은 <b>월별 인센티브 실지급액</b> 페이지에서 관리됩니다.
+                  여기는 프로젝트별 기여 재원만 표시합니다.
+                </span>
+              </div>
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-gray-400">
+                    <th className="text-left pb-2 font-medium">캠페인명</th>
+                    <th className="text-right pb-2 font-medium">기여도</th>
+                    <th className="text-right pb-2 font-medium">합계</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.projects.map(p => {
+                    const isLost = p.acquisition_status === 'LOST';
+                    const skipped = p.first_status === 'skipped';
+                    return (
+                      <tr key={p.project_id} className="border-t border-gray-100/80">
+                        <td className="py-2 text-gray-700 font-medium">
+                          {p.campaign_name}
+                          {isLost && (
+                            <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-red-100 text-red-700 rounded">
+                              수주실패
+                            </span>
+                          )}
+                          {!isLost && skipped && (
+                            <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded">
+                              미지급
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 text-right text-blue-600 font-semibold">
+                          {p.contribution}%
+                        </td>
+                        <td className="py-2 text-right font-bold text-gray-800">
+                          {skipped ? (
+                            <span className="text-gray-300 line-through">
+                              {formatKRWFull(p.first_amount)}
+                            </span>
+                          ) : (
+                            formatKRWFull(p.first_amount)
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </>
+          ) : (
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-gray-400">
+                  <th className="text-left pb-2 font-medium">캠페인명</th>
+                  <th className="text-right pb-2 font-medium">기여도</th>
+                  <th className="text-right pb-2 font-medium">1차 (지급일)</th>
+                  <th className="text-right pb-2 font-medium">2차 (지급일)</th>
+                  <th className="text-right pb-2 font-medium">합계</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.projects.map(p => {
+                  const firstCounts = p.first_status !== 'excluded' && p.first_status !== 'skipped';
+                  const secondCounts =
+                    p.second_status !== 'excluded' && p.second_status !== 'skipped';
+                  const isLost = p.acquisition_status === 'LOST';
+                  const bothSkipped = p.first_status === 'skipped' && p.second_status === 'skipped';
+                  return (
+                    <tr key={p.project_id} className="border-t border-gray-100/80">
+                      <td className="py-2 text-gray-700 font-medium">
+                        {p.campaign_name}
+                        {(p.first_status === 'excluded' || p.second_status === 'excluded') && (
                           <span
-                            title="프로젝트에서 미지급으로 표시"
-                            className="ml-2 text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded"
+                            title="paid_at 이 마지막 근무일 이후 → 제외"
+                            className="ml-2 text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded"
                           >
-                            {bothSkipped
-                              ? '1·2차 미지급'
-                              : p.first_status === 'skipped'
-                              ? '1차 미지급'
-                              : '2차 미지급'}
+                            퇴직 제외
                           </span>
                         )}
-                    </td>
-                    <td className="py-2 text-right text-blue-600 font-semibold">
-                      {p.contribution}%
-                    </td>
-                    <td className="py-2 text-right">
-                      <PhaseCell
-                        amount={p.first_amount}
-                        paidAt={p.first_paid_at}
-                        status={p.first_status}
-                        acquisitionStatus={p.acquisition_status}
-                      />
-                    </td>
-                    <td className="py-2 text-right">
-                      <PhaseCell
-                        amount={p.second_amount}
-                        paidAt={p.second_paid_at}
-                        status={p.second_status}
-                        acquisitionStatus={p.acquisition_status}
-                      />
-                    </td>
-                    <td className="py-2 text-right font-bold text-gray-800">
-                      {formatKRWFull(
-                        (firstCounts ? p.first_amount : 0) +
-                          (secondCounts ? p.second_amount : 0)
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                        {isLost && bothSkipped && (
+                          <span
+                            title="수주실패로 인한 미지급"
+                            className="ml-2 text-[10px] px-1.5 py-0.5 bg-red-100 text-red-700 rounded"
+                          >
+                            수주실패 미지급
+                          </span>
+                        )}
+                        {!isLost &&
+                          (p.first_status === 'skipped' || p.second_status === 'skipped') && (
+                            <span
+                              title="프로젝트에서 미지급으로 표시"
+                              className="ml-2 text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded"
+                            >
+                              {bothSkipped
+                                ? '1·2차 미지급'
+                                : p.first_status === 'skipped'
+                                ? '1차 미지급'
+                                : '2차 미지급'}
+                            </span>
+                          )}
+                      </td>
+                      <td className="py-2 text-right text-blue-600 font-semibold">
+                        {p.contribution}%
+                      </td>
+                      <td className="py-2 text-right">
+                        <PhaseCell
+                          amount={p.first_amount}
+                          paidAt={p.first_paid_at}
+                          status={p.first_status}
+                          acquisitionStatus={p.acquisition_status}
+                        />
+                      </td>
+                      <td className="py-2 text-right">
+                        <PhaseCell
+                          amount={p.second_amount}
+                          paidAt={p.second_paid_at}
+                          status={p.second_status}
+                          acquisitionStatus={p.acquisition_status}
+                        />
+                      </td>
+                      <td className="py-2 text-right font-bold text-gray-800">
+                        {formatKRWFull(
+                          (firstCounts ? p.first_amount : 0) +
+                            (secondCounts ? p.second_amount : 0)
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
     </>
