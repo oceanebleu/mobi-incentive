@@ -32,7 +32,7 @@ import {
 } from '@/lib/incentive-data';
 
 export default function DashboardPage() {
-  const { projects, loading, error } = useIncentiveData();
+  const { projects, loading, error, refresh } = useIncentiveData();
   const { lastWorkDateByName, teamByName, employeeIdByName, statusByName } =
     useUserDirectory();
 
@@ -289,6 +289,8 @@ export default function DashboardPage() {
         throw new Error(msg || `HTTP ${res.status}`);
       }
       setRequestState(prev => ({ ...prev, [p.id]: 'sent' }));
+      // 발송 시각이 projects 데이터에 반영되도록 재조회 — 행에 "요청완료 yyyy.mm.dd HH:MM" 노출
+      refresh();
       // 성공 표시는 잠시 유지 후 제거 (다음 작성요청을 다시 보낼 수 있도록)
       setTimeout(() => {
         setRequestState(prev => {
@@ -661,6 +663,19 @@ export default function DashboardPage() {
   );
 }
 
+/** ISO timestamp → "yyyy.mm.dd HH:MM" (KST, 24h) */
+function formatRequestedAt(iso: string): string {
+  const t = new Date(iso);
+  // KST 표기 — UTC+9 시프트 후 UTC 메서드로 읽음 (서버/브라우저 timezone 무관하게 일관)
+  const k = new Date(t.getTime() + 9 * 60 * 60 * 1000);
+  const y = k.getUTCFullYear();
+  const m = String(k.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(k.getUTCDate()).padStart(2, '0');
+  const hh = String(k.getUTCHours()).padStart(2, '0');
+  const mm = String(k.getUTCMinutes()).padStart(2, '0');
+  return `${y}.${m}.${d} ${hh}:${mm}`;
+}
+
 function acqDotColor(key: string): string {
   switch (key) {
     case 'WON':
@@ -884,6 +899,11 @@ function ProjectActionList({
                     {p.team && <span>· {p.team}</span>}
                     {p.pl && <span>· PL {p.pl}</span>}
                     {p.submitted_at && <span>· 제출 {p.submitted_at}</span>}
+                    {p.pl_request_sent_at && (
+                      <span className="text-emerald-600 font-medium">
+                        · {formatRequestedAt(p.pl_request_sent_at)} 요청완료
+                      </span>
+                    )}
                   </div>
                 </Link>
                 {actionLabel && onAction && ActionIcon && (

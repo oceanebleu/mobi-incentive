@@ -137,5 +137,21 @@ export async function POST(req: Request) {
     );
   }
 
-  return NextResponse.json({ ok: true, sentTo: email });
+  // 발송 성공 시각 기록 — 대시보드에 "yyyy.mm.dd HH:MM 요청완료" 로 표시됨
+  //   컬럼이 아직 없는 환경(=alter SQL 미실행) 에서는 update 가 실패하므로 try-catch 로 보호.
+  //   본 단계가 실패해도 메시지 발송 자체는 성공했으므로 응답에 영향 주지 않음.
+  const sentAt = new Date().toISOString();
+  try {
+    const { error: updErr } = await supabase
+      .from('projects')
+      .update({ pl_request_sent_at: sentAt })
+      .eq('id', projectId);
+    if (updErr) {
+      console.warn('[pl-request] pl_request_sent_at 기록 실패:', updErr.message);
+    }
+  } catch (e: any) {
+    console.warn('[pl-request] pl_request_sent_at 기록 예외:', e?.message ?? e);
+  }
+
+  return NextResponse.json({ ok: true, sentTo: email, sentAt });
 }
