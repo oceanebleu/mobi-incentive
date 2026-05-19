@@ -16,14 +16,19 @@ function getToken(): string {
   return t;
 }
 
-async function slackCall<T = any>(method: string, body: any): Promise<T> {
+// Slack 메서드 호출 — form-encoded body 사용.
+//   · users.lookupByEmail 같은 레거시 메서드는 JSON 을 지원하지 않으므로
+//     form-encoded 로 통일 (chat.postMessage / conversations.open 도 동일하게 호환).
+//   · 값은 모두 문자열로 직렬화 (boolean 은 'true'/'false').
+async function slackCall<T = any>(method: string, params: Record<string, string>): Promise<T> {
+  const body = new URLSearchParams(params);
   const res = await fetch(`${SLACK_API}/${method}`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${getToken()}`,
-      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
     },
-    body: JSON.stringify(body),
+    body: body.toString(),
     cache: 'no-store',
   });
   const json = await res.json().catch(() => ({} as any));
@@ -62,10 +67,9 @@ export async function sendSlackDmByEmail(email: string, text: string): Promise<v
   await slackCall('chat.postMessage', {
     channel: channelId,
     text,
-    // mrkdwn 활성화 — 기본값이지만 명시
-    mrkdwn: true,
-    // Slack 메시지 푸시 알림 미리보기 텍스트 — 너무 길면 잘리니 헤더만
-    unfurl_links: false,
-    unfurl_media: false,
+    // mrkdwn 활성화 — 기본값이지만 명시 (form-encoded 이므로 문자열로)
+    mrkdwn: 'true',
+    unfurl_links: 'false',
+    unfurl_media: 'false',
   });
 }
