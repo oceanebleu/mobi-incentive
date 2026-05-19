@@ -34,7 +34,12 @@ async function slackCall<T = any>(method: string, params: Record<string, string>
   const json = await res.json().catch(() => ({} as any));
   if (!json.ok) {
     const code = json?.error ?? `http_${res.status}`;
-    throw new Error(`Slack ${method} 실패: ${code}`);
+    // missing_scope 케이스 — Slack 이 needed / provided 를 함께 돌려주므로 같이 노출
+    const extra: string[] = [];
+    if (json?.needed) extra.push(`needed=${json.needed}`);
+    if (json?.provided) extra.push(`provided=${json.provided}`);
+    const suffix = extra.length ? ` (${extra.join(' · ')})` : '';
+    throw new Error(`Slack ${method} 실패: ${code}${suffix}`);
   }
   return json as T;
 }
