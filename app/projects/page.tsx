@@ -435,6 +435,7 @@ function ProjectModal({
     campaign_end_date: project?.campaign_end_date ?? '',
     category: project?.category ?? '',
     note: project?.note ?? '',
+    committee_result: (project as any)?.committee_result ?? '',
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -464,6 +465,7 @@ function ProjectModal({
       'pl',
       'category',
       'note',
+      'committee_result',
     ]) {
       if (payload[k] === '') payload[k] = null;
     }
@@ -760,6 +762,15 @@ function ProjectModal({
                   onChange={e => set('note', e.target.value)}
                   rows={3}
                   placeholder="지급 특이사항, 메모 등"
+                  className={clsx(inputCls, 'resize-none')}
+                />
+              </Field>
+              <Field label="운영위원회 결과" className="col-span-2">
+                <textarea
+                  value={form.committee_result ?? ''}
+                  onChange={e => set('committee_result', e.target.value)}
+                  rows={4}
+                  placeholder="위원회 결정 사항, 지급 판단 사유 등 — PL 위원회 결과 화면에 노출됩니다."
                   className={clsx(inputCls, 'resize-none')}
                 />
               </Field>

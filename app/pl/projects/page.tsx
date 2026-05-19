@@ -45,6 +45,7 @@ interface ProjectRow {
   first_payment_skipped: boolean;
   second_payment_skipped: boolean;
   incentive_fund: number;
+  committee_result: string | null;
   members: MemberLite[];
 }
 
@@ -403,6 +404,18 @@ function CommitteeResultSection({ projects }: { projects: ProjectRow[] }) {
                       skipped={p.second_payment_skipped}
                     />
                   </div>
+
+                  {/* 운영위원회 결과 — 관리자가 작성한 메모가 있을 때만 노출 */}
+                  {p.committee_result && p.committee_result.trim() !== '' && (
+                    <div className="bg-indigo-50/50 border border-indigo-100 rounded-md px-3 py-2.5">
+                      <p className="text-[10px] font-semibold text-indigo-700 uppercase tracking-wide mb-1">
+                        위원회 결과
+                      </p>
+                      <p className="text-[12px] text-gray-800 whitespace-pre-wrap leading-relaxed">
+                        {p.committee_result}
+                      </p>
+                    </div>
+                  )}
 
                   {/* 팀원별 확정 배분 — 팀 컬럼 제거 */}
                   {p.members.length > 0 ? (

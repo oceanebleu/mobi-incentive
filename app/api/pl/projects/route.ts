@@ -76,15 +76,26 @@ export async function GET(req: Request) {
   const userNameKey = normalize(userName);
 
   // 2) projects 전체에서 pl 이름이 매칭되는 것만 추림 (PL 이름은 자유 텍스트라 정규화 비교)
-  //    위원회 결과 노출에 필요한 컬럼들 모두 포함
-  const { data: projects, error: projErr } = await supabase
-    .from('projects')
-    .select(
-      'id, campaign_name, submitted_at, pl, pl_completed, acquisition_status, fund_confirmed, first_payment_date, first_payment_ratio, second_payment_date, second_payment_ratio, first_payment_completed, second_payment_completed, first_payment_skipped, second_payment_skipped, incentive_fund'
-    )
-    .order('submitted_at', { ascending: false });
-  if (projErr)
-    return NextResponse.json({ error: projErr.message }, { status: 500, headers: NO_CACHE });
+  //    위원회 결과 노출에 필요한 컬럼들 모두 포함.
+  //    committee_result 컬럼이 아직 마이그레이션 안 된 환경에서도 동작하도록 폴백 적용.
+  const FULL_COLS =
+    'id, campaign_name, submitted_at, pl, pl_completed, acquisition_status, fund_confirmed, first_payment_date, first_payment_ratio, second_payment_date, second_payment_ratio, first_payment_completed, second_payment_completed, first_payment_skipped, second_payment_skipped, incentive_fund, committee_result';
+  const FALLBACK_COLS = FULL_COLS.replace(', committee_result', '');
+  let projects: any[] | null = null;
+  {
+    const r1 = await supabase.from('projects').select(FULL_COLS).order('submitted_at', { ascending: false });
+    if (r1.error && /committee_result/.test(r1.error.message ?? '')) {
+      const r2 = await supabase.from('projects').select(FALLBACK_COLS).order('submitted_at', { ascending: false });
+      if (r2.error) {
+        return NextResponse.json({ error: r2.error.message }, { status: 500, headers: NO_CACHE });
+      }
+      projects = r2.data ?? [];
+    } else if (r1.error) {
+      return NextResponse.json({ error: r1.error.message }, { status: 500, headers: NO_CACHE });
+    } else {
+      projects = r1.data ?? [];
+    }
+  }
 
   const mine = (projects ?? []).filter(p => {
     const plName: string | null = (p as any).pl ?? null;
@@ -142,6 +153,7 @@ export async function GET(req: Request) {
         first_payment_skipped: (p as any).first_payment_skipped,
         second_payment_skipped: (p as any).second_payment_skipped,
         incentive_fund: (p as any).incentive_fund,
+        committee_result: (p as any).committee_result ?? null,
         members: membersByProject.get((p as any).id) ?? [],
       })),
     },

@@ -131,6 +131,8 @@ export interface SupabaseProject {
   fund_rate: number | null; // 0.01 (연장) | 0.02 (신규) — 수정 가능
   /** PL 작성요청 Slack DM 발송 시각 (ISO 8601). null = 아직 발송 안 됨 */
   pl_request_sent_at: string | null;
+  /** 운영위원회 결과 메모 — 관리자가 작성, PL 위원회결과 화면에서 열람 */
+  committee_result: string | null;
   members: SupabaseProjectMember[];
 }
 

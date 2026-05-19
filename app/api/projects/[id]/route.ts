@@ -40,6 +40,7 @@ const ALLOWED_FIELDS = new Set([
   'campaign_end_date',
   'category',
   'note',
+  'committee_result',
 ]);
 
 export async function PATCH(
