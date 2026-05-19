@@ -67,8 +67,8 @@ export function buildPLRequestMessage(p: PLRequestPayload): string {
     ``,
     ``,
     p.supportMention
-      ? `문의사항이 있을 경우 HRBP팀 이홍은(${p.supportMention})에게 문의부탁드립니다.`
-      : `문의사항이 있을 경우 HRBP팀 이홍은에게 문의부탁드립니다.`,
+      ? `문의사항이 있을 경우 ${p.supportMention} 에게 DM 부탁드립니다.`
+      : `문의사항이 있을 경우 HRBP팀 이홍은에게 DM 부탁드립니다.`,
     `감사합니다.`,
   ];
   return lines.join('\n');
