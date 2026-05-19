@@ -260,15 +260,54 @@ export default function DashboardPage() {
     []
   );
 
-  // 작성요청 버튼 — Slack 연동은 후속, 일단 클립보드 + 안내
-  const [requestedId, setRequestedId] = useState<string | null>(null);
-  function requestPL(p: SupabaseProject) {
-    const text = `[PL 기여도 작성 요청] ${p.campaign_name} (ID: ${p.id})\n프로젝트 관리 → 해당 카드 → 멤버 기여도 입력 부탁드립니다.`;
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(text).catch(() => {});
+  // 작성요청 버튼 — 수주인센티브운영봇으로 PL 본인 Slack DM 발송
+  //   상태값: 'idle' | 'sending' | 'sent' | 'error'
+  const [requestState, setRequestState] = useState<Record<string, 'sending' | 'sent' | 'error'>>(
+    {}
+  );
+  const [requestError, setRequestError] = useState<string | null>(null);
+
+  async function requestPL(p: SupabaseProject) {
+    const pl = p.pl?.trim();
+    if (!pl) {
+      setRequestError(`"${p.campaign_name}" — PL 정보가 비어있어 발송할 수 없습니다.`);
+      return;
     }
-    setRequestedId(p.id);
-    setTimeout(() => setRequestedId(prev => (prev === p.id ? null : prev)), 1800);
+    if (!confirm(`PL "${pl}" 님에게 "${p.campaign_name}" 작성요청 DM 을 발송할까요?`)) return;
+
+    setRequestError(null);
+    setRequestState(prev => ({ ...prev, [p.id]: 'sending' }));
+    try {
+      const res = await fetch('/api/notifications/pl-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: p.id }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = [j?.error, j?.hint].filter(Boolean).join(' — ');
+        throw new Error(msg || `HTTP ${res.status}`);
+      }
+      setRequestState(prev => ({ ...prev, [p.id]: 'sent' }));
+      // 성공 표시는 잠시 유지 후 제거 (다음 작성요청을 다시 보낼 수 있도록)
+      setTimeout(() => {
+        setRequestState(prev => {
+          const next = { ...prev };
+          if (next[p.id] === 'sent') delete next[p.id];
+          return next;
+        });
+      }, 3500);
+    } catch (e: any) {
+      setRequestState(prev => ({ ...prev, [p.id]: 'error' }));
+      setRequestError(e?.message ?? '발송 실패');
+      setTimeout(() => {
+        setRequestState(prev => {
+          const next = { ...prev };
+          if (next[p.id] === 'error') delete next[p.id];
+          return next;
+        });
+      }, 3500);
+    }
   }
 
   const kpiCards = [
@@ -476,7 +515,8 @@ export default function DashboardPage() {
           actionLabel="작성요청"
           actionIcon={Send}
           onAction={requestPL}
-          requestedId={requestedId}
+          requestState={requestState}
+          errorMessage={requestError}
         />
         <ProjectActionList
           icon={Coins}
@@ -778,7 +818,8 @@ function ProjectActionList({
   actionLabel,
   actionIcon: ActionIcon,
   onAction,
-  requestedId,
+  requestState,
+  errorMessage,
 }: {
   icon: typeof FileText;
   tone: 'amber' | 'indigo';
@@ -788,7 +829,8 @@ function ProjectActionList({
   actionLabel?: string;
   actionIcon?: typeof Send;
   onAction?: (p: SupabaseProject) => void;
-  requestedId?: string | null;
+  requestState?: Record<string, 'sending' | 'sent' | 'error'>;
+  errorMessage?: string | null;
 }) {
   const toneCls = tone === 'amber'
     ? { icon: 'text-amber-600', badge: 'bg-amber-100 text-amber-700' }
@@ -802,7 +844,13 @@ function ProjectActionList({
           {projects.length}건
         </span>
       </div>
-      <p className="text-[11px] text-gray-400 mb-4">{hint}</p>
+      <p className="text-[11px] text-gray-400 mb-3">{hint}</p>
+
+      {errorMessage && (
+        <div className="mb-2 px-2.5 py-1.5 rounded-md bg-red-50 border border-red-100 text-[11px] text-red-700 break-words">
+          {errorMessage}
+        </div>
+      )}
 
       {projects.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-xs text-gray-400 py-10">
@@ -810,48 +858,66 @@ function ProjectActionList({
         </div>
       ) : (
         <div className="flex-1 max-h-[320px] overflow-y-auto space-y-1.5 pr-1 -mr-1">
-          {projects.map(p => (
-            <div
-              key={p.id}
-              className="group flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-100 hover:bg-gray-50/70 hover:border-gray-200 transition-colors"
-            >
-              <Link
-                href={`/projects/${p.id}`}
-                className="flex-1 min-w-0"
-                title={`${p.campaign_name} 상세 보기`}
+          {projects.map(p => {
+            const st = requestState?.[p.id];
+            return (
+              <div
+                key={p.id}
+                className="group flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-100 hover:bg-gray-50/70 hover:border-gray-200 transition-colors"
               >
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-medium text-gray-900 truncate group-hover:text-blue-700">
-                    {p.campaign_name}
-                  </span>
-                  <ChevronRight
-                    size={12}
-                    className="text-gray-300 group-hover:text-blue-400 flex-shrink-0"
-                  />
-                </div>
-                <div className="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                  <span>{p.id}</span>
-                  {p.team && <span>· {p.team}</span>}
-                  {p.pl && <span>· PL {p.pl}</span>}
-                  {p.submitted_at && <span>· 제출 {p.submitted_at}</span>}
-                </div>
-              </Link>
-              {actionLabel && onAction && ActionIcon && (
-                <button
-                  onClick={() => onAction(p)}
-                  className={clsx(
-                    'flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors',
-                    requestedId === p.id
-                      ? 'bg-emerald-100 text-emerald-700'
-                      : 'bg-blue-600 text-white hover:bg-blue-700'
-                  )}
+                <Link
+                  href={`/projects/${p.id}`}
+                  className="flex-1 min-w-0"
+                  title={`${p.campaign_name} 상세 보기`}
                 >
-                  <ActionIcon size={12} />
-                  {requestedId === p.id ? '복사됨' : actionLabel}
-                </button>
-              )}
-            </div>
-          ))}
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-medium text-gray-900 truncate group-hover:text-blue-700">
+                      {p.campaign_name}
+                    </span>
+                    <ChevronRight
+                      size={12}
+                      className="text-gray-300 group-hover:text-blue-400 flex-shrink-0"
+                    />
+                  </div>
+                  <div className="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                    <span>{p.id}</span>
+                    {p.team && <span>· {p.team}</span>}
+                    {p.pl && <span>· PL {p.pl}</span>}
+                    {p.submitted_at && <span>· 제출 {p.submitted_at}</span>}
+                  </div>
+                </Link>
+                {actionLabel && onAction && ActionIcon && (
+                  <button
+                    onClick={() => onAction(p)}
+                    disabled={st === 'sending'}
+                    className={clsx(
+                      'flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors',
+                      st === 'sent'
+                        ? 'bg-emerald-100 text-emerald-700'
+                        : st === 'error'
+                        ? 'bg-red-100 text-red-700'
+                        : st === 'sending'
+                        ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                    )}
+                  >
+                    {st === 'sending' ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <ActionIcon size={12} />
+                    )}
+                    {st === 'sending'
+                      ? '발송중'
+                      : st === 'sent'
+                      ? '발송완료'
+                      : st === 'error'
+                      ? '실패'
+                      : actionLabel}
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
