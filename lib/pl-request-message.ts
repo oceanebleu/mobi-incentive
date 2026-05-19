@@ -16,6 +16,17 @@ export interface PLRequestPayload {
   accessCode: string;
   /** PL 양식 랜딩 URL */
   formUrl?: string;
+  /**
+   * 문의 담당자(이홍은) Slack 멘션 마크업.
+   *   · 룩업 성공 시: `<@U12345>` — Slack 이 자동으로 멘션으로 렌더
+   *   · 룩업 실패/미설정 시: undefined — 괄호 안 멘션을 자연스럽게 생략
+   */
+  supportMention?: string;
+  /**
+   * 작성 마감일 한국어 텍스트 (예: "11월 25일 오후 02시까지").
+   * 메시지에서 Bold 처리해 삽입.
+   */
+  deadlineText?: string;
 }
 
 const DEFAULT_FORM_URL = 'https://mobi-incentive.vercel.app/pl';
@@ -27,7 +38,9 @@ export function buildPLRequestMessage(p: PLRequestPayload): string {
     `모비데이즈 수주인센티브 운영위원회 입니다.`,
     ``,
     `*${p.campaignName}* 의 수주인센티브 운영위원회 진행을 위하여`,
-    `하기 링크를 통하여 프로젝트 정보값 기재를 요청드립니다.`,
+    p.deadlineText
+      ? `하기 링크를 통하여 *${p.deadlineText}* 프로젝트 정보값 기재를 요청드립니다.`
+      : `하기 링크를 통하여 프로젝트 정보값 기재를 요청드립니다.`,
     ``,
     `🔗 <${url}|*캠페인 정보값 작성 바로가기*>`,
     `- *${p.plName}* 님의 사번과 개인 고유 코드 입력 후 접속이 가능합니다.`,
@@ -51,6 +64,12 @@ export function buildPLRequestMessage(p: PLRequestPayload): string {
     `*[Q. 작성한 내용은 어디서 볼 수 있나요?]*`,
     `- 작성이 완료된 건에 한하여 작성 완료 상태로 변경되며, 전달드린 링크 접속 후 로그인하시면 언제든 확인 하실 수 있습니다.`,
     `- 위원회 진행 결과 역시 동일 페이지 내에서 확인 가능합니다.`,
+    ``,
+    ``,
+    p.supportMention
+      ? `문의사항이 있을 경우 HRBP팀 이홍은(${p.supportMention})에게 문의부탁드립니다.`
+      : `문의사항이 있을 경우 HRBP팀 이홍은에게 문의부탁드립니다.`,
+    `감사합니다.`,
   ];
   return lines.join('\n');
 }

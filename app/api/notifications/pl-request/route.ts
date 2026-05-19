@@ -12,10 +12,15 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { canManageProjects, type UserRole } from '@/lib/roles';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
-import { sendSlackDmByEmail } from '@/lib/slack';
+import { sendSlackDmByEmail, lookupSlackUserIdByEmail } from '@/lib/slack';
 import { buildPLRequestMessage } from '@/lib/pl-request-message';
+import { addWorkingDays } from '@/lib/payroll-date';
 
 export const dynamic = 'force-dynamic';
+
+// 문의 담당자(HRBP팀 이홍은) — 메시지 본문에서 Slack 멘션으로 렌더
+//   환경변수 SUPPORT_CONTACT_EMAIL 로 오버라이드 가능
+const SUPPORT_CONTACT_EMAIL = process.env.SUPPORT_CONTACT_EMAIL ?? 'he_lee@mobidays.com';
 
 export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
@@ -89,12 +94,29 @@ export async function POST(req: Request) {
     );
   }
 
-  // 3) 메시지 생성 + Slack DM 발송
+  // 3) 문의 담당자 Slack 멘션 — 룩업 실패해도 메시지 발송은 계속 (괄호 멘션만 생략)
+  let supportMention: string | undefined;
+  try {
+    const supportId = await lookupSlackUserIdByEmail(SUPPORT_CONTACT_EMAIL);
+    supportMention = `<@${supportId}>`;
+  } catch {
+    supportMention = undefined;
+  }
+
+  // 4) 마감일 — 발송일로부터 5 영업일(주말·한국 공휴일 제외) 후, 오후 02시
+  //    KST 기준 — 한국 사용자 대상 메시지이므로 UTC+9 로 환산해 일자 계산
+  const nowKst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const deadline = addWorkingDays(nowKst, 5);
+  const deadlineText = `${deadline.getUTCMonth() + 1}월 ${deadline.getUTCDate()}일 오후 02시까지`;
+
+  // 5) 메시지 생성 + Slack DM 발송
   const text = buildPLRequestMessage({
     plName,
     campaignName: project.campaign_name,
     employeeId,
     accessCode,
+    supportMention,
+    deadlineText,
   });
 
   try {

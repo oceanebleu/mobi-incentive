@@ -59,6 +59,26 @@ function isWeekend(d: Date): boolean {
 }
 
 /**
+ * `from` 으로부터 n 영업일(주말·한국 공휴일 제외) 후의 Date 반환.
+ *   - 시작일(from) 은 카운트에 포함하지 않음 — "발송일로부터 5 영업일" = 다음 영업일부터 세어 5번째.
+ *   - n이 0이면 from 그대로 반환.
+ *   - 서버 타임존 영향을 받지 않도록 UTC 메서드로 동작.
+ *     KST 기준 계산이 필요하면 호출자가 `new Date(Date.now() + 9h)` 형태로 시프트해서 넘기면 됨.
+ */
+export function addWorkingDays(from: Date, n: number): Date {
+  const d = new Date(from.getTime());
+  let added = 0;
+  while (added < n) {
+    d.setUTCDate(d.getUTCDate() + 1);
+    const dow = d.getUTCDay();
+    const isWeekendUtc = dow === 0 || dow === 6;
+    const ymdUtc = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+    if (!isWeekendUtc && !KR_HOLIDAYS.has(ymdUtc)) added++;
+  }
+  return d;
+}
+
+/**
  * 당월(year, month, 1~12) 급여의 실제 지급일을 반환
  *   기준: 익월 10일. 그 날이 주말/공휴일이면 직전 평일.
  * @returns YYYY-MM-DD
