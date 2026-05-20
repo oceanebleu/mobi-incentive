@@ -78,3 +78,19 @@ export async function sendSlackDmByEmail(email: string, text: string): Promise<v
     unfurl_media: 'false',
   });
 }
+
+/**
+ * 특정 채널(public/private)에 메시지 발송.
+ *  - channel: 채널 ID (C12345ABC) 또는 채널 이름 (#hrm-notify)
+ *  - 봇이 해당 채널에 초대되어 있어야 함 (not_in_channel 에러 시 invite 필요)
+ *  - 봇 권한: chat:write (private 채널이면 추가로 채널 멤버 자격 필요)
+ */
+export async function sendSlackChannelMessage(channel: string, text: string): Promise<void> {
+  await slackCall('chat.postMessage', {
+    channel,
+    text,
+    mrkdwn: 'true',
+    unfurl_links: 'false',
+    unfurl_media: 'false',
+  });
+}

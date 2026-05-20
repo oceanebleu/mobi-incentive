@@ -19,6 +19,7 @@ import {
   Save,
   Copy,
   Check,
+  Send,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { formatKRWFull } from '@/lib/utils';
@@ -71,6 +72,45 @@ export default function PayrollPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [clModalOpen, setClModalOpen] = useState(false);
+  // HRM 공유 버튼 상태 — 'idle' | 'sending' | 'sent' | 'error'
+  const [hrmState, setHrmState] = useState<'idle' | 'sending' | 'sent' | 'error'>(
+    'idle'
+  );
+  const [hrmError, setHrmError] = useState<string | null>(null);
+
+  async function shareToHRM(bucket: MonthBucket) {
+    if (
+      !confirm(
+        `${bucket.year}년 ${bucket.month}월 지급 내용을 HRM 채널에 공유합니다.\n` +
+          `· 지급일: ${bucket.pay_date}\n· 지급총액: ${bucket.total.toLocaleString()} 원\n계속할까요?`
+      )
+    )
+      return;
+    setHrmState('sending');
+    setHrmError(null);
+    try {
+      const res = await fetch('/api/notifications/hrm-payroll-share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          year: bucket.year,
+          month: bucket.month,
+          totalAmount: bucket.total,
+        }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = [j?.error, j?.hint].filter(Boolean).join(' — ');
+        throw new Error(msg || `HTTP ${res.status}`);
+      }
+      setHrmState('sent');
+      setTimeout(() => setHrmState('idle'), 3500);
+    } catch (e: any) {
+      setHrmState('error');
+      setHrmError(e?.message ?? '발송 실패');
+      setTimeout(() => setHrmState('idle'), 5000);
+    }
+  }
 
   function loadMonths() {
     setLoading(true);
@@ -202,7 +242,7 @@ export default function PayrollPage() {
           {/* 우측 활성 월 내용 */}
           {active && (
             <div className="space-y-6 min-w-0">
-              {/* 월 요약 */}
+              {/* 월 요약 + HRM 공유 버튼 */}
               <div className="bg-rose-50/40 border border-rose-100 rounded-xl px-5 py-4 flex items-center gap-4">
                 <Calendar size={18} className="text-rose-500" />
                 <div className="flex-1">
@@ -214,7 +254,40 @@ export default function PayrollPage() {
                     {formatKRWFull(active.total)}
                   </p>
                 </div>
+                <button
+                  onClick={() => shareToHRM(active)}
+                  disabled={hrmState === 'sending'}
+                  title="HRM 채널에 이 달 지급 요청 메시지 공유"
+                  className={clsx(
+                    'flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-lg border transition-colors whitespace-nowrap',
+                    hrmState === 'sent'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : hrmState === 'error'
+                      ? 'bg-red-50 text-red-700 border-red-200'
+                      : hrmState === 'sending'
+                      ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed'
+                      : 'bg-white text-rose-700 hover:bg-rose-100 border-rose-200'
+                  )}
+                >
+                  {hrmState === 'sending' ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Send size={14} />
+                  )}
+                  {hrmState === 'sending'
+                    ? '발송중'
+                    : hrmState === 'sent'
+                    ? '공유 완료'
+                    : hrmState === 'error'
+                    ? '발송 실패'
+                    : 'HRM 공유'}
+                </button>
               </div>
+              {hrmError && (
+                <div className="-mt-3 px-3 py-2 rounded-md bg-red-50 border border-red-100 text-[11px] text-red-700 break-words">
+                  {hrmError}
+                </div>
+              )}
 
               {/* 인원별 합계 — 3 컬럼 그리드 */}
               <div className="bg-white border border-gray-200 rounded-xl p-5">
