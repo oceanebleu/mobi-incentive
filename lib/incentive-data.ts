@@ -133,6 +133,8 @@ export interface SupabaseProject {
   pl_request_sent_at: string | null;
   /** 운영위원회 결과 메모 — 관리자가 작성, PL 위원회결과 화면에서 열람 */
   committee_result: string | null;
+  /** 수주확정일자 — PL 양식에서 작성. first_payment_date 와는 별개. */
+  won_date: string | null;
   members: SupabaseProjectMember[];
 }
 

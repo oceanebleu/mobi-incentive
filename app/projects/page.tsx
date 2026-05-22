@@ -432,6 +432,7 @@ function ProjectModal({
     second_payment_ratio: project?.second_payment_ratio ?? 40,
     second_payment_completed: project?.second_payment_completed ?? false,
     second_payment_skipped: project?.second_payment_skipped ?? false,
+    won_date: (project as any)?.won_date ?? '',
     campaign_end_date: project?.campaign_end_date ?? '',
     category: project?.category ?? '',
     note: project?.note ?? '',
@@ -459,6 +460,7 @@ function ProjectModal({
       'distributed_at',
       'first_payment_date',
       'second_payment_date',
+      'won_date',
       'campaign_end_date',
       'committee_sheet_link',
       'team',
@@ -748,7 +750,21 @@ function ProjectModal({
           {/* 기타 */}
           <Section title="기타">
             <div className="grid grid-cols-2 gap-4">
-              <Field label="캠페인 종료예정일">
+              <Field
+                label="수주확정일자"
+                hint="PL 양식에서 작성된 값 (1차 지급일과는 별개)"
+              >
+                <input
+                  type="date"
+                  value={form.won_date ?? ''}
+                  onChange={e => set('won_date', e.target.value)}
+                  className={inputCls}
+                />
+              </Field>
+              <Field
+                label="캠페인 운영종료 예상일"
+                hint="PL 양식에서 작성된 값 (2차 지급일과는 별개)"
+              >
                 <input
                   type="date"
                   value={form.campaign_end_date ?? ''}
@@ -937,16 +953,21 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function Field({
   label,
+  hint,
   children,
   className,
 }: {
   label: string;
+  hint?: string;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <div className={className}>
-      <label className="block text-xs font-medium text-gray-500 mb-1.5">{label}</label>
+      <label className="block text-xs font-medium text-gray-500 mb-1.5">
+        {label}
+        {hint && <span className="ml-1.5 text-[10px] font-normal text-gray-400">· {hint}</span>}
+      </label>
       {children}
     </div>
   );

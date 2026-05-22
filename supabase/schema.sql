@@ -118,7 +118,9 @@ create table if not exists public.projects (
   second_payment_ratio        int,                             -- S
   second_payment_completed    boolean not null default false,  -- T
   second_payment_skipped      boolean not null default false,  -- 2차 미지급(= 영영 지급되지 않을 회차)
-  campaign_end_date           date,                            -- U: 캠페인 종료예정일
+  -- 수주확정일자 — PL 이 양식에서 작성하는 날짜. 1차 지급일(first_payment_date)과는 별개.
+  won_date                    date,
+  campaign_end_date           date,                            -- 캠페인 운영종료 예상일 (PL 작성)
   category                    text,                            -- V: 연장/신규
   note                        text,                            -- W: 지급 특이사항
   source_proposal_id          bigint,                          -- proposals.id에서 승격된 경우
@@ -137,6 +139,16 @@ create table if not exists public.projects (
 -- 기존 환경에 컬럼 추가 (idempotent)
 alter table public.projects add column if not exists pl_request_sent_at timestamptz;
 alter table public.projects add column if not exists committee_result text;
+alter table public.projects add column if not exists won_date date;
+
+-- 데이터 마이그레이션 — 기존 first/second_payment_date 에 저장돼 있던 PL 작성 일정 정보(수주확정일자/캠페인운영종료예상일)를
+-- 새 컬럼으로 복제. 새 컬럼이 비어있는 경우에만 복제 (이미 분리된 경우 덮어쓰지 않음).
+update public.projects
+   set won_date = first_payment_date
+ where won_date is null and first_payment_date is not null;
+update public.projects
+   set campaign_end_date = second_payment_date
+ where campaign_end_date is null and second_payment_date is not null;
 
 create index if not exists projects_acquisition_idx   on public.projects (acquisition_status);
 create index if not exists projects_team_idx          on public.projects (team);

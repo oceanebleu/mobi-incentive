@@ -328,13 +328,14 @@ export async function PUT(
   if (typeof formInput?.pl_name === 'string' && formInput.pl_name.trim() !== '') {
     projectsPatch.pl = formInput.pl_name.trim();
   }
-  // 수주 확정 일자 → first_payment_date / 캠페인 운영 종료 예상일 → second_payment_date
-  //   빈 문자열 또는 null 이면 NULL 로 클리어
+  // 수주 확정 일자 → projects.won_date / 캠페인 운영 종료 예상일 → projects.campaign_end_date
+  //   주의: 1차/2차 지급일(first/second_payment_date) 은 별개 개념 — 관리자만 편집.
+  //   PL 양식 수정은 이 두 컬럼만 갱신함.
   if ('won_date' in (formInput ?? {})) {
-    projectsPatch.first_payment_date = formInput.won_date || null;
+    projectsPatch.won_date = formInput.won_date || null;
   }
   if ('campaign_end_date' in (formInput ?? {})) {
-    projectsPatch.second_payment_date = formInput.campaign_end_date || null;
+    projectsPatch.campaign_end_date = formInput.campaign_end_date || null;
   }
   // R값 — 숫자
   if (formInput?.r_value !== undefined && formInput.r_value !== null && formInput.r_value !== '') {

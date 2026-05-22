@@ -46,6 +46,10 @@ interface ProjectRow {
   second_payment_skipped: boolean;
   incentive_fund: number;
   committee_result: string | null;
+  /** 수주확정일자 — PL 양식에서 작성 (1차 지급일과 별개) */
+  won_date: string | null;
+  /** 캠페인 운영종료 예상일 — PL 양식에서 작성 (2차 지급일과 별개) */
+  campaign_end_date: string | null;
   members: MemberLite[];
 }
 
@@ -389,6 +393,14 @@ function CommitteeResultSection({ projects }: { projects: ProjectRow[] }) {
               {/* 펼침 상세 */}
               {open && (
                 <div className="border-t border-gray-100 px-4 py-3 bg-gray-50/30 space-y-3">
+                  {/* 캠페인 운영 일정 — PL 이 양식에서 작성한 값 (지급일과 별개) */}
+                  {(p.won_date || p.campaign_end_date) && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <ScheduleCard label="수주확정일자" date={p.won_date} />
+                      <ScheduleCard label="캠페인 운영종료 예상일" date={p.campaign_end_date} />
+                    </div>
+                  )}
+
                   {/* 지급 일정 — skipped(미지급) 회차는 그대로 표기 */}
                   <div className="grid grid-cols-2 gap-3">
                     <PhaseCard
@@ -477,6 +489,16 @@ function CommitteeResultSection({ projects }: { projects: ProjectRow[] }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// 캠페인 일정 카드 — PL 이 양식에서 작성한 값을 표기 (지급일 카드와 시각적으로 구분)
+function ScheduleCard({ label, date }: { label: string; date: string | null }) {
+  return (
+    <div className="bg-white rounded-md border border-blue-100 px-3 py-2">
+      <p className="text-[10px] text-blue-600 uppercase tracking-wide">{label}</p>
+      <p className="text-sm font-semibold text-gray-800 mt-0.5">{date ?? '미정'}</p>
     </div>
   );
 }

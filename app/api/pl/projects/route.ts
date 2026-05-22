@@ -79,12 +79,13 @@ export async function GET(req: Request) {
   //    위원회 결과 노출에 필요한 컬럼들 모두 포함.
   //    committee_result 컬럼이 아직 마이그레이션 안 된 환경에서도 동작하도록 폴백 적용.
   const FULL_COLS =
-    'id, campaign_name, submitted_at, pl, pl_completed, acquisition_status, fund_confirmed, first_payment_date, first_payment_ratio, second_payment_date, second_payment_ratio, first_payment_completed, second_payment_completed, first_payment_skipped, second_payment_skipped, incentive_fund, committee_result';
-  const FALLBACK_COLS = FULL_COLS.replace(', committee_result', '');
+    'id, campaign_name, submitted_at, pl, pl_completed, acquisition_status, fund_confirmed, first_payment_date, first_payment_ratio, second_payment_date, second_payment_ratio, first_payment_completed, second_payment_completed, first_payment_skipped, second_payment_skipped, incentive_fund, committee_result, won_date, campaign_end_date';
+  // committee_result / won_date 컬럼이 마이그레이션 안 된 환경에서도 동작하도록 폴백
+  const FALLBACK_COLS = FULL_COLS.replace(', committee_result', '').replace(', won_date', '');
   let projects: any[] | null = null;
   {
     const r1 = await supabase.from('projects').select(FULL_COLS).order('submitted_at', { ascending: false });
-    if (r1.error && /committee_result/.test(r1.error.message ?? '')) {
+    if (r1.error && /committee_result|won_date/.test(r1.error.message ?? '')) {
       const r2 = await supabase.from('projects').select(FALLBACK_COLS).order('submitted_at', { ascending: false });
       if (r2.error) {
         return NextResponse.json({ error: r2.error.message }, { status: 500, headers: NO_CACHE });
@@ -154,6 +155,8 @@ export async function GET(req: Request) {
         second_payment_skipped: (p as any).second_payment_skipped,
         incentive_fund: (p as any).incentive_fund,
         committee_result: (p as any).committee_result ?? null,
+        won_date: (p as any).won_date ?? null,
+        campaign_end_date: (p as any).campaign_end_date ?? null,
         members: membersByProject.get((p as any).id) ?? [],
       })),
     },

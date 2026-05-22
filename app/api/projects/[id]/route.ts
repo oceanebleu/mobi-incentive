@@ -38,6 +38,7 @@ const ALLOWED_FIELDS = new Set([
   'second_payment_completed',
   'second_payment_skipped',
   'campaign_end_date',
+  'won_date',
   'category',
   'note',
   'committee_result',

@@ -1,9 +1,29 @@
 'use client';
 
+import { Suspense } from 'react';
 import { signIn } from 'next-auth/react';
+import { useSearchParams } from 'next/navigation';
 import { TrendingUp } from 'lucide-react';
 
+// useSearchParams() 는 정적 prerender 와 충돌 — Suspense 안에서 호출되어야 함
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginShell callbackUrl="/" />}>
+      <LoginPageInner />
+    </Suspense>
+  );
+}
+
+function LoginPageInner() {
+  const search = useSearchParams();
+  // 미들웨어가 미인증 사용자를 /login?callbackUrl=<원본URL> 로 보낸 경우, 그 URL 로 복귀시킴.
+  //   보안: open redirect 방지를 위해 동일 출처 경로(`/...`)만 허용. http(s):// 로 시작하면 무시.
+  const raw = search?.get('callbackUrl') ?? '/';
+  const callbackUrl = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/';
+  return <LoginShell callbackUrl={callbackUrl} />;
+}
+
+function LoginShell({ callbackUrl }: { callbackUrl: string }) {
   return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg-base)' }}>
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-10 w-full max-w-sm text-center">
@@ -19,7 +39,7 @@ export default function LoginPage() {
 
         {/* 로그인 버튼 */}
         <button
-          onClick={() => signIn('google', { callbackUrl: '/' })}
+          onClick={() => signIn('google', { callbackUrl })}
           className="w-full flex items-center justify-center gap-3 px-4 py-3 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
         >
           {/* Google 아이콘 */}

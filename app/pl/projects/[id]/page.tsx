@@ -70,8 +70,8 @@ interface FormState {
   // 위원회 구성
   pl_name: string;            // projects.pl — 자동 파싱, 수정 가능
   // 캠페인 운영 일정
-  won_date: string;           // 수주 확정 일자 = projects.first_payment_date
-  campaign_end_date: string;  // 캠페인 운영 종료 예상일 = projects.second_payment_date
+  won_date: string;           // 수주 확정 일자 → projects.won_date (1차 지급일과 별개)
+  campaign_end_date: string;  // 캠페인 운영 종료 예상일 → projects.campaign_end_date (2차 지급일과 별개)
   // 총 예산 및 수수료
   r_value: string;            // 콤마 표시용 — 내부적으로 숫자 문자열 (콤마 제거)
   commission_pct: string;     // 0~100 (%), 소숫점 2자리
@@ -313,8 +313,11 @@ function PLProjectFormPageInner() {
         : '';
     setForm({
       pl_name: p.pl ?? '',
-      won_date: p.first_payment_date ?? '',
-      campaign_end_date: p.second_payment_date ?? '',
+      // 수주확정일자 / 캠페인운영종료예상일 — 신규 전용 컬럼.
+      //   레거시 환경(컬럼 미마이그레이션) 에서는 won_date 가 응답에 없을 수 있으므로
+      //   기존 first/second_payment_date 로 폴백해 호환성 유지.
+      won_date: p.won_date ?? p.first_payment_date ?? '',
+      campaign_end_date: p.campaign_end_date ?? p.second_payment_date ?? '',
       r_value: rValueStr,
       commission_pct: commissionPctStr,
       budget_note: f.budget_note ?? '',
