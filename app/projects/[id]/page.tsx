@@ -64,7 +64,7 @@ export default function ProjectDetailPage() {
       <div className="p-8 text-center text-gray-400">
         <p>프로젝트를 찾을 수 없습니다.</p>
         <button
-          onClick={() => router.back()}
+          onClick={() => router.push('/projects')}
           className="mt-4 text-sm text-blue-600 hover:underline"
         >
           돌아가기
@@ -100,7 +100,7 @@ export default function ProjectDetailPage() {
     <div className="p-8 space-y-6 fade-in">
       <div>
         <button
-          onClick={() => router.back()}
+          onClick={() => router.push('/projects')}
           className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-700 mb-4 transition-colors"
         >
           <ArrowLeft size={15} />
