@@ -840,14 +840,15 @@ function MembersEditModal({
 }
 
 // ─────────────────────────────────────────────
-// PL 고유 링크 복사 버튼 — 관리자가 Slack/이메일로 PL에게 전달
+// 프로젝트 상세 페이지 링크 복사 버튼 — 관리자가 Slack/이메일로 공유
+//   복사되는 URL: /projects/<id> (PL 양식 링크 /pl/projects/... 와는 별개)
 // ─────────────────────────────────────────────
 function PLLinkCopyButton({ projectId }: { projectId: string }) {
   const [copied, setCopied] = useState(false);
   function copy() {
     const origin =
       typeof window !== 'undefined' ? window.location.origin : '';
-    const url = `${origin}/pl/projects/${encodeURIComponent(projectId)}`;
+    const url = `${origin}/projects/${encodeURIComponent(projectId)}`;
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(url).catch(() => {});
     }
@@ -857,7 +858,7 @@ function PLLinkCopyButton({ projectId }: { projectId: string }) {
   return (
     <button
       onClick={copy}
-      title="PL이 사번 인증 후 양식을 입력할 수 있는 고유 링크"
+      title="현재 프로젝트 상세 페이지 링크 복사"
       className={clsx(
         'flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors',
         copied
