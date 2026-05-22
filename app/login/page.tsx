@@ -17,10 +17,31 @@ export default function LoginPage() {
 function LoginPageInner() {
   const search = useSearchParams();
   // 미들웨어가 미인증 사용자를 /login?callbackUrl=<원본URL> 로 보낸 경우, 그 URL 로 복귀시킴.
-  //   보안: open redirect 방지를 위해 동일 출처 경로(`/...`)만 허용. http(s):// 로 시작하면 무시.
+  //   보안: open redirect 방지를 위해 두 가지만 허용
+  //     1) 상대 경로(`/projects/...`)
+  //     2) 절대 URL 이지만 동일 출처(`https://<현재 호스트>/...`)
+  //   그 외(크로스 오리진·`//evil.com` 형태)는 `/` 로 fallback.
   const raw = search?.get('callbackUrl') ?? '/';
-  const callbackUrl = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/';
+  const callbackUrl = getSafeCallbackUrl(raw);
   return <LoginShell callbackUrl={callbackUrl} />;
+}
+
+function getSafeCallbackUrl(raw: string): string {
+  if (!raw) return '/';
+  // 상대 경로
+  if (raw.startsWith('/') && !raw.startsWith('//')) return raw;
+  // 절대 URL — 동일 출처만 허용
+  if (typeof window !== 'undefined') {
+    try {
+      const u = new URL(raw);
+      if (u.origin === window.location.origin) {
+        return u.pathname + u.search + u.hash;
+      }
+    } catch {
+      // invalid URL
+    }
+  }
+  return '/';
 }
 
 function LoginShell({ callbackUrl }: { callbackUrl: string }) {
