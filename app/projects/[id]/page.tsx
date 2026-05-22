@@ -23,6 +23,7 @@ import {
 import clsx from 'clsx';
 import { formatKRWFull, formatCommission, formatDate } from '@/lib/utils';
 import { canManageProjects, type UserRole } from '@/lib/roles';
+import ProjectEditModal from '@/components/projects/ProjectEditModal';
 import {
   useIncentiveData,
   useUserDirectory,
@@ -44,6 +45,8 @@ export default function ProjectDetailPage() {
   const canEdit = canManageProjects(role);
 
   const [editing, setEditing] = useState(false);
+  // 캠페인 정보 편집 모달 (목록 페이지의 모달과 동일 컴포넌트를 공유)
+  const [editingProject, setEditingProject] = useState(false);
 
   if (loading) {
     return (
@@ -125,6 +128,16 @@ export default function ProjectDetailPage() {
             >
               {PAYMENT_STAGE_LABEL[stage]}
             </span>
+            {canEdit && (
+              <button
+                onClick={() => setEditingProject(true)}
+                title="캠페인 정보 편집 (R값·수수료·지급일·비고 등)"
+                className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-md bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
+              >
+                <Pencil size={11} />
+                캠페인 편집
+              </button>
+            )}
             {canEdit && <PLLinkCopyButton projectId={project.id} />}
             {project.committee_sheet_link && (
               <a
@@ -323,6 +336,17 @@ export default function ProjectDetailPage() {
           onClose={() => setEditing(false)}
           onSaved={() => {
             setEditing(false);
+            refresh();
+          }}
+        />
+      )}
+
+      {editingProject && (
+        <ProjectEditModal
+          project={project}
+          onClose={() => setEditingProject(false)}
+          onSaved={() => {
+            setEditingProject(false);
             refresh();
           }}
         />
@@ -842,7 +866,7 @@ function PLLinkCopyButton({ projectId }: { projectId: string }) {
       )}
     >
       {copied ? <CheckCircle2 size={11} /> : <Link2 size={11} />}
-      {copied ? '복사됨' : 'PL 링크 복사'}
+      {copied ? '복사됨' : 'PJ 링크 복사'}
     </button>
   );
 }
@@ -977,7 +1001,7 @@ function PLFormPanel({ projectId }: { projectId: string }) {
           )}
           {!loading && !error && !hasAny && (
             <p className="text-sm text-gray-400">
-              PL이 아직 양식을 작성하지 않았습니다. 상단 [PL 링크 복사]로 PL에게 작성 링크를 전달해 주세요.
+              PL이 아직 양식을 작성하지 않았습니다. 상단 [PJ 링크 복사]로 PL에게 작성 링크를 전달해 주세요.
             </p>
           )}
           {!loading && !error && hasAny && data && (
