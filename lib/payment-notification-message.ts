@@ -26,7 +26,7 @@ export function buildPaymentNotifyMessage(p: PaymentNotifyPayload): string {
   const url = p.formUrl ?? DEFAULT_FORM_URL;
   const lines = [
     `안녕하세요, *${p.plName}* 님.`,
-    `모비데이즈 수주인센티브 운영 위원회 입니다.`,
+    `모비데이즈 수주인센티브 운영위원회 입니다.`,
     ``,
     `*${p.campaignName}* 에 대한 수주인센티브운영위원회 진행이 완료되었습니다.`,
     `결과는 하기 링크를 통하여 확인 가능합니다.`,
