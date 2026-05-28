@@ -18,6 +18,7 @@ import {
   CheckCircle2,
   Inbox,
   FileSpreadsheet,
+  Trash2,
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -91,6 +92,7 @@ export default function ArchivePage() {
   const [syncing, setSyncing] = useState(false);
   const [promotingId, setPromotingId] = useState<number | null>(null);
   const [markingId, setMarkingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [lastPromote, setLastPromote] = useState<string | null>(null);
@@ -191,6 +193,29 @@ export default function ArchivePage() {
       setError(e?.message ?? '처리 중 오류');
     } finally {
       setMarkingId(null);
+    }
+  }
+
+  async function deleteRow(row: ArchiveRow) {
+    const warn = row.promoted_project_id
+      ? `[${row.client_name}] 아카이브 행을 삭제합니다.\n\n` +
+        `⚠️ 이미 생성된 프로젝트(${row.promoted_project_id})는 삭제되지 않고, 아카이브 추적 행만 제거됩니다.\n` +
+        `시트에 동일 광고주명이 남아있으면 다음 동기화 때 다시 생길 수 있습니다.\n\n계속할까요?`
+      : `[${row.client_name}] 아카이브 행을 삭제합니다.\n\n` +
+        `시트에 동일 광고주명이 남아있으면 다음 동기화 때 다시 생길 수 있습니다.\n` +
+        `(광고주명이 바뀌어 중복으로 끌려온 stale 행 정리용)\n\n계속할까요?`;
+    if (!confirm(warn)) return;
+    setDeletingId(row.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/proposal-archive/${row.id}`, { method: 'DELETE' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error ?? '삭제 실패');
+      await load();
+    } catch (e: any) {
+      setError(e?.message ?? '삭제 중 오류');
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -496,6 +521,15 @@ export default function ArchivePage() {
                           <div className="text-[10px] text-gray-400 mt-0.5">
                             {r.promoted_by_name ?? r.promoted_by_email ?? ''}
                           </div>
+                          <button
+                            onClick={() => deleteRow(r)}
+                            disabled={deletingId === r.id}
+                            title="중복/오류로 끌려온 아카이브 행 제거 (생성된 프로젝트는 삭제되지 않음)"
+                            className="mt-1 inline-flex items-center gap-1 text-[10px] text-gray-400 hover:text-red-600 underline-offset-2 hover:underline disabled:opacity-60"
+                          >
+                            <Trash2 size={10} />
+                            {deletingId === r.id ? '삭제 중...' : '아카이브 행 삭제'}
+                          </button>
                         </div>
                       ) : r.marked_existing ? (
                         <div className="text-xs">
@@ -506,21 +540,43 @@ export default function ArchivePage() {
                           <div className="text-[10px] text-gray-400 mt-0.5">
                             {r.marked_existing_by_name ?? r.marked_existing_by_email ?? ''}
                           </div>
-                          <button
-                            onClick={() => setMarkExisting(r, false)}
-                            disabled={markingId === r.id}
-                            className="mt-1 text-[10px] text-gray-400 hover:text-gray-700 underline-offset-2 hover:underline disabled:opacity-60"
-                          >
-                            {markingId === r.id ? '처리 중...' : '표시 해제'}
-                          </button>
+                          <div className="mt-1 flex items-center gap-2">
+                            <button
+                              onClick={() => setMarkExisting(r, false)}
+                              disabled={markingId === r.id || deletingId === r.id}
+                              className="text-[10px] text-gray-400 hover:text-gray-700 underline-offset-2 hover:underline disabled:opacity-60"
+                            >
+                              {markingId === r.id ? '처리 중...' : '표시 해제'}
+                            </button>
+                            <button
+                              onClick={() => deleteRow(r)}
+                              disabled={markingId === r.id || deletingId === r.id}
+                              title="중복/오류로 끌려온 아카이브 행 제거"
+                              className="inline-flex items-center gap-1 text-[10px] text-gray-400 hover:text-red-600 underline-offset-2 hover:underline disabled:opacity-60"
+                            >
+                              <Trash2 size={10} />
+                              {deletingId === r.id ? '삭제 중...' : '삭제'}
+                            </button>
+                          </div>
                         </div>
                       ) : isLostStatus(r.bidding_status) ? (
-                        <span className="text-[11px] text-gray-400">진행 불필요 (수주실패)</span>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[11px] text-gray-400">진행 불필요 (수주실패)</span>
+                          <button
+                            onClick={() => deleteRow(r)}
+                            disabled={deletingId === r.id}
+                            title="중복/오류로 끌려온 아카이브 행 제거"
+                            className="inline-flex items-center gap-1 text-[10px] text-gray-400 hover:text-red-600 underline-offset-2 hover:underline disabled:opacity-60"
+                          >
+                            <Trash2 size={10} />
+                            {deletingId === r.id ? '삭제 중...' : '삭제'}
+                          </button>
+                        </div>
                       ) : (
                         <div className="flex flex-col gap-1.5">
                           <button
                             onClick={() => promote(r)}
-                            disabled={promotingId === r.id || markingId === r.id}
+                            disabled={promotingId === r.id || markingId === r.id || deletingId === r.id}
                             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-60 transition-colors whitespace-nowrap"
                           >
                             <ArrowRight size={12} />
@@ -528,12 +584,21 @@ export default function ArchivePage() {
                           </button>
                           <button
                             onClick={() => setMarkExisting(r, true)}
-                            disabled={promotingId === r.id || markingId === r.id}
+                            disabled={promotingId === r.id || markingId === r.id || deletingId === r.id}
                             title="다른 경로(직접입력·과거자료 등)로 이미 프로젝트화된 경우에만 사용"
                             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-60 transition-colors whitespace-nowrap"
                           >
                             <CheckCircle2 size={12} />
                             {markingId === r.id ? '처리 중...' : '이미 생성됨'}
+                          </button>
+                          <button
+                            onClick={() => deleteRow(r)}
+                            disabled={promotingId === r.id || markingId === r.id || deletingId === r.id}
+                            title="광고주명이 바뀌어 중복으로 끌려온 행 등을 아카이브에서 제거"
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 bg-white border border-red-100 rounded-md hover:bg-red-50 disabled:opacity-60 transition-colors whitespace-nowrap"
+                          >
+                            <Trash2 size={12} />
+                            {deletingId === r.id ? '삭제 중...' : '삭제'}
                           </button>
                         </div>
                       )}
