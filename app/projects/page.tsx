@@ -58,7 +58,13 @@ export default function ProjectsPage() {
       setNotifyError(`"${p.campaign_name}" — PL 정보가 비어있어 발송할 수 없습니다.`);
       return;
     }
-    if (!confirm(`PL "${pl}" 님에게 "${p.campaign_name}" 지급알림 DM 을 발송할까요?`)) return;
+    // 이미 알림 발송된 건은 재발송 경고
+    const prevSent = (p as any).payment_notify_sent_at as string | null;
+    const msg = prevSent
+      ? `⚠️ "${p.campaign_name}" 은 이미 ${formatKstShort(prevSent)} 에 지급알림이 발송되었습니다.\n\n` +
+        `다시 한 번 PL "${pl}" 님에게 DM 을 발송할까요?`
+      : `PL "${pl}" 님에게 "${p.campaign_name}" 지급알림 DM 을 발송할까요?`;
+    if (!confirm(msg)) return;
     setNotifyError(null);
     setNotifyState(prev => ({ ...prev, [p.id]: 'sending' }));
     try {
@@ -69,10 +75,12 @@ export default function ProjectsPage() {
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const msg = [j?.error, j?.hint].filter(Boolean).join(' — ');
-        throw new Error(msg || `HTTP ${res.status}`);
+        const errMsg = [j?.error, j?.hint].filter(Boolean).join(' — ');
+        throw new Error(errMsg || `HTTP ${res.status}`);
       }
       setNotifyState(prev => ({ ...prev, [p.id]: 'sent' }));
+      // 발송 시각이 projects 데이터에 반영되도록 재조회 → "알림완료" 영구 표시
+      refresh();
       setTimeout(() => {
         setNotifyState(prev => {
           const next = { ...prev };
@@ -447,44 +455,70 @@ function ProjectRow({
             >
               <Trash2 size={13} />
             </button>
-            {/* 지급알림 — 재원확정완료 단계에서만 노출 */}
-            {stage === 'FUND_CONFIRMED' && (
-              <button
-                onClick={onNotify}
-                disabled={notifyStatus === 'sending'}
-                title="PL 에게 위원회 진행결과 안내 DM 발송"
-                className={clsx(
-                  'flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md whitespace-nowrap transition-colors ml-0.5',
-                  notifyStatus === 'sent'
-                    ? 'bg-emerald-100 text-emerald-700'
-                    : notifyStatus === 'error'
-                    ? 'bg-red-100 text-red-700'
-                    : notifyStatus === 'sending'
-                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                    : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-100'
-                )}
-              >
-                {notifyStatus === 'sending' ? (
-                  <Loader2 size={11} className="animate-spin" />
-                ) : notifyStatus === 'sent' ? (
-                  <CheckCircle2 size={11} />
-                ) : (
-                  <BellRing size={11} />
-                )}
-                {notifyStatus === 'sending'
+            {/* 지급알림 — 재원확정완료 단계에서만 노출
+                · 한 번이라도 발송했으면 payment_notify_sent_at 이 set 되어 '알림완료' 영구 표시
+                · 알림완료 상태에서도 클릭 시 재발송 가능 (confirm 으로 경고) */}
+            {stage === 'FUND_CONFIRMED' && (() => {
+              const sentAt = (p as any).payment_notify_sent_at as string | null;
+              const alreadyNotified = !!sentAt;
+              const label =
+                notifyStatus === 'sending'
                   ? '발송중'
-                  : notifyStatus === 'sent'
-                  ? '발송완료'
                   : notifyStatus === 'error'
                   ? '실패'
-                  : '지급알림'}
-              </button>
-            )}
+                  : notifyStatus === 'sent' || alreadyNotified
+                  ? '알림완료'
+                  : '지급알림';
+              const cls =
+                notifyStatus === 'error'
+                  ? 'bg-red-100 text-red-700'
+                  : notifyStatus === 'sending'
+                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                  : notifyStatus === 'sent' || alreadyNotified
+                  ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-100'
+                  : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-100';
+              const Icon =
+                notifyStatus === 'sending'
+                  ? Loader2
+                  : notifyStatus === 'sent' || alreadyNotified
+                  ? CheckCircle2
+                  : BellRing;
+              return (
+                <button
+                  onClick={onNotify}
+                  disabled={notifyStatus === 'sending'}
+                  title={
+                    alreadyNotified
+                      ? `${formatKstShort(sentAt!)} 발송 완료 — 클릭 시 재발송`
+                      : 'PL 에게 위원회 진행결과 안내 DM 발송'
+                  }
+                  className={clsx(
+                    'flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md whitespace-nowrap transition-colors ml-0.5',
+                    cls
+                  )}
+                >
+                  <Icon size={11} className={notifyStatus === 'sending' ? 'animate-spin' : ''} />
+                  {label}
+                </button>
+              );
+            })()}
           </div>
         </td>
       )}
     </tr>
   );
+}
+
+/** ISO timestamp → "yyyy.mm.dd HH:MM" (KST, 24h) — 알림 발송 시각 표시용 */
+function formatKstShort(iso: string): string {
+  const t = new Date(iso);
+  const k = new Date(t.getTime() + 9 * 60 * 60 * 1000);
+  const y = k.getUTCFullYear();
+  const m = String(k.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(k.getUTCDate()).padStart(2, '0');
+  const hh = String(k.getUTCHours()).padStart(2, '0');
+  const mm = String(k.getUTCMinutes()).padStart(2, '0');
+  return `${y}.${m}.${d} ${hh}:${mm}`;
 }
 
 function CategoryBadge({ category }: { category: string | null }) {

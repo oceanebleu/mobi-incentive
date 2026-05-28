@@ -130,6 +130,8 @@ create table if not exists public.projects (
   -- PL 작성요청 Slack DM 발송 시각 — 대시보드에 "요청완료" 타임스탬프 표시
   --   null = 아직 발송 안 됨, NOT null = 마지막 발송 시각 (재발송 시 갱신)
   pl_request_sent_at          timestamptz,
+  -- 지급알림(재원확정완료 → PL DM) 발송 시각 — 프로젝트 관리에 "알림완료" 표시
+  payment_notify_sent_at      timestamptz,
   -- 운영위원회 결과 메모 — 관리자가 프로젝트 편집에서 작성, PL 위원회결과 화면에 노출
   committee_result            text,
   created_at                  timestamptz not null default now(),
@@ -138,6 +140,7 @@ create table if not exists public.projects (
 
 -- 기존 환경에 컬럼 추가 (idempotent)
 alter table public.projects add column if not exists pl_request_sent_at timestamptz;
+alter table public.projects add column if not exists payment_notify_sent_at timestamptz;
 alter table public.projects add column if not exists committee_result text;
 alter table public.projects add column if not exists won_date date;
 

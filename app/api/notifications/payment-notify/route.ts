@@ -131,5 +131,20 @@ export async function POST(req: Request) {
     );
   }
 
-  return NextResponse.json({ ok: true, sentTo: email });
+  // 발송 성공 시각 기록 — 프로젝트 관리에 "알림완료" 영구 표시
+  //   컬럼이 마이그레이션 안 된 환경에서는 update 가 실패하지만 메시지 발송은 성공이므로 warn 후 계속.
+  const sentAt = new Date().toISOString();
+  try {
+    const { error: updErr } = await supabase
+      .from('projects')
+      .update({ payment_notify_sent_at: sentAt })
+      .eq('id', projectId);
+    if (updErr) {
+      console.warn('[payment-notify] payment_notify_sent_at 기록 실패:', updErr.message);
+    }
+  } catch (e: any) {
+    console.warn('[payment-notify] payment_notify_sent_at 기록 예외:', e?.message ?? e);
+  }
+
+  return NextResponse.json({ ok: true, sentTo: email, sentAt });
 }
