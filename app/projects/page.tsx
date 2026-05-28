@@ -12,6 +12,8 @@ import {
   Plus,
   Pencil,
   Trash2,
+  BellRing,
+  CheckCircle2,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { formatKRWFull, formatCommission, formatDate } from '@/lib/utils';
@@ -45,6 +47,51 @@ export default function ProjectsPage() {
 
   // 편집 모달 상태: null = 닫힘, {} = 신규, {...project} = 편집
   const [editing, setEditing] = useState<SupabaseProject | null | 'new'>(null);
+
+  // 지급알림 발송 상태 — 행별 'sending' | 'sent' | 'error'
+  const [notifyState, setNotifyState] = useState<Record<string, 'sending' | 'sent' | 'error'>>({});
+  const [notifyError, setNotifyError] = useState<string | null>(null);
+
+  async function notifyPayment(p: SupabaseProject) {
+    const pl = p.pl?.trim();
+    if (!pl) {
+      setNotifyError(`"${p.campaign_name}" — PL 정보가 비어있어 발송할 수 없습니다.`);
+      return;
+    }
+    if (!confirm(`PL "${pl}" 님에게 "${p.campaign_name}" 지급알림 DM 을 발송할까요?`)) return;
+    setNotifyError(null);
+    setNotifyState(prev => ({ ...prev, [p.id]: 'sending' }));
+    try {
+      const res = await fetch('/api/notifications/payment-notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: p.id }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = [j?.error, j?.hint].filter(Boolean).join(' — ');
+        throw new Error(msg || `HTTP ${res.status}`);
+      }
+      setNotifyState(prev => ({ ...prev, [p.id]: 'sent' }));
+      setTimeout(() => {
+        setNotifyState(prev => {
+          const next = { ...prev };
+          if (next[p.id] === 'sent') delete next[p.id];
+          return next;
+        });
+      }, 3500);
+    } catch (e: any) {
+      setNotifyState(prev => ({ ...prev, [p.id]: 'error' }));
+      setNotifyError(e?.message ?? '발송 실패');
+      setTimeout(() => {
+        setNotifyState(prev => {
+          const next = { ...prev };
+          if (next[p.id] === 'error') delete next[p.id];
+          return next;
+        });
+      }, 5000);
+    }
+  }
 
   const years = useMemo(() => {
     const ys = new Set<number>();
@@ -116,6 +163,13 @@ export default function ProjectsPage() {
         <div className="flex items-start gap-2 px-4 py-3 bg-red-50 border border-red-100 rounded-lg text-sm text-red-700">
           <AlertCircle size={15} className="mt-0.5" />
           <span>조회 실패: {error}</span>
+        </div>
+      )}
+
+      {notifyError && (
+        <div className="flex items-start gap-2 px-4 py-3 bg-red-50 border border-red-100 rounded-lg text-sm text-red-700">
+          <AlertCircle size={15} className="mt-0.5" />
+          <span>지급알림 발송 실패: {notifyError}</span>
         </div>
       )}
 
@@ -248,6 +302,8 @@ export default function ProjectsPage() {
                     canEdit={canEdit}
                     onEdit={() => setEditing(p)}
                     onDelete={() => handleDelete(p)}
+                    onNotify={() => notifyPayment(p)}
+                    notifyStatus={notifyState[p.id]}
                   />
                 ))
               )}
@@ -276,11 +332,15 @@ function ProjectRow({
   canEdit,
   onEdit,
   onDelete,
+  onNotify,
+  notifyStatus,
 }: {
   project: SupabaseProject;
   canEdit: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  onNotify: () => void;
+  notifyStatus?: 'sending' | 'sent' | 'error';
 }) {
   const acq = (p.acquisition_status ?? 'PENDING') as keyof typeof ACQUISITION_LABEL;
   const acqCls =
@@ -387,6 +447,39 @@ function ProjectRow({
             >
               <Trash2 size={13} />
             </button>
+            {/* 지급알림 — 재원확정완료 단계에서만 노출 */}
+            {stage === 'FUND_CONFIRMED' && (
+              <button
+                onClick={onNotify}
+                disabled={notifyStatus === 'sending'}
+                title="PL 에게 위원회 진행결과 안내 DM 발송"
+                className={clsx(
+                  'flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md whitespace-nowrap transition-colors ml-0.5',
+                  notifyStatus === 'sent'
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : notifyStatus === 'error'
+                    ? 'bg-red-100 text-red-700'
+                    : notifyStatus === 'sending'
+                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                    : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-100'
+                )}
+              >
+                {notifyStatus === 'sending' ? (
+                  <Loader2 size={11} className="animate-spin" />
+                ) : notifyStatus === 'sent' ? (
+                  <CheckCircle2 size={11} />
+                ) : (
+                  <BellRing size={11} />
+                )}
+                {notifyStatus === 'sending'
+                  ? '발송중'
+                  : notifyStatus === 'sent'
+                  ? '발송완료'
+                  : notifyStatus === 'error'
+                  ? '실패'
+                  : '지급알림'}
+              </button>
+            )}
           </div>
         </td>
       )}
