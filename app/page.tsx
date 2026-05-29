@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import {
   Wallet,
   CreditCard,
@@ -30,11 +31,16 @@ import {
   ACQUISITION_LABEL,
   type PaymentStage,
 } from '@/lib/incentive-data';
+import { canManageProjects, type UserRole } from '@/lib/roles';
 
 export default function DashboardPage() {
   const { projects, loading, error, refresh } = useIncentiveData();
   const { lastWorkDateByName, teamByName, employeeIdByName, statusByName } =
     useUserDirectory();
+  const { data: session } = useSession();
+  const role = (session?.user as any)?.role as UserRole | undefined;
+  // 경영진(EXEC) 은 대시보드를 열람할 수 있지만 'PL 작성요청' 같은 운영 액션은 ADMIN 전용
+  const canTakeAction = canManageProjects(role);
 
   // Creative.Lab 실지급 합계 — 월별 인센티브 실지급액 페이지에 입력된 금액
   const [creativeLabPaidTotal, setCreativeLabPaidTotal] = useState(0);
@@ -514,9 +520,10 @@ export default function DashboardPage() {
           title="PL 작성대기"
           hint="멤버 기여도가 아직 입력되지 않은 프로젝트"
           projects={stageGroups.plPending}
-          actionLabel="작성요청"
-          actionIcon={Send}
-          onAction={requestPL}
+          /* 경영진(EXEC) 은 열람만 — '작성요청' 버튼 숨김 (실수 방지) */
+          actionLabel={canTakeAction ? '작성요청' : undefined}
+          actionIcon={canTakeAction ? Send : undefined}
+          onAction={canTakeAction ? requestPL : undefined}
           requestState={requestState}
           errorMessage={requestError}
         />
