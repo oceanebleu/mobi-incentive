@@ -468,7 +468,7 @@ function PLProjectFormPageInner() {
     // 캠페인 일정 — 빈값 허용하지만 형식 검사
     const isYmd = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
     if (form.won_date && !isYmd(form.won_date)) {
-      setError('수주 확정 일자 형식이 올바르지 않습니다.');
+      setError('캠페인 운영 시작일 형식이 올바르지 않습니다.');
       return;
     }
     if (form.campaign_end_date && !isYmd(form.campaign_end_date)) {
@@ -885,7 +885,7 @@ function PLProjectFormPageInner() {
               />
               <div className="grid grid-cols-2 gap-4">
                 <DateField
-                  label="수주 확정 일자"
+                  label="캠페인 운영 시작일"
                   value={form.won_date}
                   onChange={v => setForm(f => ({ ...f, won_date: v }))}
                 />
