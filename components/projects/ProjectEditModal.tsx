@@ -9,7 +9,7 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertCircle, Loader2, Save, X } from 'lucide-react';
+import { AlertCircle, Loader2, Save, X, Pencil, RotateCcw } from 'lucide-react';
 import clsx from 'clsx';
 import { withCommas } from '@/lib/utils';
 import { ACQUISITION_LABEL, type SupabaseProject } from '@/lib/incentive-data';
@@ -63,9 +63,29 @@ export default function ProjectEditModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // 인센티브 재원 수동 입력 모드 — default 는 자동계산(R값 × 수수료 × 재원율).
+  //   기존 프로젝트를 열 때, 저장된 값이 자동계산과 다르면(=과거에 수동 조정됨) 수동 모드로 시작.
+  const [manualFund, setManualFund] = useState<boolean>(() => {
+    if (!project) return false;
+    const rv = Number(project.r_value) || 0;
+    const cm = Number(project.commission) || 0;
+    const fr = Number((project as any).fund_rate) || (project.category === '신규' ? 0.02 : 0.01);
+    const auto = Math.round(rv * cm * fr);
+    const stored = Number(project.incentive_fund) || 0;
+    return Math.abs(stored - auto) > 1; // 반올림 오차 1원 까지는 자동으로 간주
+  });
+
   function set<K extends keyof typeof form>(key: K, val: (typeof form)[K]) {
     setForm(prev => ({ ...prev, [key]: val }));
   }
+
+  // 현재 자동계산값 (R값 × 수수료 × 재원율, 원 단위 반올림)
+  const autoFund = (() => {
+    const rv = Number(form.r_value) || 0;
+    const cm = Number(form.commission) || 0;
+    const fr = Number(form.fund_rate) || 0;
+    return Math.round(rv * cm * fr);
+  })();
 
   async function handleSave() {
     if (!form.campaign_name.trim()) {
@@ -93,12 +113,17 @@ export default function ProjectEditModal({
     ]) {
       if (payload[k] === '') payload[k] = null;
     }
-    // 인센티브 재원 자동 계산 — R값 × 수수료 × fund_rate
-    {
+    // 인센티브 재원
+    //   · manualFund=false (default): R값 × 수수료 × fund_rate 자동 계산
+    //   · manualFund=true: 사용자가 입력한 form.incentive_fund 그대로 사용
+    //   저장된 incentive_fund 로 1차/2차 회차 금액이 산출되는 로직은 그대로 유지됨.
+    if (!manualFund) {
       const rv = Number(form.r_value) || 0;
       const cm = Number(form.commission) || 0;
       const fr = Number(form.fund_rate) || 0;
       payload.incentive_fund = Math.round(rv * cm * fr);
+    } else {
+      payload.incentive_fund = Math.max(0, Math.round(Number(form.incentive_fund) || 0));
     }
 
     try {
@@ -276,18 +301,56 @@ export default function ProjectEditModal({
                   <option value="0.02">2% (신규 기본)</option>
                 </select>
               </Field>
-              <Field label="인센티브 재원 (자동 계산)">
-                <div className={clsx(inputCls, 'bg-gray-50 text-gray-700 cursor-not-allowed tabular-nums')}>
-                  {(() => {
-                    const rv = Number(form.r_value) || 0;
-                    const cm = Number(form.commission) || 0;
-                    const fr = Number(form.fund_rate) || 0;
-                    const calc = Math.round(rv * cm * fr);
-                    return `${withCommas(calc)} 원`;
-                  })()}
-                </div>
+              <Field label={manualFund ? '인센티브 재원 (수동 입력)' : '인센티브 재원 (자동 계산)'}>
+                {manualFund ? (
+                  <div className="flex items-stretch gap-1.5">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={form.incentive_fund ? withCommas(form.incentive_fund) : ''}
+                      onChange={e => {
+                        const digits = e.target.value.replace(/[^0-9]/g, '');
+                        set('incentive_fund', digits ? Number(digits) : 0);
+                      }}
+                      placeholder="0"
+                      className={clsx(inputCls, 'tabular-nums')}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // 자동 계산값으로 되돌리고 수동 모드 해제
+                        set('incentive_fund', autoFund);
+                        setManualFund(false);
+                      }}
+                      title={`자동 계산으로 되돌리기 (${withCommas(autoFund)} 원)`}
+                      className="flex items-center justify-center px-2 rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors"
+                    >
+                      <RotateCcw size={13} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-stretch gap-1.5">
+                    <div className={clsx(inputCls, 'bg-gray-50 text-gray-700 cursor-not-allowed tabular-nums flex-1')}>
+                      {`${withCommas(autoFund)} 원`}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // 자동 계산 결과를 seed 로 수동 모드 진입
+                        set('incentive_fund', autoFund);
+                        setManualFund(true);
+                      }}
+                      title="직접 입력 (특이사항으로 자동계산과 다르게 저장)"
+                      className="flex items-center justify-center px-2 rounded-md border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                  </div>
+                )}
                 <p className="text-[10px] text-gray-400 mt-1">
-                  R값 × 수수료 × 재원율
+                  {manualFund
+                    ? '수동 입력 모드 — 저장된 값으로 1·2차 금액 계산. ↩ 버튼으로 자동으로 복귀.'
+                    : 'R값 × 수수료 × 재원율 (자동). ✏ 버튼으로 수동 입력 모드 전환.'}
                 </p>
               </Field>
             </div>
