@@ -235,18 +235,19 @@ export default function ProjectDetailPage() {
           <thead>
             <tr className="border-b border-gray-100">
               {[
-                { label: '이름', align: 'left' as const },
-                { label: '기여도', align: 'right' as const },
-                { label: '담당업무상세', align: 'left' as const },
-                { label: '1차 (지급일)', align: 'right' as const },
-                { label: '2차 (지급일)', align: 'right' as const },
-                { label: '합계', align: 'right' as const },
+                { label: '이름', align: 'left' as const, extra: '' },
+                { label: '기여도', align: 'right' as const, extra: '' },
+                { label: '담당업무상세', align: 'left' as const, extra: 'pl-6' },
+                { label: '1차 (지급일)', align: 'right' as const, extra: '' },
+                { label: '2차 (지급일)', align: 'right' as const, extra: '' },
+                { label: '합계', align: 'right' as const, extra: '' },
               ].map(h => (
                 <th
                   key={h.label}
                   className={clsx(
                     'pb-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wide',
-                    h.align === 'left' ? 'text-left' : 'text-right'
+                    h.align === 'left' ? 'text-left' : 'text-right',
+                    h.extra
                   )}
                 >
                   {h.label}
@@ -271,7 +272,7 @@ export default function ProjectDetailPage() {
                       {m.contribution}%
                     </span>
                   </td>
-                  <td className="py-3 pr-4 text-xs text-gray-600 whitespace-pre-wrap break-words max-w-[280px]">
+                  <td className="py-3 pl-6 pr-4 text-xs text-gray-600 whitespace-pre-wrap break-words max-w-[280px]">
                     {m.duty?.trim() ? m.duty : <span className="text-gray-300">-</span>}
                   </td>
                   <td className="py-3 text-right text-sm">
