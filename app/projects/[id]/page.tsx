@@ -234,15 +234,22 @@ export default function ProjectDetailPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100">
-              {['이름', '기여도', '1차 (지급일)', '2차 (지급일)', '합계'].map((h, i) => (
+              {[
+                { label: '이름', align: 'left' as const },
+                { label: '기여도', align: 'right' as const },
+                { label: '담당업무상세', align: 'left' as const },
+                { label: '1차 (지급일)', align: 'right' as const },
+                { label: '2차 (지급일)', align: 'right' as const },
+                { label: '합계', align: 'right' as const },
+              ].map(h => (
                 <th
-                  key={h}
+                  key={h.label}
                   className={clsx(
                     'pb-3 text-[11px] font-semibold text-gray-400 uppercase tracking-wide',
-                    i === 0 ? 'text-left' : 'text-right'
+                    h.align === 'left' ? 'text-left' : 'text-right'
                   )}
                 >
-                  {h}
+                  {h.label}
                 </th>
               ))}
             </tr>
@@ -263,6 +270,9 @@ export default function ProjectDetailPage() {
                     <span className="inline-flex items-center px-2 py-0.5 bg-blue-50 text-blue-700 text-xs font-semibold rounded">
                       {m.contribution}%
                     </span>
+                  </td>
+                  <td className="py-3 pr-4 text-xs text-gray-600 whitespace-pre-wrap break-words max-w-[280px]">
+                    {m.duty?.trim() ? m.duty : <span className="text-gray-300">-</span>}
                   </td>
                   <td className="py-3 text-right text-sm">
                     <span
@@ -305,6 +315,7 @@ export default function ProjectDetailPage() {
               <td className="pt-3 text-right text-xs font-semibold text-gray-400">
                 {project.members.reduce((s, m) => s + m.contribution, 0)}%
               </td>
+              <td className="pt-3" />
               <td className="pt-3 text-right font-bold text-gray-700">
                 {formatKRWFull(firstTotal)}
               </td>
