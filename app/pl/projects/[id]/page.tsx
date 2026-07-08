@@ -963,9 +963,11 @@ function PLProjectFormPageInner() {
               <CardHeader
                 title="⑥ 비딩 준비 시트 링크"
                 subtitle={
-                  '비딩 종료(결과 확정) 이후 2주 이내 프로젝트 리뷰를 진행해 주세요. ' +
-                  '리뷰 결과는 시트의 「09 결과 분석 (ALL)」 탭 C5 셀에 기재해 주시면, ' +
-                  '인센티브 관리자가 동기화 버튼을 눌러 자동 반영합니다.'
+                  <>
+                    비딩 종료(결과 확정) 이후 <strong className="font-bold text-gray-900">2주 이내</strong> 프로젝트 리뷰를 진행해 주세요.
+                    <br />
+                    리뷰 결과는 시트의 <strong className="font-bold text-gray-900">「09 결과 분석 (ALL)」</strong> 탭 내용을 기재해주시면 자동으로 확인됩니다.
+                  </>
                 }
               />
               <input
@@ -978,8 +980,12 @@ function PLProjectFormPageInner() {
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
               />
               <p className="text-[11px] text-gray-400 mt-2 leading-relaxed">
-                · 시트는 <b>@mobidays.com 도메인 열람 가능</b>으로 공유되어 있어야 합니다 (기본 설정).
-                <br />· 링크만 정확히 붙여넣어 주시면 됩니다 — 별도 조치 필요 없음.
+                ·{' '}
+                <strong className="font-bold text-gray-900">
+                  시트의 공유권한은 '모비데이즈' 구성원이라면 모두 볼 수 있도록 설정해주세요.
+                </strong>{' '}
+                (공유 → 일반 액세스 → 모비데이즈)
+                <br />· 시트 링크를 정확히 입력해주세요.
               </p>
             </Card>
 
@@ -1016,11 +1022,19 @@ function PLProjectFormPageInner() {
 function Card({ children }: { children: React.ReactNode }) {
   return <div className="bg-white rounded-xl border border-gray-200 p-6">{children}</div>;
 }
-function CardHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+function CardHeader({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle?: React.ReactNode;
+}) {
   return (
     <div className="mb-4">
       <h2 className="text-sm font-semibold text-gray-800">{title}</h2>
-      {subtitle && <p className="text-[11px] text-gray-400 mt-0.5">{subtitle}</p>}
+      {subtitle && (
+        <p className="text-[11px] text-gray-400 mt-0.5 leading-relaxed">{subtitle}</p>
+      )}
     </div>
   );
 }

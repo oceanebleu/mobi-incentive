@@ -1372,10 +1372,10 @@ function ChangeRow({ change: c }: { change: ChangeRow }) {
 // ─────────────────────────────────────────────
 // 리뷰 진행여부 카드 — 인센티브 재원 / 1차 / 2차 옆에 나란히 노출.
 //   상태 판단:
+//     · hasLink == false                 → '미진행' (시트 링크 없음 — DB 잔존값 무시)
 //     · review_date == null              → '미진행' (회색)
 //     · review_date < todayKst           → '진행완료' (emerald)
-//     · review_date > todayKst           → '진행예정' (blue)
-//     · review_date == todayKst          → '진행중/오늘' (blue)
+//     · review_date >= todayKst          → '진행예정' (blue)
 //   review_date 는 서버가 시트 09 결과 분석(ALL) C5 셀에서 sync.
 // ─────────────────────────────────────────────
 function ReviewStatusCard({
@@ -1398,10 +1398,15 @@ function ReviewStatusCard({
   const todayKst = new Date(Date.now() + 9 * 60 * 60 * 1000)
     .toISOString()
     .slice(0, 10);
+
+  // 시트 링크가 없으면 DB 에 잔존하는 review_date 는 신뢰할 수 없음 → 표시상 미진행 취급.
+  // (예: PL 이 링크를 삭제했거나, 이전에 sync 됐지만 지금은 링크 사라진 경우)
+  const effectiveReviewDate = hasLink ? reviewDate : null;
+
   let status: '미진행' | '진행완료' | '진행예정' = '미진행';
   let statusCls = 'bg-gray-100 text-gray-600';
-  if (reviewDate) {
-    if (reviewDate < todayKst) {
+  if (effectiveReviewDate) {
+    if (effectiveReviewDate < todayKst) {
       status = '진행완료';
       statusCls = 'bg-emerald-100 text-emerald-700';
     } else {
@@ -1434,13 +1439,13 @@ function ReviewStatusCard({
         </span>
       </div>
       <div className="space-y-2.5">
-        <InfoRow label="리뷰 진행일" value={reviewDate ?? '미정'} />
+        <InfoRow label="리뷰 진행일" value={effectiveReviewDate ?? '미정'} />
         <div className="border-t border-gray-100 pt-2.5 text-[10px] text-gray-400 space-y-1">
-          {syncedLabel ? (
+          {hasLink && syncedLabel ? (
             <p>마지막 sync · {syncedLabel}</p>
-          ) : (
+          ) : hasLink ? (
             <p>아직 sync 이력 없음</p>
-          )}
+          ) : null}
           {!hasLink && (
             <p className="text-amber-600">
               PL 이 비딩 준비 시트 링크를 아직 등록하지 않았습니다.
