@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /home/mobidays/mobi-incentive/app/api/projects/\\\\[id\\\\]/refresh-review)",
+      "Bash(rm /home/mobidays/mobi-incentive/lib/bidding-review-sheet.ts && rm -rf /home/mobidays/mobi-incentive/app/api/projects/\\\\[id\\\\]/refresh-review && ls /home/mobidays/mobi-incentive/app/api/projects/\\\\[id\\\\]/)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(gh --version)",
+      "Bash(gh auth *)"
+    ],
+    "additionalDirectories": [
+      "/home/mobidays/mobi-incentive/app/api/projects/[id]",
+      "/home/mobidays/mobi-incentive/app/api/projects/[id]/refresh-review"
+    ]
+  }
+}
