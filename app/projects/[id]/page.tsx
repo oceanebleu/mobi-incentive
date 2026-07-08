@@ -19,6 +19,8 @@ import {
   Link2,
   CheckCircle2,
   FileText,
+  RefreshCw,
+  ClipboardCheck,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { formatKRWFull, formatCommission, formatDate } from '@/lib/utils';
@@ -47,6 +49,52 @@ export default function ProjectDetailPage() {
   const [editing, setEditing] = useState(false);
   // 캠페인 정보 편집 모달 (목록 페이지의 모달과 동일 컴포넌트를 공유)
   const [editingProject, setEditingProject] = useState(false);
+
+  // PL 양식 중 상단 헤더/카드에서 필요한 필드만 미리 로드
+  //   - bidding_review_sheet_link: 상단 '비딩준비시트' 링크
+  //   - PL 양식 상세는 아래 PLFormPanel 이 열릴 때 별도 fetch
+  const [biddingSheetLink, setBiddingSheetLink] = useState<string | null>(null);
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    fetch(`/api/projects/${encodeURIComponent(id)}/pl-form`, { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(j => {
+        if (cancelled || !j) return;
+        const raw = (j.form as any)?.bidding_review_sheet_link;
+        const link = typeof raw === 'string' && raw.trim() !== '' ? raw.trim() : null;
+        setBiddingSheetLink(link);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  // 리뷰 진행일 동기화 — 서버가 Apps Script Web App 프록시로 시트 C5 를 읽어 DB 갱신.
+  const [refreshingReview, setRefreshingReview] = useState(false);
+  const [reviewRefreshError, setReviewRefreshError] = useState<string | null>(null);
+
+  async function refreshReviewStatus() {
+    if (!id) return;
+    setRefreshingReview(true);
+    setReviewRefreshError(null);
+    try {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(id)}/refresh-review`,
+        { method: 'POST' }
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j?.error ?? `HTTP ${res.status}`);
+      // Apps Script 프록시가 에러를 body 에 넣어 200 으로 응답하는 경우
+      if (j?.error_message) setReviewRefreshError(j.error_message);
+      refresh();
+    } catch (e: any) {
+      setReviewRefreshError(e?.message ?? '리뷰 동기화 실패');
+    } finally {
+      setRefreshingReview(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -139,6 +187,18 @@ export default function ProjectDetailPage() {
               </button>
             )}
             {canEdit && <PLLinkCopyButton projectId={project.id} />}
+            {biddingSheetLink && (
+              <a
+                href={biddingSheetLink}
+                target="_blank"
+                rel="noreferrer"
+                title="PL 이 등록한 비딩 준비 시트 (리뷰 진행일 sync 대상)"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
+              >
+                <ExternalLink size={12} />
+                비딩준비시트
+              </a>
+            )}
             {project.committee_sheet_link && (
               <a
                 href={project.committee_sheet_link}
@@ -154,7 +214,17 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-5">
+      <div className="grid grid-cols-4 gap-5">
+        <ReviewStatusCard
+          reviewDate={project.review_date}
+          syncedAt={project.review_synced_at}
+          syncError={project.review_sync_error}
+          hasLink={!!biddingSheetLink}
+          onRefresh={canEdit ? refreshReviewStatus : undefined}
+          refreshing={refreshingReview}
+          refreshError={reviewRefreshError}
+        />
+
         <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
           <h2 className="text-sm font-semibold text-gray-700">인센티브 재원</h2>
           <div className="space-y-2.5">
@@ -1296,6 +1366,117 @@ function ChangeRow({ change: c }: { change: ChangeRow }) {
         <div className="mt-1">{body}</div>
       </div>
     </li>
+  );
+}
+
+// ─────────────────────────────────────────────
+// 리뷰 진행여부 카드 — 인센티브 재원 / 1차 / 2차 옆에 나란히 노출.
+//   상태 판단:
+//     · review_date == null              → '미진행' (회색)
+//     · review_date < todayKst           → '진행완료' (emerald)
+//     · review_date > todayKst           → '진행예정' (blue)
+//     · review_date == todayKst          → '진행중/오늘' (blue)
+//   review_date 는 서버가 시트 09 결과 분석(ALL) C5 셀에서 sync.
+// ─────────────────────────────────────────────
+function ReviewStatusCard({
+  reviewDate,
+  syncedAt,
+  syncError,
+  hasLink,
+  onRefresh,
+  refreshing,
+  refreshError,
+}: {
+  reviewDate: string | null;
+  syncedAt: string | null;
+  syncError: string | null;
+  hasLink: boolean;
+  onRefresh?: () => void;
+  refreshing: boolean;
+  refreshError?: string | null;
+}) {
+  const todayKst = new Date(Date.now() + 9 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10);
+  let status: '미진행' | '진행완료' | '진행예정' = '미진행';
+  let statusCls = 'bg-gray-100 text-gray-600';
+  if (reviewDate) {
+    if (reviewDate < todayKst) {
+      status = '진행완료';
+      statusCls = 'bg-emerald-100 text-emerald-700';
+    } else {
+      status = '진행예정';
+      statusCls = 'bg-blue-100 text-blue-700';
+    }
+  }
+
+  const syncedLabel = (() => {
+    if (!syncedAt) return null;
+    const d = new Date(syncedAt);
+    const k = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+    const y = k.getUTCFullYear();
+    const m = String(k.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(k.getUTCDate()).padStart(2, '0');
+    const hh = String(k.getUTCHours()).padStart(2, '0');
+    const mm = String(k.getUTCMinutes()).padStart(2, '0');
+    return `${y}.${m}.${dd} ${hh}:${mm}`;
+  })();
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <ClipboardCheck size={14} className="text-gray-500" />
+          <h2 className="text-sm font-semibold text-gray-700">리뷰 진행여부</h2>
+        </div>
+        <span className={clsx('text-xs font-medium px-2 py-0.5 rounded-full', statusCls)}>
+          {status}
+        </span>
+      </div>
+      <div className="space-y-2.5">
+        <InfoRow label="리뷰 진행일" value={reviewDate ?? '미정'} />
+        <div className="border-t border-gray-100 pt-2.5 text-[10px] text-gray-400 space-y-1">
+          {syncedLabel ? (
+            <p>마지막 sync · {syncedLabel}</p>
+          ) : (
+            <p>아직 sync 이력 없음</p>
+          )}
+          {!hasLink && (
+            <p className="text-amber-600">
+              PL 이 비딩 준비 시트 링크를 아직 등록하지 않았습니다.
+            </p>
+          )}
+          {syncError && (
+            <p className="text-red-600 break-words">동기화 오류: {syncError}</p>
+          )}
+          {refreshError && (
+            <p className="text-red-600 break-words">{refreshError}</p>
+          )}
+        </div>
+        {onRefresh && (
+          <button
+            onClick={onRefresh}
+            disabled={refreshing || !hasLink}
+            title={
+              !hasLink
+                ? '먼저 PL 이 비딩 준비 시트 링크를 등록해야 합니다.'
+                : '시트에서 리뷰 진행일 다시 읽어오기'
+            }
+            className={clsx(
+              'w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-md border transition-colors',
+              refreshing
+                ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed'
+                : !hasLink
+                ? 'bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed'
+                : 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-100'
+            )}
+          >
+            <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
+            {refreshing ? '동기화 중...' : '리뷰 동기화'}
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 

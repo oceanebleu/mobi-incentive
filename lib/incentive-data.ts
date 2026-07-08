@@ -133,6 +133,12 @@ export interface SupabaseProject {
   pl_request_sent_at: string | null;
   /** 지급알림 Slack DM 발송 시각 (ISO 8601). null = 아직 발송 안 됨 */
   payment_notify_sent_at: string | null;
+  /** 비딩 리뷰(프로젝트 리뷰) 진행일 — 시트 09 결과 분석(ALL) C5 에서 sync (YYYY-MM-DD). null = 미진행 */
+  review_date: string | null;
+  /** review_date 를 마지막으로 sync 한 시각 (ISO 8601) */
+  review_synced_at: string | null;
+  /** 마지막 sync 시 발생한 에러(시트 접근 실패 등) — 사용자에게 안내용 */
+  review_sync_error: string | null;
   /** 운영위원회 결과 메모 — 관리자가 작성, PL 위원회결과 화면에서 열람 */
   committee_result: string | null;
   /** 수주확정일자 — PL 양식에서 작성. first_payment_date 와는 별개. */

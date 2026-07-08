@@ -91,6 +91,8 @@ interface FormState {
   external_expert: string;
   stop_risk_case: string;
   stop_risk: string;
+  // ⑥ 비딩 준비 시트 링크 (PL 이 붙여넣은 URL)
+  bidding_review_sheet_link: string;
 }
 
 const EMPTY_FORM: FormState = {
@@ -114,6 +116,7 @@ const EMPTY_FORM: FormState = {
   external_expert: '',
   stop_risk_case: '',
   stop_risk: '',
+  bidding_review_sheet_link: '',
 };
 
 // 천단위 콤마 표시 ↔ 숫자 문자열 변환 헬퍼
@@ -335,6 +338,7 @@ function PLProjectFormPageInner() {
       external_expert: f.external_expert ?? '',
       stop_risk_case: f.stop_risk_case != null ? String(f.stop_risk_case) : '',
       stop_risk: f.stop_risk ?? '',
+      bidding_review_sheet_link: f.bidding_review_sheet_link ?? '',
     });
   }
 
@@ -505,6 +509,7 @@ function PLProjectFormPageInner() {
           external_expert: form.external_expert,
           stop_risk_case: form.stop_risk_case,
           stop_risk: form.stop_risk,
+          bidding_review_sheet_link: form.bidding_review_sheet_link,
         },
       };
       const res = await fetch(
@@ -587,6 +592,8 @@ function PLProjectFormPageInner() {
           stop_risk_case:
             f.stop_risk_case != null ? String(f.stop_risk_case) : prev.stop_risk_case,
           stop_risk: f.stop_risk ?? prev.stop_risk,
+          bidding_review_sheet_link:
+            f.bidding_review_sheet_link ?? prev.bidding_review_sheet_link,
         }));
       }
     } catch (e: any) {
@@ -949,6 +956,31 @@ function PLProjectFormPageInner() {
                   />
                 ))}
               </div>
+            </Card>
+
+            {/* ⑥ 비딩 준비 시트 링크 */}
+            <Card>
+              <CardHeader
+                title="⑥ 비딩 준비 시트 링크"
+                subtitle={
+                  '비딩 종료(결과 확정) 이후 2주 이내 프로젝트 리뷰를 진행해 주세요. ' +
+                  '리뷰 결과는 시트의 「09 결과 분석 (ALL)」 탭 C5 셀에 기재해 주시면, ' +
+                  '인센티브 관리자가 동기화 버튼을 눌러 자동 반영합니다.'
+                }
+              />
+              <input
+                type="url"
+                value={form.bidding_review_sheet_link}
+                onChange={e =>
+                  setForm(f => ({ ...f, bidding_review_sheet_link: e.target.value }))
+                }
+                placeholder="https://docs.google.com/spreadsheets/d/..."
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+              />
+              <p className="text-[11px] text-gray-400 mt-2 leading-relaxed">
+                · 시트는 <b>@mobidays.com 도메인 열람 가능</b>으로 공유되어 있어야 합니다 (기본 설정).
+                <br />· 링크만 정확히 붙여넣어 주시면 됩니다 — 별도 조치 필요 없음.
+              </p>
             </Card>
 
             {/* 에러 & 저장 */}

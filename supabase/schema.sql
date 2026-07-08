@@ -132,6 +132,11 @@ create table if not exists public.projects (
   pl_request_sent_at          timestamptz,
   -- 지급알림(재원확정완료 → PL DM) 발송 시각 — 프로젝트 관리에 "알림완료" 표시
   payment_notify_sent_at      timestamptz,
+  -- 비딩 리뷰 (프로젝트 리뷰) 진행일 — PL 이 입력한 비딩 준비 시트의 '09 결과 분석 (ALL)' C5 셀에서 sync
+  --   null = 미진행 / today > review_date → 진행완료 / today < review_date → 진행예정
+  review_date                 date,
+  review_synced_at            timestamptz,   -- 위 값이 마지막으로 시트에서 sync 된 시각
+  review_sync_error           text,          -- 마지막 sync 시 발생한 에러 (링크 접근 실패 등)
   -- 운영위원회 결과 메모 — 관리자가 프로젝트 편집에서 작성, PL 위원회결과 화면에 노출
   committee_result            text,
   created_at                  timestamptz not null default now(),
@@ -143,6 +148,10 @@ alter table public.projects add column if not exists pl_request_sent_at timestam
 alter table public.projects add column if not exists payment_notify_sent_at timestamptz;
 alter table public.projects add column if not exists committee_result text;
 alter table public.projects add column if not exists won_date date;
+alter table public.projects add column if not exists review_date date;
+alter table public.projects add column if not exists review_synced_at timestamptz;
+alter table public.projects add column if not exists review_sync_error text;
+alter table public.project_pl_forms add column if not exists bidding_review_sheet_link text;
 
 -- 데이터 마이그레이션 — 기존 first/second_payment_date 에 저장돼 있던 PL 작성 일정 정보(수주확정일자/캠페인운영종료예상일)를
 -- 새 컬럼으로 복제. 새 컬럼이 비어있는 경우에만 복제 (이미 분리된 경우 덮어쓰지 않음).
@@ -332,6 +341,9 @@ create table if not exists public.project_pl_forms (
   stop_risk_case            smallint,  -- 1 ~ 3
   -- 총 예산 및 수수료 위원회 참고 메모
   budget_note text,
+  -- ⑥ 비딩 준비 시트 링크 — PL 이 프로젝트 리뷰 시트(복제본) URL 입력
+  --   프로젝트 상세 상단에 링크로 노출 + 이 시트의 '09 결과 분석 (ALL)' C5 셀에서 리뷰 진행일 자동 조회.
+  bidding_review_sheet_link text,
   -- 위원회 구성 (현 정책상 부문대표=이광수 · C.O1=안민혁 고정 — 컬럼은 향후 변경 대비 보존)
   committee_division_head text,
   committee_co1           text,

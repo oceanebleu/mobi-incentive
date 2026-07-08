@@ -109,6 +109,7 @@ const FORM_TEXT_FIELDS = [
   'external_expert',
   'stop_risk',
   'budget_note',
+  'bidding_review_sheet_link', // ⑥ 비딩 준비 시트 링크 (PL 입력 URL)
 ] as const;
 
 // 정형 케이스 필드 (smallint or text)
@@ -291,6 +292,7 @@ export async function PUT(
     const msg = formErr.message ?? '';
     const knownNewCols = [
       'budget_note',
+      'bidding_review_sheet_link',
       'client_importance_case',
       'rfp_route_case',
       'prep_effort_case',

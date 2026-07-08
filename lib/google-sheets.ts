@@ -139,6 +139,24 @@ export async function fetchSheetValues(
   return json.values ?? [];
 }
 
+// 스프레드시트의 탭 이름 목록만 가져옴 (fields=sheets.properties.title 로 페이로드 최소화)
+export async function fetchSheetTitles(spreadsheetId: string): Promise<string[]> {
+  const token = await getAccessToken();
+  const url = `${SHEETS_BASE}/${spreadsheetId}?fields=sheets.properties.title`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Google Sheets 메타데이터 조회 실패: ${res.status} ${body}`);
+  }
+  const json = (await res.json()) as { sheets?: Array<{ properties?: { title?: string } }> };
+  return (json.sheets ?? [])
+    .map(s => s.properties?.title ?? '')
+    .filter(Boolean);
+}
+
 // information_employees 시트를 1행=헤더 가정으로 객체 배열로 변환
 // A=사번 B=사원명 C=법인/그룹 D=소속1 E=소속2 F=재직상태 G=입사일 H=마지막근무일 I=서류상퇴사일 J=회사이메일 K=PL고유코드
 export interface EmployeeRow {
