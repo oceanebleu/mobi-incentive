@@ -326,7 +326,8 @@ export default function DashboardPage() {
     };
   })();
 
-  // 히어로 오른쪽에 들어갈 보조 지표 — 금액 3종 + 완료 비율 2종
+  // 히어로 오른쪽에 들어갈 보조 지표 — 금액 3종 + 1차 완료 비율
+  //   (1~2차 완료 비율은 '누적 지급 완료액' 과 짝이 맞아 좌측 히어로 안에 둔다)
   const kpiRows = (() => {
     const cancelled = stats.firstPaidThenCancelledCount;
     const cancelledPct =
@@ -355,14 +356,6 @@ export default function DashboardPage() {
           value: `${stats.firstPayRatio.toFixed(1)}%`,
           sub: `재원확정 ${stats.fundConfirmedCount}건 중 ${stats.firstPaidCount}건 완료`,
           warn: cancelled > 0 ? `1차 지급 후 대행종료 ${cancelled}건 (${cancelledPct}%)` : null,
-          done: true,
-        },
-        {
-          label: '1~2차 지급 완료 비율',
-          value: `${stats.allPayRatio.toFixed(1)}%`,
-          sub: `재원확정 ${stats.fundConfirmedCount}건 중 ${stats.allPaidCount}건 모두 완료`,
-          warn: null,
-          done: false,
         },
       ],
     };
@@ -426,6 +419,23 @@ export default function DashboardPage() {
                 </div>
               </div>
             )}
+
+            {/* 1~2차 지급 완료 비율 — '얼마를 지급했나(금액)' 와 짝이 되는
+                '몇 건이 끝났나(진행률)' 지표라 히어로 안에 함께 둔다 */}
+            <div className="mt-5 border-t border-blue-100 pt-4">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-xs text-gray-500 whitespace-nowrap">
+                  1~2차 지급 완료 비율
+                </span>
+                <span className="text-xl font-bold leading-none text-emerald-700">
+                  {stats.allPayRatio.toFixed(1)}%
+                </span>
+              </div>
+              <p className="mt-1.5 text-[11px] text-gray-400">
+                재원확정 {stats.fundConfirmedCount}건 중 {stats.allPaidCount}건 모두 완료 · 전체{' '}
+                {stats.totalProjects}건
+              </p>
+            </div>
           </div>
 
           {/* 세로 구분선 — 좁은 화면에서는 가로선 */}
@@ -446,14 +456,8 @@ export default function DashboardPage() {
               <div key={r.label} className="flex items-baseline justify-between gap-3">
                 <span className="text-xs text-gray-500 whitespace-nowrap">{r.label}</span>
                 <span className="text-right min-w-0">
-                  <span
-                    className={clsx(
-                      'text-base font-bold',
-                      r.done ? 'text-emerald-700' : 'text-blue-700'
-                    )}
-                  >
-                    {r.value}
-                  </span>
+                  {/* 완료 비율은 초록 — 좌측 1~2차 비율과 같은 규칙 */}
+                  <span className="text-base font-bold text-emerald-700">{r.value}</span>
                   <span className="block text-[11px] text-gray-400">{r.sub}</span>
                   {r.warn && <span className="block text-[11px] text-red-600">{r.warn}</span>}
                 </span>
