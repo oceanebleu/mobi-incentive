@@ -32,6 +32,17 @@ import ProjectEditModal from '@/components/projects/ProjectEditModal';
 const ACQ_OPTIONS = ['WON', 'LOST', 'CANCELLED', 'REVIEWING', 'RESULT_PENDING'] as const;
 type AcqFilter = (typeof ACQ_OPTIONS)[number] | 'ALL';
 type StageFilter = PaymentStage | 'ALL';
+// 'NONE' = 제품 미지정 건만
+type ProductFilter = string | 'ALL' | 'NONE';
+
+// 목록 정렬 기준 — 진행중인 단계가 위, 전체지급완료가 가장 아래로 누적
+const STAGE_ORDER: Record<PaymentStage, number> = {
+  PL_PENDING: 0,
+  PL_COMPLETED: 1,
+  FUND_CONFIRMED: 2,
+  FIRST_PAID: 3,
+  ALL_PAID: 4,
+};
 
 export default function ProjectsPage() {
   const { projects, loading, error, refresh } = useIncentiveData();
@@ -43,6 +54,7 @@ export default function ProjectsPage() {
   const [search, setSearch] = useState('');
   const [filterAcq, setFilterAcq] = useState<AcqFilter>('ALL');
   const [filterStage, setFilterStage] = useState<StageFilter>('ALL');
+  const [filterProduct, setFilterProduct] = useState<ProductFilter>('ALL');
   const [filterYear, setFilterYear] = useState<number | 'ALL'>('ALL');
 
   // 편집 모달 상태: null = 닫힘, {} = 신규, {...project} = 편집
@@ -109,8 +121,20 @@ export default function ProjectsPage() {
     return [...ys].sort((a, b) => b - a);
   }, [projects]);
 
+  // 제품 목록 — 데이터에 실제로 존재하는 값만 (미지정 건이 있으면 선택지 추가)
+  const products = useMemo(() => {
+    const set = new Set<string>();
+    let hasEmpty = false;
+    for (const p of projects) {
+      const v = p.product?.trim();
+      if (v) set.add(v);
+      else hasEmpty = true;
+    }
+    return { list: [...set].sort((a, b) => a.localeCompare(b, 'ko')), hasEmpty };
+  }, [projects]);
+
   const filtered = useMemo(() => {
-    return projects.filter(p => {
+    const rows = projects.filter(p => {
       // 탭 필터 우선
       if (activeTab === 'WON' && p.acquisition_status !== 'WON') return false;
 
@@ -122,15 +146,30 @@ export default function ProjectsPage() {
           .toLowerCase();
         if (!hay.includes(q)) return false;
       }
-      if (filterAcq !== 'ALL' && (p.acquisition_status ?? 'PENDING') !== filterAcq) return false;
+      // 수주여부 필터는 '전체 프로젝트' 탭에서만 — 수주성공 탭은 이미 WON 고정
+      if (activeTab === 'ALL' && filterAcq !== 'ALL' && (p.acquisition_status ?? 'PENDING') !== filterAcq)
+        return false;
       if (filterStage !== 'ALL' && paymentStageOf(p) !== filterStage) return false;
+      if (filterProduct !== 'ALL') {
+        const v = p.product?.trim() ?? '';
+        if (filterProduct === 'NONE' ? v !== '' : v !== filterProduct) return false;
+      }
       if (filterYear !== 'ALL') {
         const y = p.submitted_at ? parseInt(p.submitted_at.slice(0, 4), 10) : 0;
         if (y !== filterYear) return false;
       }
       return true;
     });
-  }, [projects, activeTab, search, filterAcq, filterStage, filterYear]);
+
+    // 지급 단계 순 정렬 — PL작성대기 → PL작성완료 → 재원확정완료 → 1차지급완료 → 전체지급완료.
+    //   완료된 건(전체지급완료)이 아래로 쌓여서 진행중인 건이 위에 모이도록 한다.
+    //   같은 단계 안에서는 제출일 최신순.
+    return rows.sort((a, b) => {
+      const d = STAGE_ORDER[paymentStageOf(a)] - STAGE_ORDER[paymentStageOf(b)];
+      if (d !== 0) return d;
+      return (b.submitted_at ?? '').localeCompare(a.submitted_at ?? '');
+    });
+  }, [projects, activeTab, search, filterAcq, filterStage, filterProduct, filterYear]);
 
   const tabCounts = useMemo(() => {
     const won = projects.filter(p => p.acquisition_status === 'WON').length;
@@ -245,18 +284,35 @@ export default function ProjectsPage() {
             </option>
           ))}
         </select>
+        {/* 제품 구분 */}
         <select
-          value={filterAcq}
-          onChange={e => setFilterAcq(e.target.value as AcqFilter)}
+          value={filterProduct}
+          onChange={e => setFilterProduct(e.target.value as ProductFilter)}
           className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-600"
         >
-          <option value="ALL">전체 수주여부</option>
-          {ACQ_OPTIONS.map(a => (
-            <option key={a} value={a}>
-              {ACQUISITION_LABEL[a]}
+          <option value="ALL">전체 제품</option>
+          {products.list.map(p => (
+            <option key={p} value={p}>
+              {p}
             </option>
           ))}
+          {products.hasEmpty && <option value="NONE">제품 미지정</option>}
         </select>
+        {/* 수주여부는 '전체 프로젝트' 탭에서만 — 수주성공 탭은 이미 WON 으로 고정됨 */}
+        {activeTab === 'ALL' && (
+          <select
+            value={filterAcq}
+            onChange={e => setFilterAcq(e.target.value as AcqFilter)}
+            className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-600"
+          >
+            <option value="ALL">전체 수주여부</option>
+            {ACQ_OPTIONS.map(a => (
+              <option key={a} value={a}>
+                {ACQUISITION_LABEL[a]}
+              </option>
+            ))}
+          </select>
+        )}
         <span className="ml-auto text-xs text-gray-400">{filtered.length}건</span>
       </div>
 
