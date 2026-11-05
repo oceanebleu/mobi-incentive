@@ -227,14 +227,12 @@ export default function ProjectsPage() {
           onClick={() => setActiveTab('WON')}
           label="수주성공"
           count={tabCounts.won}
-          tone="emerald"
         />
         <ProjectTab
           active={activeTab === 'ALL'}
           onClick={() => setActiveTab('ALL')}
           label="전체 프로젝트"
           count={tabCounts.all}
-          tone="blue"
         />
       </div>
 
@@ -407,6 +405,7 @@ function ProjectRow({
   onNotify: () => void;
   notifyStatus?: 'sending' | 'sent' | 'error';
 }) {
+  // 색 규칙 — 파랑=진행중/액션, 초록=완료/성공, 빨강=실패/경고, 회색=중립/대기
   const acq = (p.acquisition_status ?? 'PENDING') as keyof typeof ACQUISITION_LABEL;
   const acqCls =
     acq === 'WON'
@@ -415,17 +414,17 @@ function ProjectRow({
       ? 'bg-red-50 text-red-700'
       : acq === 'CANCELLED'
       ? 'bg-gray-100 text-gray-500'
-      : 'bg-amber-50 text-amber-700';
+      : 'bg-blue-50 text-blue-700'; // 진행중(검토·결과대기)
 
   const stage = paymentStageOf(p);
   const stageCls =
     stage === 'ALL_PAID'
       ? 'bg-emerald-100 text-emerald-800'
-      : stage.includes('PAID')
+      : stage === 'FIRST_PAID'
       ? 'bg-blue-100 text-blue-700'
       : stage === 'FUND_CONFIRMED'
-      ? 'bg-indigo-50 text-indigo-700'
-      : 'bg-gray-100 text-gray-600';
+      ? 'bg-blue-50 text-blue-700'
+      : 'bg-gray-100 text-gray-600'; // PL 작성대기 / 작성완료
 
   const year = p.submitted_at ? parseInt(p.submitted_at.slice(0, 4), 10) : '-';
 
@@ -536,7 +535,7 @@ function ProjectRow({
                   ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
                   : notifyStatus === 'sent' || alreadyNotified
                   ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-100'
-                  : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-100';
+                  : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100';
               const Icon =
                 notifyStatus === 'sending'
                   ? Loader2
@@ -583,14 +582,9 @@ function formatKstShort(iso: string): string {
 
 function CategoryBadge({ category }: { category: string | null }) {
   if (!category) return <span className="text-gray-300 text-xs">-</span>;
-  // 신규 / 연장 케이스를 색상 분리. 그 외 (신규(이전경험 X) 등)는 기본 색
+  // 신규만 파랑으로 강조(재원율 2%), 연장·그 외는 중립 회색
   const isNew = category.startsWith('신규');
-  const isExt = category.startsWith('연장');
-  const cls = isExt
-    ? 'bg-amber-50 text-amber-700'
-    : isNew
-    ? 'bg-blue-50 text-blue-700'
-    : 'bg-gray-100 text-gray-600';
+  const cls = isNew ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600';
   return (
     <span className={clsx('text-[11px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap', cls)}>
       {category}
@@ -598,34 +592,29 @@ function CategoryBadge({ category }: { category: string | null }) {
   );
 }
 
+// 탭은 네비게이션 — 활성=파랑, 비활성=회색으로 통일 (상태색을 쓰지 않는다)
 function ProjectTab({
   active,
   onClick,
   label,
   hint,
   count,
-  tone,
 }: {
   active: boolean;
   onClick: () => void;
   label: string;
   hint?: string;
   count: number;
-  tone: 'emerald' | 'blue';
 }) {
-  const activeColor =
-    tone === 'emerald' ? 'border-emerald-600 text-emerald-700' : 'border-blue-600 text-blue-700';
-  const badgeColor = active
-    ? tone === 'emerald'
-      ? 'bg-emerald-100 text-emerald-700'
-      : 'bg-blue-100 text-blue-700'
-    : 'bg-gray-100 text-gray-500';
+  const badgeColor = active ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500';
   return (
     <button
       onClick={onClick}
       className={clsx(
         'px-4 py-2.5 -mb-px border-b-2 transition-colors flex items-center gap-2',
-        active ? activeColor : 'border-transparent text-gray-500 hover:text-gray-800'
+        active
+          ? 'border-blue-600 text-blue-700'
+          : 'border-transparent text-gray-500 hover:text-gray-800'
       )}
     >
       <span className="text-sm font-semibold">{label}</span>
@@ -661,7 +650,7 @@ function PaymentCell({
   if (skipped) {
     return (
       <div>
-        <div className="text-xs font-medium text-amber-700">미지급</div>
+        <div className="text-xs font-medium text-gray-500">미지급</div>
         <div className="text-[11px] text-gray-400">
           {ratio != null && `${ratio}%`}
         </div>
@@ -676,7 +665,8 @@ function PaymentCell({
       <div
         className={clsx(
           'text-xs font-medium',
-          completed ? 'text-emerald-600' : 'text-amber-600'
+          // 완료만 초록으로 강조, 대기는 중립 회색 (날짜가 링크처럼 보이지 않도록)
+          completed ? 'text-emerald-600' : 'text-gray-700'
         )}
       >
         {formatDate(date)}

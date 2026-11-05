@@ -14,7 +14,16 @@
       "Bash(sed -i \"s|const asMulti = \\(v\\) => { const t = \\(v ?? ''\\).trim\\(\\); if \\(!t\\) return \\\\[\\\\]; return t.split\\(/\\\\[,/;\\\\]/\\).map\\(s => s.trim\\(\\)\\).filter\\(Boolean\\); };|const asMulti = \\(v\\) => { const t = \\(v ?? ''\\).trim\\(\\); if \\(!t\\) return []; return t.split\\(/[,\\\\\\\\/;]/\\).map\\(s => s.trim\\(\\)\\).filter\\(Boolean\\); };\\\\nconst asProducts = \\(v\\) => { const t = \\(v ?? ''\\).trim\\(\\); if \\(!t\\) return []; return t.split\\(/[,;]/\\).map\\(s => s.trim\\(\\)\\).filter\\(Boolean\\); };|\" verify.mjs)",
       "Bash(sed -i 's|products: asMulti\\(row\\\\[8\\\\]\\)|products: asProducts\\(row[8]\\)|' verify.mjs)",
       "Bash(node /tmp/claude-1000/-home-mobidays-mobi-incentive/5287417f-fe96-41f8-ac79-469961a8ecb7/scratchpad/product-dryrun.mjs)",
-      "Bash(node /tmp/claude-1000/-home-mobidays-mobi-incentive/5287417f-fe96-41f8-ac79-469961a8ecb7/scratchpad/product-apply.mjs)"
+      "Bash(node /tmp/claude-1000/-home-mobidays-mobi-incentive/5287417f-fe96-41f8-ac79-469961a8ecb7/scratchpad/product-apply.mjs)",
+      "Bash(grep -rhoE \"\\(bg|text|border|ring|from|to\\)-\\(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose\\)-[0-9]{2,3}\" app components --include=\"*.tsx\")",
+      "Bash(grep -noE \"\\(bg|text|border|ring|from|to\\)-\\(red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose|brand\\)-[0-9]{2,3}\\(/[0-9]+\\)?\" app/projects/page.tsx)",
+      "Bash(sort -t: -k2)",
+      "Bash(uniq -c -f0)",
+      "Bash(awk -F: '{print $0}')",
+      "Bash(sed -i '230d' app/projects/page.tsx)",
+      "Bash(sed -i '236d' app/projects/page.tsx)",
+      "Bash(grep -noE \"\\(bg|text|border|ring|from|to\\)-\\(orange|amber|yellow|lime|green|teal|cyan|sky|indigo|violet|purple|fuchsia|pink|rose\\)-[0-9]{2,3}\" app/projects/page.tsx)",
+      "Bash(grep -rhoE \"\\(bg|text|border|ring\\)-\\(red|emerald|blue|gray\\)-[0-9]{2,3}\" app/projects/page.tsx)"
     ],
     "additionalDirectories": [
       "/home/mobidays/mobi-incentive/app/api/projects/[id]",
