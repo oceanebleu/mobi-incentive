@@ -175,7 +175,7 @@ function PLProjectsPageInner() {
           <div className="space-y-6">
             <Section
               title="작성 대기"
-              tone="amber"
+              tone="pending"
               hint="멤버 기여도와 판단 사유 9개 항목을 입력해 주세요."
               projects={grouped.pending}
               empId={empId}
@@ -183,7 +183,7 @@ function PLProjectsPageInner() {
             />
             <Section
               title="작성 완료"
-              tone="emerald"
+              tone="done"
               hint="저장된 내용을 보거나 수정할 수 있습니다."
               projects={grouped.done}
               empId={empId}
@@ -215,15 +215,15 @@ function Section({
   code,
 }: {
   title: string;
-  tone: 'amber' | 'emerald';
+  tone: 'pending' | 'done';
   hint: string;
   projects: ProjectRow[];
   empId: string;
   code: string;
 }) {
   const badgeCls =
-    tone === 'amber'
-      ? 'bg-amber-100 text-amber-700'
+    tone === 'pending'
+      ? 'bg-blue-100 text-blue-700'
       : 'bg-emerald-100 text-emerald-700';
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -237,7 +237,7 @@ function Section({
 
       {projects.length === 0 ? (
         <div className="text-xs text-gray-400 py-6 text-center">
-          {tone === 'amber' ? '작성할 프로젝트가 없습니다 ✓' : '아직 없습니다'}
+          {tone === 'pending' ? '작성할 프로젝트가 없습니다 ✓' : '아직 없습니다'}
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -295,15 +295,15 @@ function Section({
 function statusLabel(p: ProjectRow): { text: string; tone: string } | null {
   if (!p.pl_completed) return null;
   if (p.acquisition_status === 'LOST') {
-    return { text: '위원회 미진행', tone: 'bg-amber-100 text-amber-700' };
+    return { text: '위원회 미진행', tone: 'bg-gray-200 text-gray-700' };
   }
   if (p.acquisition_status === 'CANCELLED' && p.first_payment_completed) {
     return { text: '대행종료 - 1차 지급 후', tone: 'bg-gray-200 text-gray-700' };
   }
   if (p.fund_confirmed || p.first_payment_completed || p.second_payment_completed) {
-    return { text: '위원회 검토 완료', tone: 'bg-indigo-100 text-indigo-700' };
+    return { text: '위원회 검토 완료', tone: 'bg-emerald-100 text-emerald-700' };
   }
-  return { text: '운영위원회 진행 중', tone: 'bg-amber-100 text-amber-700' };
+  return { text: '운영위원회 진행 중', tone: 'bg-blue-100 text-blue-700' };
 }
 
 // 위원회 결과 섹션 — 캠페인 리스트(접힘) + 클릭 시 상세 펼침
@@ -332,7 +332,7 @@ function CommitteeResultSection({ projects }: { projects: ProjectRow[] }) {
     <div className="bg-white rounded-xl border border-gray-200 p-5">
       <div className="flex items-center gap-2 mb-1">
         <h2 className="text-sm font-semibold text-gray-800">위원회 결과</h2>
-        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
           {projects.length}건
         </span>
       </div>
@@ -376,7 +376,7 @@ function CommitteeResultSection({ projects }: { projects: ProjectRow[] }) {
                         1차 지급 완료
                       </span>
                     ) : (
-                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700 whitespace-nowrap">
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 whitespace-nowrap">
                         재원확정 완료
                       </span>
                     )}
@@ -419,8 +419,8 @@ function CommitteeResultSection({ projects }: { projects: ProjectRow[] }) {
 
                   {/* 운영위원회 결과 — 관리자가 작성한 메모가 있을 때만 노출 */}
                   {p.committee_result && p.committee_result.trim() !== '' && (
-                    <div className="bg-indigo-50/50 border border-indigo-100 rounded-md px-3 py-2.5">
-                      <p className="text-[10px] font-semibold text-indigo-700 uppercase tracking-wide mb-1">
+                    <div className="bg-blue-50/50 border border-blue-100 rounded-md px-3 py-2.5">
+                      <p className="text-[10px] font-semibold text-blue-700 uppercase tracking-wide mb-1">
                         위원회 결과
                       </p>
                       <p className="text-[12px] text-gray-800 whitespace-pre-wrap leading-relaxed">
@@ -517,10 +517,10 @@ function PhaseCard({
 }) {
   if (skipped) {
     return (
-      <div className="bg-amber-50/60 rounded-md border border-amber-100 px-3 py-2">
-        <p className="text-[10px] text-amber-600 uppercase">{label}</p>
-        <p className="text-sm font-semibold text-amber-700 mt-0.5">미지급</p>
-        <p className="text-[11px] text-amber-600/70">대행종료로 인한 미지급</p>
+      <div className="bg-gray-50 rounded-md border border-gray-200 px-3 py-2">
+        <p className="text-[10px] text-gray-400 uppercase">{label}</p>
+        <p className="text-sm font-semibold text-gray-600 mt-0.5">미지급</p>
+        <p className="text-[11px] text-gray-400">대행종료로 인한 미지급</p>
       </div>
     );
   }

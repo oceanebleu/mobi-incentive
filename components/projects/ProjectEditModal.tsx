@@ -370,7 +370,7 @@ export default function ProjectEditModal({
                         setManualFund(true);
                       }}
                       title="직접 입력 (특이사항으로 자동계산과 다르게 저장)"
-                      className="flex items-center justify-center px-2 rounded-md border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
+                      className="flex items-center justify-center px-2 rounded-md border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
                     >
                       <Pencil size={13} />
                     </button>

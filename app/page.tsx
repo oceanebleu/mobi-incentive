@@ -333,27 +333,27 @@ export default function DashboardPage() {
       value: formatKRW(stats.totalFirstPaid),
       sub: formatKRWFull(stats.totalFirstPaid),
       icon: CreditCard,
-      colorCls: 'text-indigo-700',
-      bgCls: 'bg-indigo-50',
-      iconBg: 'bg-indigo-100',
+      colorCls: 'text-blue-700',
+      bgCls: 'bg-blue-50',
+      iconBg: 'bg-blue-100',
     },
     {
       label: '누적 2차 지급액',
       value: formatKRW(stats.totalSecondPaid),
       sub: formatKRWFull(stats.totalSecondPaid),
       icon: CreditCard,
-      colorCls: 'text-violet-700',
-      bgCls: 'bg-violet-50',
-      iconBg: 'bg-violet-100',
+      colorCls: 'text-blue-700',
+      bgCls: 'bg-blue-50',
+      iconBg: 'bg-blue-100',
     },
     {
       label: '지급 예정 총액',
       value: formatKRW(stats.totalPending),
       sub: formatKRWFull(stats.totalPending),
       icon: TrendingUp,
-      colorCls: 'text-amber-700',
-      bgCls: 'bg-amber-50',
-      iconBg: 'bg-amber-100',
+      colorCls: 'text-blue-700',
+      bgCls: 'bg-blue-50',
+      iconBg: 'bg-blue-100',
     },
     {
       label: '1차 지급 완료 비율',
@@ -370,7 +370,7 @@ export default function DashboardPage() {
               재원확정 {stats.fundConfirmedCount}건 중 {stats.firstPaidCount}건 완료 · 전체{' '}
               {stats.totalProjects}건
             </span>
-            <span className="block text-rose-600 mt-0.5">
+            <span className="block text-red-600 mt-0.5">
               1차 지급 후 대행종료 {cancelled}건 ({cancelledPct}%)
             </span>
           </span>
@@ -386,9 +386,9 @@ export default function DashboardPage() {
       value: `${stats.allPayRatio.toFixed(1)}%`,
       sub: `재원확정 ${stats.fundConfirmedCount}건 중 ${stats.allPaidCount}건 모두 완료 · 전체 ${stats.totalProjects}건`,
       icon: CheckCircle,
-      colorCls: 'text-sky-700',
-      bgCls: 'bg-sky-50',
-      iconBg: 'bg-sky-100',
+      colorCls: 'text-blue-700',
+      bgCls: 'bg-blue-50',
+      iconBg: 'bg-blue-100',
     },
   ];
 
@@ -516,7 +516,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-3 gap-5">
         <ProjectActionList
           icon={FileText}
-          tone="amber"
+          tone="pl"
           title="PL 작성대기"
           hint="멤버 기여도가 아직 입력되지 않은 프로젝트"
           projects={stageGroups.plPending}
@@ -529,7 +529,7 @@ export default function DashboardPage() {
         />
         <ProjectActionList
           icon={Coins}
-          tone="indigo"
+          tone="fund"
           title="재원확정 필요"
           hint="수주성공 건 중 PL 작성 완료 건"
           projects={stageGroups.plDoneFundNeeded}
@@ -632,7 +632,7 @@ export default function DashboardPage() {
                         </span>
                       </td>
                       <td className="py-3 pr-4 text-right">
-                        <span className="text-amber-600">
+                        <span className="text-blue-600">
                           {formatKRWFull(m.total_pending)}
                         </span>
                       </td>
@@ -693,7 +693,7 @@ function acqDotColor(key: string): string {
       return 'bg-gray-400';
     case 'PENDING':
     case 'REVIEWING':
-      return 'bg-amber-400';
+      return 'bg-blue-400';
     case 'RESULT_PENDING':
       return 'bg-blue-400';
     default:
@@ -805,7 +805,7 @@ function StageDrillModal({
                               ? 'bg-red-100 text-red-700'
                               : p.acquisition_status === 'CANCELLED'
                               ? 'bg-gray-200 text-gray-600'
-                              : 'bg-amber-100 text-amber-700'
+                              : 'bg-blue-100 text-blue-700'
                           )}
                         >
                           {ACQUISITION_LABEL[p.acquisition_status] ?? p.acquisition_status}
@@ -844,7 +844,7 @@ function ProjectActionList({
   errorMessage,
 }: {
   icon: typeof FileText;
-  tone: 'amber' | 'indigo';
+  tone: 'pl' | 'fund';  // 섹션 구분용 (색은 동일, 의미만 구분)
   title: string;
   hint: string;
   projects: SupabaseProject[];
@@ -854,9 +854,8 @@ function ProjectActionList({
   requestState?: Record<string, 'sending' | 'sent' | 'error'>;
   errorMessage?: string | null;
 }) {
-  const toneCls = tone === 'amber'
-    ? { icon: 'text-amber-600', badge: 'bg-amber-100 text-amber-700' }
-    : { icon: 'text-indigo-600', badge: 'bg-indigo-100 text-indigo-700' };
+  // 두 섹션 모두 '처리 대기 중인 액션' — 색으로 구분하지 않고 파랑으로 통일
+  const toneCls = { icon: 'text-blue-600', badge: 'bg-blue-100 text-blue-700' };
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col">
       <div className="flex items-center gap-2 mb-1">
@@ -980,9 +979,9 @@ function UpcomingPaymentsList({
   };
   const dTone = (date: string) => {
     const d = daysBetween(date, todayKst);
-    if (d <= 7) return 'bg-rose-50 text-rose-700 border-rose-100';        // 임박 7일 내
-    if (d <= 30) return 'bg-amber-50 text-amber-700 border-amber-100';    // 한 달 내
-    return 'bg-gray-50 text-gray-600 border-gray-100';                    // 여유
+    if (d <= 7) return 'bg-red-50 text-red-700 border-red-100';     // 임박 7일 내
+    if (d <= 30) return 'bg-blue-50 text-blue-700 border-blue-100'; // 한 달 내
+    return 'bg-gray-50 text-gray-600 border-gray-100';              // 여유
   };
   // YYYY-MM-DD → MM.DD (공백 없이 — 좁은 박스 안에서 줄바꿈 방지)
   const shortDate = (s: string) => {
@@ -993,9 +992,9 @@ function UpcomingPaymentsList({
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col">
       <div className="flex items-center gap-2 mb-1">
-        <CalendarClock size={16} className="text-rose-500" />
+        <CalendarClock size={16} className="text-red-500" />
         <h2 className="text-sm font-semibold text-gray-800">인센티브 지급 예정</h2>
-        <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">
+        <span className="ml-auto text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
           {items.length}건
         </span>
       </div>
@@ -1037,9 +1036,10 @@ function UpcomingPaymentsList({
                   <span
                     className={clsx(
                       'text-[10px] font-semibold px-1.5 py-0.5 rounded whitespace-nowrap',
+                      // 1차/2차는 회차 구분 — 같은 파랑 계열의 농도로만 구분
                       r.phase === 1
-                        ? 'bg-indigo-100 text-indigo-700'
-                        : 'bg-emerald-100 text-emerald-700'
+                        ? 'bg-blue-50 text-blue-700'
+                        : 'bg-blue-100 text-blue-800'
                     )}
                   >
                     {r.phase}차

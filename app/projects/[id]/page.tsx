@@ -131,7 +131,7 @@ export default function ProjectDetailPage() {
       : stage.includes('PAID')
       ? 'bg-blue-100 text-blue-700'
       : stage === 'FUND_CONFIRMED'
-      ? 'bg-indigo-50 text-indigo-700'
+      ? 'bg-blue-50 text-blue-700'
       : 'bg-gray-100 text-gray-600';
 
   const acq = project.acquisition_status ?? 'PENDING';
@@ -180,7 +180,7 @@ export default function ProjectDetailPage() {
               <button
                 onClick={() => setEditingProject(true)}
                 title="캠페인 정보 편집 (R값·수수료·지급일·비고 등)"
-                className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-md bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
+                className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
               >
                 <Pencil size={11} />
                 캠페인 편집
@@ -193,7 +193,7 @@ export default function ProjectDetailPage() {
                 target="_blank"
                 rel="noreferrer"
                 title="PL 이 등록한 비딩 준비 시트 (리뷰 진행일 sync 대상)"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
               >
                 <ExternalLink size={12} />
                 비딩준비시트
@@ -698,7 +698,7 @@ function MembersEditModal({
             <p
               className={clsx(
                 'font-semibold',
-                totalContribution === 100 ? 'text-emerald-700' : 'text-amber-700'
+                totalContribution === 100 ? 'text-emerald-700' : 'text-red-600'
               )}
             >
               {totalContribution}% {totalContribution !== 100 && '(보통 100%)'}
@@ -1449,7 +1449,7 @@ function ReviewStatusCard({
             <p>아직 sync 이력 없음</p>
           ) : null}
           {!hasLink && (
-            <p className="text-amber-600">
+            <p className="text-gray-500">
               PL 이 비딩 준비 시트 링크를 아직 등록하지 않았습니다.
             </p>
           )}
@@ -1475,7 +1475,7 @@ function ReviewStatusCard({
                 ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed'
                 : !hasLink
                 ? 'bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed'
-                : 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-100'
+                : 'bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-100'
             )}
           >
             <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
@@ -1505,7 +1505,7 @@ function PaymentStateBadge({
   }
   if (skipped) {
     return (
-      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
         미지급
       </span>
     );
@@ -1518,7 +1518,7 @@ function PaymentStateBadge({
     );
   }
   return (
-    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
       대기
     </span>
   );

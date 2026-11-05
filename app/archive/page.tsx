@@ -349,7 +349,7 @@ export default function ArchivePage() {
       {/* 통계 — 수동 표시는 '프로젝트로 등록됨'에 합산 */}
       <div className="grid grid-cols-4 gap-3">
         <Stat label="전체" value={counts.total} />
-        <Stat label="미등록 (운영위 대상)" value={counts.pending} tone="amber" />
+        <Stat label="미등록 (운영위 대상)" value={counts.pending} tone="blue" />
         <Stat
           label="프로젝트로 등록됨"
           value={counts.done}
@@ -618,12 +618,12 @@ function Stat({
 }: {
   label: string;
   value: number;
-  tone?: 'default' | 'amber' | 'emerald' | 'gray' | 'red';
+  tone?: 'default' | 'blue' | 'emerald' | 'gray' | 'red';
   sublabel?: string;
 }) {
   const toneCls: Record<string, string> = {
     default: 'text-gray-900',
-    amber: 'text-amber-700',
+    blue: 'text-blue-700',
     emerald: 'text-emerald-700',
     gray: 'text-gray-500',
     red: 'text-red-700',
@@ -684,7 +684,7 @@ function BiddingBadge({ status }: { status: string | null }) {
   else if (t.includes('드랍')) cls = 'bg-gray-200 text-gray-600';
   else if (t.includes('대행종료') || t.includes('대행종결') || t.includes('대화종료'))
     cls = 'bg-gray-200 text-gray-600';
-  else if (t.includes('결과대기') || t.includes('결과반영')) cls = 'bg-amber-100 text-amber-700';
+  else if (t.includes('결과대기') || t.includes('결과반영')) cls = 'bg-blue-100 text-blue-700';
   else if (
     t.includes('제안진행') ||
     t.includes('검토대기') ||

@@ -36,12 +36,14 @@ type RoleFilter = 'ALL' | UserRole;
 // 상단 탭: 재직(퇴사예정·휴직 포함) / 퇴사자
 type StatusTab = 'ACTIVE' | 'RESIGNED';
 
+// 권한은 '상태'가 아니라 분류 — 파랑 농도(권한 높음)와 회색(일반)으로 구분하고
+// 빨강은 '권한 없음'에만 사용한다.
 const ROLE_BADGE: Record<UserRole, string> = {
-  EXEC: 'bg-violet-100 text-violet-700',
-  ADMIN: 'bg-blue-100 text-blue-700',
-  PAYROLL: 'bg-rose-100 text-rose-700',
+  EXEC: 'bg-blue-600 text-white',
+  ADMIN: 'bg-blue-100 text-blue-800',
+  PAYROLL: 'bg-blue-50 text-blue-700',
   NORMAL: 'bg-gray-100 text-gray-600',
-  NONE: 'bg-red-100 text-red-700',
+  NONE: 'bg-red-50 text-red-700',
 };
 
 export default function UsersPage() {
@@ -269,8 +271,8 @@ export default function UsersPage() {
 
       {/* 미저장 변경 안내 바 */}
       {pendingCount > 0 && (
-        <div className="flex items-center justify-between px-4 py-3 bg-amber-50 border border-amber-100 rounded-lg">
-          <div className="flex items-center gap-2 text-sm text-amber-800">
+        <div className="flex items-center justify-between px-4 py-3 bg-blue-50 border border-blue-100 rounded-lg">
+          <div className="flex items-center gap-2 text-sm text-blue-800">
             <AlertCircle size={15} />
             <span>
               <b>{pendingCount}건</b>의 권한 변경이 아직 저장되지 않았습니다. 우측 상단{' '}
@@ -279,7 +281,7 @@ export default function UsersPage() {
           </div>
           <button
             onClick={discardAll}
-            className="text-xs font-medium text-amber-700 hover:text-amber-900 underline-offset-2 hover:underline"
+            className="text-xs font-medium text-blue-700 hover:text-blue-900 underline-offset-2 hover:underline"
           >
             변경취소
           </button>
@@ -304,9 +306,9 @@ export default function UsersPage() {
       {statusTab === 'ACTIVE' ? (
         <div className="grid grid-cols-5 gap-3">
           <Stat label="재직 인원 (휴직·퇴사예정 포함)" value={counts.active} />
-          <Stat label="경영진" value={counts.activeExec} tone="violet" />
-          <Stat label="관리자" value={counts.activeAdmin} tone="blue" />
-          <Stat label="급여담당" value={counts.activePayroll} tone="rose" />
+          <Stat label="경영진" value={counts.activeExec} tone="exec" />
+          <Stat label="관리자" value={counts.activeAdmin} tone="admin" />
+          <Stat label="급여담당" value={counts.activePayroll} tone="payroll" />
           <Stat label="일반" value={counts.activeNormal} tone="gray" />
         </div>
       ) : (
@@ -408,7 +410,7 @@ export default function UsersPage() {
                       key={u.employee_id}
                       className={clsx(
                         'border-b border-gray-50 transition-colors',
-                        isDirty ? 'bg-amber-50/40 hover:bg-amber-50/70' : 'hover:bg-gray-50/70',
+                        isDirty ? 'bg-blue-50/40 hover:bg-blue-50/70' : 'hover:bg-gray-50/70',
                         u.status === '퇴사' && 'opacity-50'
                       )}
                     >
@@ -447,7 +449,7 @@ export default function UsersPage() {
                             className={clsx(
                               'text-xs font-medium px-2 py-1 rounded-md border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30',
                               ROLE_BADGE[effRole],
-                              isDirty && 'ring-2 ring-amber-400/60',
+                              isDirty && 'ring-2 ring-blue-400/60',
                               u.status === '퇴사' && 'cursor-not-allowed'
                             )}
                           >
@@ -468,12 +470,12 @@ export default function UsersPage() {
                         </div>
                         <div className="text-[10px] mt-0.5 space-x-1">
                           {isDirty && (
-                            <span className="text-amber-700 font-medium">
+                            <span className="text-blue-700 font-medium">
                               미저장: {ROLE_LABELS[u.role]} → {ROLE_LABELS[effRole]}
                             </span>
                           )}
                           {!isDirty && u.role_overridden && (
-                            <span className="text-amber-600">수동 설정</span>
+                            <span className="text-gray-500">수동 설정</span>
                           )}
                         </div>
                       </td>
@@ -514,15 +516,17 @@ function Stat({
 }: {
   label: string;
   value: number;
-  tone?: 'default' | 'violet' | 'blue' | 'gray' | 'muted' | 'rose';
+  tone?: 'default' | 'exec' | 'admin' | 'payroll' | 'gray' | 'muted' | 'none';
 }) {
+  // 권한 레벨은 파랑 농도로, 그 외는 회색 — ROLE_BADGE 와 같은 규칙
   const toneCls: Record<string, string> = {
     default: 'text-gray-900',
-    violet: 'text-violet-700',
-    blue: 'text-blue-700',
+    exec: 'text-blue-800',
+    admin: 'text-blue-700',
+    payroll: 'text-blue-600',
     gray: 'text-gray-700',
     muted: 'text-gray-400',
-    rose: 'text-rose-700',
+    none: 'text-red-700',
   };
   return (
     <div className="bg-white rounded-xl border border-gray-200 px-4 py-3">

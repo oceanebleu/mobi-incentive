@@ -279,7 +279,7 @@ export default function ImportPage() {
           {/* 경고 멤버 */}
           {memberWarnRows.length > 0 && (
             <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-              <div className="px-4 py-3 bg-amber-50 border-b border-amber-100 text-xs font-semibold text-amber-800">
+              <div className="px-4 py-3 bg-red-50 border-b border-red-100 text-xs font-semibold text-red-800">
                 ⚠ 매칭/검증 경고 {memberWarnRows.length}건 — 그대로 import하면 사용자관리 매칭이 NULL이 됩니다
               </div>
               <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
@@ -303,7 +303,7 @@ export default function ImportPage() {
                         </td>
                         <td className="px-3 py-1.5 text-gray-500">{m.project_campaign_name}</td>
                         <td className="px-3 py-1.5 text-right text-gray-500">{m.contribution}%</td>
-                        <td className="px-3 py-1.5 text-amber-700">
+                        <td className="px-3 py-1.5 text-red-700">
                           {m.warnings.join(' · ')}
                         </td>
                       </tr>
@@ -408,7 +408,7 @@ function SummaryCard({
     <div
       className={clsx(
         'rounded-xl border px-4 py-3',
-        warn ? 'bg-amber-50 border-amber-100' : 'bg-white border-gray-200'
+        warn ? 'bg-red-50 border-red-100' : 'bg-white border-gray-200'
       )}
     >
       <p className="text-[11px] text-gray-400">{title}</p>

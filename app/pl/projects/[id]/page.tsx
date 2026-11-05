@@ -741,7 +741,7 @@ function PLProjectFormPageInner() {
                   인센티브 총 재원 = R값 × 수수료 × {(fundRate * 100).toFixed(0)}% (
                   {project.category ?? '-'})
                 </p>
-                <p className="text-[11px] text-amber-700 mt-0.5">
+                <p className="text-[11px] text-gray-500 mt-0.5">
                   ※ 1, 2차 지급 총액(비율)은 캠페인 상황 및 운영위원회 검토 결과에 따라 변동될 수 있습니다.
                 </p>
               </div>
@@ -1054,7 +1054,7 @@ function Stat({
       <p
         className={clsx(
           'text-sm font-semibold mt-0.5',
-          tone === 'good' ? 'text-emerald-700' : tone === 'warn' ? 'text-amber-700' : 'text-gray-800'
+          tone === 'good' ? 'text-emerald-700' : tone === 'warn' ? 'text-red-600' : 'text-gray-800'
         )}
       >
         {value}

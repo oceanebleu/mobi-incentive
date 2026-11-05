@@ -226,8 +226,8 @@ export default function MembersPage() {
 
       {/* 요약 카드 — 항상 재직자 기준 (퇴사자 영향 없음) */}
       <div className="grid grid-cols-3 gap-4">
-        <SummaryCard label="총 지급 완료액" value={formatKRWFull(activeAgg.paid)} color="blue" />
-        <SummaryCard label="총 수령 예정액" value={formatKRWFull(activeAgg.pending)} color="amber" />
+        <SummaryCard label="총 지급 완료액" value={formatKRWFull(activeAgg.paid)} color="paid" />
+        <SummaryCard label="총 수령 예정액" value={formatKRWFull(activeAgg.pending)} color="pending" />
         <SummaryCard label="대상 인원/팀" value={`${activeAgg.count}건`} color="gray" />
       </div>
 
@@ -369,7 +369,7 @@ function MemberRow({
           <span className="text-sm font-medium text-blue-700">{formatKRWFull(summary.total_paid)}</span>
         </div>
         <div className="flex items-center justify-end">
-          <span className="text-sm text-amber-600">{formatKRWFull(summary.total_pending)}</span>
+          <span className="text-sm text-blue-600">{formatKRWFull(summary.total_pending)}</span>
         </div>
         <div className="flex items-center justify-end">
           <div className="text-right">
@@ -453,7 +453,7 @@ function MemberRow({
                             </span>
                           )}
                           {!isLost && skipped && (
-                            <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded">
+                            <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">
                               미지급
                             </span>
                           )}
@@ -518,7 +518,7 @@ function MemberRow({
                           (p.first_status === 'skipped' || p.second_status === 'skipped') && (
                             <span
                               title="프로젝트에서 미지급으로 표시"
-                              className="ml-2 text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded"
+                              className="ml-2 text-[10px] px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded"
                             >
                               {bothSkipped
                                 ? '1·2차 미지급'
@@ -580,7 +580,7 @@ function PhaseCell({
     const isLost = acquisitionStatus === 'LOST';
     return (
       <span
-        className={isLost ? 'text-red-500 line-through' : 'text-amber-600 line-through'}
+        className={isLost ? 'text-red-500 line-through' : 'text-gray-400 line-through'}
         title={isLost ? '수주실패로 인한 미지급' : '프로젝트에서 미지급으로 표시됨'}
       >
         {formatKRWFull(amount)}
@@ -609,7 +609,7 @@ function PhaseCell({
   return (
     <span className="text-gray-500">
       {formatKRWFull(amount)}
-      {paidAt && <span className="ml-1 text-[10px] text-amber-600">{formatDate(paidAt)} 예정</span>}
+      {paidAt && <span className="ml-1 text-[10px] text-blue-600">{formatDate(paidAt)} 예정</span>}
     </span>
   );
 }
@@ -621,11 +621,12 @@ function SummaryCard({
 }: {
   label: string;
   value: string;
-  color: 'blue' | 'amber' | 'gray';
+  color: 'paid' | 'pending' | 'gray';
 }) {
   const cls = {
-    blue: { bg: 'bg-blue-50', text: 'text-blue-700' },
-    amber: { bg: 'bg-amber-50', text: 'text-amber-700' },
+    // 지급완료/지급예정 모두 파랑 — 농도로만 구분
+    paid: { bg: 'bg-blue-100', text: 'text-blue-800' },
+    pending: { bg: 'bg-blue-50', text: 'text-blue-700' },
     gray: { bg: 'bg-gray-100', text: 'text-gray-700' },
   }[color];
   return (
