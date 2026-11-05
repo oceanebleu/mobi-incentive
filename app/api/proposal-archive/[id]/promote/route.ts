@@ -20,11 +20,14 @@ import { logProjectChange } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 
+// 시트 Q열 '결과' (수주성공/제안드랍/수주실패) → projects.acquisition_status
+//   구 시트의 '입찰상태' 표기(대행종료·결과대기 등)도 그대로 수용한다.
 function mapAcquisitionStatus(biddingStatus: string | null): string | null {
   if (!biddingStatus) return null;
   const t = biddingStatus.replace(/\s/g, '');
   if (t.includes('수주성공')) return 'WON';
   if (t.includes('수주실패')) return 'LOST';
+  if (t.includes('제안드랍') || t.includes('드랍')) return 'CANCELLED';
   if (t.includes('대행종료') || t.includes('대화종료') || t.includes('대행종결')) return 'CANCELLED';
   if (t.includes('결과대기') || t.includes('결과반영')) return 'RESULT_PENDING';
   if (t.includes('제안진행') || t.includes('검토대기') || t.includes('제안작성') || t.includes('제안대기')) return 'REVIEWING';
@@ -81,17 +84,31 @@ export async function POST(
   // 3) projects insert
   const teams: string[] = (archive as any).teams ?? [];
   const a = archive as any;
+
+  // 캠페인명 — 같은 광고주의 프로젝트가 이미 있으면 '제품'을 덧붙여 구분한다.
+  //   (한 광고주가 제품별로 여러 기회를 갖는 구조이므로 동명 프로젝트가 생길 수 있음)
+  const products: string[] = a.proposal_types ?? [];
+  let campaignName: string = a.client_name;
+  const { data: sameName } = await supabase
+    .from('projects')
+    .select('id')
+    .eq('campaign_name', campaignName)
+    .limit(1);
+  if ((sameName?.length ?? 0) > 0 && products.length > 0) {
+    campaignName = `${a.client_name} (${products.join('/')})`;
+  }
+
   const projectRow = {
     id: newProjectId,
-    campaign_name: a.client_name,
+    campaign_name: campaignName,
     committee_sheet_link: a.workflow_folder ?? null,
     r_value: a.r_value ?? null,
     commission: a.commission ?? null,
     team: teams[0] ?? null,
     pl: a.pl ?? null,
-    // 제출일 = 시트 I열 '비딩 제출일자' (building_due_at).
-    //   I열이 비어있는 과거 행에 한해 H열(proposal_at)을 폴백으로 사용.
-    submitted_at: a.building_due_at ?? a.proposal_at ?? null,
+    // 제출일 = 시트 K열 '제출일' (proposal_at).
+    //   구 시트에서 넘어온 과거 행은 building_due_at(구 I열)을 폴백으로 사용.
+    submitted_at: a.proposal_at ?? a.building_due_at ?? null,
     distributed: false,
     distributed_at: null,
     acquisition_status: mapAcquisitionStatus(a.bidding_status) ?? 'PENDING',

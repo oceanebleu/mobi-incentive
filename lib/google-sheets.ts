@@ -205,82 +205,58 @@ export async function fetchEmployees(): Promise<EmployeeRow[]> {
     }));
 }
 
-// ─── 제안 자료 아카이브 (제안서.2025 Ver) ──────────────────────
+// ─── 제안 자료 아카이브 ('수주인센티브 대상' 시트) ──────────────
 //
-// 35열 (A~AI) 구조. 자세한 매핑은 schema.sql 의 proposal_archive 테이블 정의 참조.
-// A열(체크박스)이 TRUE 인 행만 의미가 있음 — caller 측에서 필터.
+// A:T 구조, 2행부터 데이터. B열(대상여부)이 '대상' 인 행만 의미가 있음 — caller 측에서 필터.
+// 사용하는 열만 읽어온다 (나머지 열은 인센티브 산정과 무관):
+//   A 기회ID / B 대상여부 / C 광고주명 / D 구분 / E 산업군 / F 담당팀 / G PL명 /
+//   I 제품 / K 제출일 / L 취급고(R값) / M 수수료율 / N 영업수익 / Q 결과
+// 자세한 매핑은 schema.sql 의 proposal_archive 테이블 정의 참조.
 
 export interface ProposalArchiveRow {
-  needs_committee: boolean;
-  bidding_status: string | null;
-  category: string | null;
-  industry: string | null;
-  proposal_types: string[];
-  client_name: string;
-  workflow_note: string | null;
-  proposal_at: string | null;
-  building_due_at: string | null;
-  pt_at: string | null;
-  result_at: string | null;
-  agency: string | null;
-  pl: string | null;
-  teams: string[];
-  participants: string[];
-  r_value: number | null;
-  commission: number | null;
-  region: string | null;
-  kpis: string[];
-  kpi_detail: string | null;
-  media_scope: string[];
-  workflow_folder: string | null;
-  ppt_url: string | null;
-  pdf_url: string | null;
-  presentation_url: string | null;
-  factbook_folder: string | null;
-  rfp_folder: string | null;
-  mix_folder: string | null;
-  expected_revenue: number | null;
-  pre_review_marked: boolean | null;
-  strategy_note: string | null;
-  planning_note: string | null;
-  coaching_done: boolean | null;
-  coaching_at: string | null;
-  coaching_note: string | null;
+  opportunity_id: string;           // A — upsert 키 (시트의 행 식별자)
+  needs_committee: boolean;         // B '대상여부' = '대상'
+  client_name: string;              // C 광고주명
+  category: string | null;          // D 구분 (신규/연장)
+  industry: string | null;          // E 산업군
+  teams: string[];                  // F 담당팀
+  pl: string | null;                // G PL명
+  proposal_types: string[];         // I 제품
+  proposal_at: string | null;       // K 제출일
+  r_value: number | null;           // L 취급고 (= R값)
+  commission: number | null;        // M 수수료율
+  expected_revenue: number | null;  // N 영업수익 (수수료)
+  bidding_status: string | null;    // Q 결과 (수주성공/제안드랍/수주실패)
 }
 
-function asBool(v: string | undefined): boolean {
-  const t = (v ?? '').trim().toUpperCase();
-  return t === 'TRUE' || t === 'V' || t === 'Y' || t === '1';
+// B열 '대상여부' — '대상' 이면 true, '비대상'·공백이면 false
+function asTargetFlag(v: string | undefined): boolean {
+  const t = (v ?? '').replace(/\s/g, '');
+  if (!t) return false;
+  if (t.includes('비대상')) return false;
+  return t.includes('대상');
 }
 
-function asBoolNullable(v: string | undefined): boolean | null {
-  const t = (v ?? '').trim();
-  if (t === '') return null;
-  const u = t.toUpperCase();
-  if (u === 'TRUE' || u === 'V' || u === 'Y' || u === '1') return true;
-  if (u === 'FALSE' || u === 'N' || u === '0') return false;
-  // '진행완료', '미진행' 같은 한국어도 처리
-  if (t.includes('진행완료') || t.includes('완료')) return true;
-  if (t.includes('미진행') || t.includes('미')) return false;
-  return null;
-}
-
+// "1,234,567원" / "₩1,234,567" / "1234567.5" → 정수 (소수점은 반올림)
 function asMoney(v: string | undefined): number | null {
   const t = (v ?? '').trim();
   if (!t) return null;
-  const digits = t.replace(/[^0-9\-]/g, '');
-  if (!digits || digits === '-') return null;
-  const n = Number(digits);
-  return Number.isFinite(n) ? n : null;
+  const cleaned = t.replace(/[^0-9.\-]/g, '');
+  if (!cleaned || cleaned === '-' || cleaned === '.') return null;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? Math.round(n) : null;
 }
 
+// "15%" / "15.00%" → 0.15, "0.15" → 0.15, "15" → 0.15
+//   (셀 서식에 따라 Sheets API 가 '%' 포함 문자열 또는 소수를 돌려주므로 둘 다 수용)
 function asPercent(v: string | undefined): number | null {
   const t = (v ?? '').trim();
   if (!t) return null;
   const hasPct = t.includes('%');
   const n = Number(t.replace(/[%\s,]/g, ''));
   if (!Number.isFinite(n)) return null;
-  return hasPct ? n / 100 : n / 100; // "15.00%" → 0.15; "15"도 0.15로 가정
+  if (hasPct) return n / 100;
+  return Math.abs(n) < 1 ? n : n / 100;
 }
 
 function asDate(v: string | undefined): string | null {
@@ -315,51 +291,31 @@ export async function fetchProposalArchive(): Promise<ProposalArchiveRow[]> {
   if (!sheetId) {
     throw new Error('GOOGLE_SHEETS_ARCHIVE_SHEET_ID 환경변수가 필요합니다.');
   }
-  // 헤더 행(1행) 제외, 2행부터 35열 (A~AI)
-  // 탭 이름: '제안서.2025 Ver' (공백·점·년도 포함 — Sheets API는 따옴표로 감싸야 함)
-  const rows = await fetchSheetValues(sheetId, "'제안서.2025 Ver'!A2:AI");
+  // 헤더 행(1행) 제외, 2행부터 A~T
+  // 탭 이름: '수주인센티브 대상' (공백 포함 — Sheets API는 따옴표로 감싸야 함)
+  const rows = await fetchSheetValues(sheetId, "'수주인센티브 대상'!A2:T");
 
   const out: ProposalArchiveRow[] = [];
   for (const r of rows) {
-    const clientName = (r[5] ?? '').trim();
-    if (!clientName) continue; // 광고주 없는 행 스킵
+    const opportunityId = (r[0] ?? '').trim();   // A
+    const clientName    = (r[2] ?? '').trim();   // C
+    // 기회ID(=upsert 키) 또는 광고주가 없는 행은 스킵
+    if (!opportunityId || !clientName) continue;
 
     out.push({
-      needs_committee:   asBool(r[0]),                  // A
-      bidding_status:    nullableText(r[1]),            // B
-      category:          normalizeCategory(nullableText(r[2])), // C — '신규(운영경험 X)' 등 변형 → '신규'/'연장'으로 통일
-      industry:          nullableText(r[3]),            // D
-      proposal_types:    asMulti(r[4]),                 // E
-      client_name:       clientName,                    // F
-      workflow_note:     nullableText(r[6]),            // G
-      proposal_at:       asDate(r[7]),                  // H
-      building_due_at:   asDate(r[8]),                  // I
-      pt_at:             asDate(r[9]),                  // J
-      result_at:         asDate(r[10]),                 // K
-      agency:            nullableText(r[11]),           // L
-      pl:                nullableText(r[12]),           // M
-      teams:             asMulti(r[13]),                // N
-      participants:      asMulti(r[14]),                // O
-      r_value:           asMoney(r[15]),                // P
-      commission:        asPercent(r[16]),              // Q
-      region:            nullableText(r[17]),           // R
-      kpis:              asMulti(r[18]),                // S
-      kpi_detail:        nullableText(r[19]),           // T
-      media_scope:       asMulti(r[20]),                // U
-      workflow_folder:   nullableText(r[21]),           // V
-      ppt_url:           nullableText(r[22]),           // W
-      pdf_url:           nullableText(r[23]),           // X
-      presentation_url:  nullableText(r[24]),           // Y
-      factbook_folder:   nullableText(r[25]),           // Z
-      rfp_folder:        nullableText(r[26]),           // AA
-      mix_folder:        nullableText(r[27]),           // AB
-      expected_revenue:  asMoney(r[28]),                // AC
-      pre_review_marked: asBoolNullable(r[29]),         // AD
-      strategy_note:     nullableText(r[30]),           // AE
-      planning_note:     nullableText(r[31]),           // AF
-      coaching_done:     asBoolNullable(r[32]),         // AG
-      coaching_at:       nullableText(r[33]),           // AH (자유형식 그대로)
-      coaching_note:     nullableText(r[34]),           // AI
+      opportunity_id:   opportunityId,                           // A 기회ID
+      needs_committee:  asTargetFlag(r[1]),                      // B 대상여부
+      client_name:      clientName,                              // C 광고주명
+      category:         normalizeCategory(nullableText(r[3])),   // D 구분 — '신규(운영경험 X)' 등 변형 → '신규'/'연장' 통일
+      industry:         nullableText(r[4]),                      // E 산업군
+      teams:            asMulti(r[5]),                           // F 담당팀
+      pl:               nullableText(r[6]),                      // G PL명
+      proposal_types:   asMulti(r[8]),                           // I 제품
+      proposal_at:      asDate(r[10]),                           // K 제출일
+      r_value:          asMoney(r[11]),                          // L 취급고 (= R값)
+      commission:       asPercent(r[12]),                        // M 수수료율
+      expected_revenue: asMoney(r[13]),                          // N 영업수익
+      bidding_status:   nullableText(r[16]),                     // Q 결과
     });
   }
   return out;

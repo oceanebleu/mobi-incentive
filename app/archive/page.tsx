@@ -2,8 +2,8 @@
 
 // ─────────────────────────────────────────────────────────────
 // /archive — 제안 자료 아카이브
-// '제안서.2025 Ver' 시트의 A열 TRUE 행만 DB로 동기화하고,
-// 운영위원회 대상으로 선정된 건은 [운영위로 보내기]로 projects 테이블에 승격한다.
+// '수주인센티브 대상' 시트의 B열(대상여부)='대상' 행만 DB로 동기화하고,
+// 운영위원회 대상으로 선정된 건은 [프로젝트 생성]으로 projects 테이블에 승격한다.
 // ─────────────────────────────────────────────────────────────
 
 import { useEffect, useMemo, useState } from 'react';
@@ -24,41 +24,24 @@ import clsx from 'clsx';
 
 interface ArchiveRow {
   id: number;
-  needs_committee: boolean;
-  bidding_status: string | null;
-  category: string | null;
-  industry: string | null;
-  proposal_types: string[] | null;
-  client_name: string;
-  workflow_note: string | null;
-  proposal_at: string | null;
+  // '수주인센티브 대상' 시트 매핑
+  opportunity_id: string | null;   // A 기회ID
+  needs_committee: boolean;        // B 대상여부
+  client_name: string;             // C 광고주명
+  category: string | null;         // D 구분
+  industry: string | null;         // E 산업군
+  teams: string[] | null;          // F 담당팀
+  pl: string | null;               // G PL명
+  proposal_types: string[] | null; // I 제품
+  proposal_at: string | null;      // K 제출일
+  r_value: number | null;          // L 취급고 (R값)
+  commission: number | null;       // M 수수료율
+  expected_revenue: number | null; // N 영업수익
+  bidding_status: string | null;   // Q 결과
+  // 구 시트 잔존 데이터 (과거 행에만 값이 있음)
   building_due_at: string | null;
-  pt_at: string | null;
-  result_at: string | null;
   agency: string | null;
-  pl: string | null;
-  teams: string[] | null;
   participants: string[] | null;
-  r_value: number | null;
-  commission: number | null;
-  region: string | null;
-  kpis: string[] | null;
-  kpi_detail: string | null;
-  media_scope: string[] | null;
-  workflow_folder: string | null;
-  ppt_url: string | null;
-  pdf_url: string | null;
-  presentation_url: string | null;
-  factbook_folder: string | null;
-  rfp_folder: string | null;
-  mix_folder: string | null;
-  expected_revenue: number | null;
-  pre_review_marked: boolean | null;
-  strategy_note: string | null;
-  planning_note: string | null;
-  coaching_done: boolean | null;
-  coaching_at: string | null;
-  coaching_note: string | null;
   promoted_project_id: string | null;
   promoted_at: string | null;
   promoted_by_email: string | null;
@@ -73,18 +56,21 @@ interface ArchiveRow {
 
 type Tab = 'PENDING' | 'PROMOTED' | 'LOST';
 
-// 입찰상태가 수주실패인지 — 시트 표기 변형 흡수 (공백 제거 후 substring)
-const isLostStatus = (s: string | null | undefined) =>
-  !!s && s.replace(/\s/g, '').includes('수주실패');
+// 결과(Q열)가 종결 상태인지 — 수주실패 / 제안드랍. 시트 표기 변형 흡수 (공백 제거 후 substring)
+const isLostStatus = (s: string | null | undefined) => {
+  if (!s) return false;
+  const t = s.replace(/\s/g, '');
+  return t.includes('수주실패') || t.includes('제안드랍') || t.includes('드랍');
+};
 
 const withCommas = (n: number) => {
   const s = String(Math.round(n));
   return s.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 };
 
-// 운영팀이 직접 편집하는 시트로 바로 이동시키는 외부 링크
+// 운영팀이 직접 편집하는 시트로 바로 이동시키는 외부 링크 ('수주인센티브 대상' 탭)
 const ARCHIVE_SHEET_URL =
-  'https://docs.google.com/spreadsheets/d/1LscohDN8Di-RRz1UJyjFx7xVmgbJrPc6cgD8iQW7Fp8/edit';
+  'https://docs.google.com/spreadsheets/d/17IBaYyBdfapzAUI9_QRFEaL-Tv75-ykPQ91DMnjMbwI/edit';
 
 export default function ArchivePage() {
   const [items, setItems] = useState<ArchiveRow[]>([]);
@@ -134,7 +120,11 @@ export default function ArchivePage() {
         minute: '2-digit',
         hour12: false,
       });
-      setLastSync(`${stamp} · 신규 ${json.new ?? 0}건 추가`);
+      const parts = [`신규 ${json.new ?? 0}건 추가`, `갱신 ${json.updated ?? 0}건`];
+      if (json.skippedExistingProject > 0) {
+        parts.push(`이미 프로젝트로 관리 중인 ${json.skippedExistingProject}건 제외`);
+      }
+      setLastSync(`${stamp} · ${parts.join(' · ')}`);
       await load();
     } catch (e: any) {
       setError(e?.message ?? '동기화 중 오류');
@@ -261,12 +251,12 @@ export default function ArchivePage() {
       if (!q) return true;
       const hay = [
         r.client_name,
+        r.opportunity_id,
         r.industry,
         r.category,
         r.pl,
-        r.agency,
         (r.teams ?? []).join(' '),
-        (r.participants ?? []).join(' '),
+        (r.proposal_types ?? []).join(' '),
         r.bidding_status,
       ]
         .filter(Boolean)
@@ -370,7 +360,7 @@ export default function ArchivePage() {
               : undefined
           }
         />
-        <Stat label="수주실패" value={counts.lost} tone="red" />
+        <Stat label="수주실패 · 제안드랍" value={counts.lost} tone="red" />
       </div>
 
       {/* 탭 */}
@@ -379,7 +369,7 @@ export default function ArchivePage() {
           active={tab === 'PENDING'}
           onClick={() => setTab('PENDING')}
           label="미등록"
-          hint="수주실패 제외, 아직 운영위 등록 전"
+          hint="수주실패·드랍 제외, 아직 운영위 등록 전"
           count={counts.pending}
         />
         <TabButton
@@ -392,8 +382,8 @@ export default function ArchivePage() {
         <TabButton
           active={tab === 'LOST'}
           onClick={() => setTab('LOST')}
-          label="수주실패"
-          hint="운영위 요청 전에 이미 실패된 건"
+          label="수주실패 · 드랍"
+          hint="운영위 요청 전에 이미 종결된 건"
           count={counts.lost}
         />
       </div>
@@ -404,7 +394,7 @@ export default function ArchivePage() {
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="광고주, PL, 산업, 팀, 입찰상태 검색..."
+            placeholder="광고주, 기회ID, PL, 산업, 팀, 제품, 결과 검색..."
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
@@ -430,13 +420,13 @@ export default function ArchivePage() {
                 {[
                   '광고주',
                   '구분',
-                  '산업',
-                  '팀',
+                  '제품',
                   'PL',
                   '제출일',
                   'R값',
-                  '수수료',
-                  '입찰상태',
+                  '수수료율',
+                  '영업수익',
+                  '결과',
                   '액션',
                 ].map(h => (
                   <th
@@ -466,7 +456,7 @@ export default function ArchivePage() {
                         ? '운영위 대상 미등록 건이 없습니다.'
                         : tab === 'PROMOTED'
                         ? '아직 등록된 프로젝트가 없습니다.'
-                        : '수주실패로 분류된 건이 없습니다.'}
+                        : '수주실패·제안드랍으로 분류된 건이 없습니다.'}
                     </p>
                   </td>
                 </tr>
@@ -488,22 +478,22 @@ export default function ArchivePage() {
                       <CategoryBadge category={r.category} />
                     </td>
                     <td className="px-4 py-3 align-top text-xs text-gray-700">
-                      {r.industry ?? '-'}
-                    </td>
-                    <td className="px-4 py-3 align-top text-xs text-gray-700">
-                      {(r.teams ?? []).join(' / ') || '-'}
+                      {(r.proposal_types ?? []).join(' / ') || '-'}
                     </td>
                     <td className="px-4 py-3 align-top text-xs text-gray-700">
                       {r.pl ?? '-'}
                     </td>
                     <td className="px-4 py-3 align-top text-xs text-gray-700 whitespace-nowrap">
-                      {r.building_due_at ?? '-'}
+                      {r.proposal_at ?? r.building_due_at ?? '-'}
                     </td>
                     <td className="px-4 py-3 align-top text-xs text-gray-700 whitespace-nowrap">
                       {r.r_value != null ? `${withCommas(r.r_value)}원` : '-'}
                     </td>
                     <td className="px-4 py-3 align-top text-xs text-gray-700 whitespace-nowrap">
                       {r.commission != null ? `${(r.commission * 100).toFixed(1)}%` : '-'}
+                    </td>
+                    <td className="px-4 py-3 align-top text-xs text-gray-700 whitespace-nowrap">
+                      {r.expected_revenue != null ? `${withCommas(r.expected_revenue)}원` : '-'}
                     </td>
                     <td className="px-4 py-3 align-top">
                       <BiddingBadge status={r.bidding_status} />
@@ -561,7 +551,9 @@ export default function ArchivePage() {
                         </div>
                       ) : isLostStatus(r.bidding_status) ? (
                         <div className="flex flex-col gap-1">
-                          <span className="text-[11px] text-gray-400">진행 불필요 (수주실패)</span>
+                          <span className="text-[11px] text-gray-400">
+                            진행 불필요 ({r.bidding_status ?? '종결'})
+                          </span>
                           <button
                             onClick={() => deleteRow(r)}
                             disabled={deletingId === r.id}
@@ -681,12 +673,14 @@ function TabButton({
   );
 }
 
+// 결과(Q열) 배지 — 수주성공 / 제안드랍 / 수주실패 + 구 시트의 입찰상태 표기도 수용
 function BiddingBadge({ status }: { status: string | null }) {
   if (!status) return <span className="text-xs text-gray-400">-</span>;
   const t = status.replace(/\s/g, '');
   let cls = 'bg-gray-100 text-gray-600';
   if (t.includes('수주성공')) cls = 'bg-emerald-100 text-emerald-700';
   else if (t.includes('수주실패')) cls = 'bg-red-100 text-red-700';
+  else if (t.includes('드랍')) cls = 'bg-gray-200 text-gray-600';
   else if (t.includes('대행종료') || t.includes('대행종결') || t.includes('대화종료'))
     cls = 'bg-gray-200 text-gray-600';
   else if (t.includes('결과대기') || t.includes('결과반영')) cls = 'bg-amber-100 text-amber-700';
@@ -748,56 +742,36 @@ function DetailModal({ row, onClose }: { row: ArchiveRow; onClose: () => void })
         </div>
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 text-sm">
           <Section title="기본 정보">
-            <Field label="입찰 상태" value={row.bidding_status} />
-            <Field label="대행사" value={row.agency} />
+            <Field label="기회ID" value={row.opportunity_id} />
+            <Field label="결과" value={row.bidding_status} />
+            <Field label="구분" value={row.category} />
+            <Field label="산업군" value={row.industry} />
+            <Field label="담당팀" value={(row.teams ?? []).join(' / ') || null} />
             <Field label="PL" value={row.pl} />
-            <Field label="팀" value={(row.teams ?? []).join(' / ') || null} />
-            <Field label="참여자" value={(row.participants ?? []).join(', ') || null} />
-            <Field label="지역" value={row.region} />
-          </Section>
-          <Section title="일정">
-            <Field label="제안일" value={row.proposal_at} />
-            <Field label="빌딩 마감" value={row.building_due_at} />
-            <Field label="PT일" value={row.pt_at} />
-            <Field label="결과일" value={row.result_at} />
+            <Field label="제품" value={(row.proposal_types ?? []).join(', ') || null} />
+            <Field label="제출일" value={row.proposal_at ?? row.building_due_at} />
           </Section>
           <Section title="규모">
             <Field
-              label="R값"
+              label="R값 (취급고)"
               value={row.r_value != null ? `${withCommas(row.r_value)}원` : null}
             />
             <Field
-              label="예상 매출"
-              value={row.expected_revenue != null ? `${withCommas(row.expected_revenue)}원` : null}
-            />
-            <Field
-              label="수수료"
+              label="수수료율"
               value={row.commission != null ? `${(row.commission * 100).toFixed(2)}%` : null}
             />
+            <Field
+              label="영업수익 (수수료)"
+              value={row.expected_revenue != null ? `${withCommas(row.expected_revenue)}원` : null}
+            />
           </Section>
-          <Section title="KPI / 매체">
-            <Field label="KPI" value={(row.kpis ?? []).join(', ') || null} />
-            <Field label="KPI 상세" value={row.kpi_detail} multiline />
-            <Field label="매체 범위" value={(row.media_scope ?? []).join(', ') || null} />
-          </Section>
-          <Section title="자료 링크">
-            <LinkField label="워크플로 폴더" url={row.workflow_folder} />
-            <LinkField label="PPT" url={row.ppt_url} />
-            <LinkField label="PDF" url={row.pdf_url} />
-            <LinkField label="발표자료" url={row.presentation_url} />
-            <LinkField label="팩트북" url={row.factbook_folder} />
-            <LinkField label="RFP" url={row.rfp_folder} />
-            <LinkField label="믹스" url={row.mix_folder} />
-          </Section>
-          <Section title="코칭 / 메모">
-            <Field label="사전 리뷰" value={row.pre_review_marked == null ? null : row.pre_review_marked ? 'O' : 'X'} />
-            <Field label="코칭 완료" value={row.coaching_done == null ? null : row.coaching_done ? 'O' : 'X'} />
-            <Field label="코칭 일시" value={row.coaching_at} />
-            <Field label="코칭 메모" value={row.coaching_note} multiline />
-            <Field label="전략 메모" value={row.strategy_note} multiline />
-            <Field label="기획 메모" value={row.planning_note} multiline />
-            <Field label="워크플로 메모" value={row.workflow_note} multiline />
-          </Section>
+          {/* 구 '제안서.2025 Ver' 시트에서 넘어온 행에만 값이 있는 항목 */}
+          {(row.agency || (row.participants ?? []).length > 0) && (
+            <Section title="이전 시트 데이터">
+              <Field label="대행사" value={row.agency} />
+              <Field label="참여자" value={(row.participants ?? []).join(', ') || null} />
+            </Section>
+          )}
           {row.promoted_project_id && (
             <Section title="운영위 등록 정보">
               <Field label="프로젝트 ID" value={row.promoted_project_id} />
@@ -853,27 +827,6 @@ function Field({
       >
         {value ?? '-'}
       </p>
-    </div>
-  );
-}
-
-function LinkField({ label, url }: { label: string; url: string | null }) {
-  return (
-    <div>
-      <p className="text-[10px] text-gray-400 uppercase">{label}</p>
-      {url ? (
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline truncate max-w-full"
-        >
-          <ExternalLink size={11} />
-          <span className="truncate">{url}</span>
-        </a>
-      ) : (
-        <p className="text-sm text-gray-400 mt-0.5">-</p>
-      )}
     </div>
   );
 }
