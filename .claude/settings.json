@@ -42,7 +42,8 @@
       "Bash(grep -rhoE \"\\(bg|text|border|ring|from|to\\)-\\(orange|amber|yellow|lime|green|teal|cyan|sky|indigo|violet|purple|fuchsia|pink|rose\\)-[0-9]{2,3}\" app components --include=\"*.tsx\")",
       "Bash(grep -rhoE \"\\(bg|text|border|ring|from|to\\)-\\(gray|blue|emerald|red|brand\\)-[0-9]{2,3}\" app components --include=\"*.tsx\")",
       "Bash(python3 -)",
-      "Bash(grep -rhoE \"\\(bg|text|border|ring|from|to\\)-[a-z]+-[0-9]{2,3}\" app components --include=\"*.tsx\")"
+      "Bash(grep -rhoE \"\\(bg|text|border|ring|from|to\\)-[a-z]+-[0-9]{2,3}\" app components --include=\"*.tsx\")",
+      "Bash(grep -n \"^function \\\\|^}$\" app/page.tsx)"
     ],
     "additionalDirectories": [
       "/home/mobidays/mobi-incentive/app/api/projects/[id]",
