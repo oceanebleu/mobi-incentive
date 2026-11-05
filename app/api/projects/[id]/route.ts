@@ -40,6 +40,7 @@ const ALLOWED_FIELDS = new Set([
   'campaign_end_date',
   'won_date',
   'category',
+  'product',
   'note',
   'committee_result',
 ]);

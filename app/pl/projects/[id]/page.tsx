@@ -729,6 +729,7 @@ function PLProjectFormPageInner() {
                   placeholder="이름"
                 />
                 <FixedField label="캠페인 구분" value={project.category ?? '-'} />
+                <FixedField label="제품" value={(project as any).product ?? '-'} />
               </div>
             </Card>
 

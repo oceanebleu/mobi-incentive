@@ -234,6 +234,7 @@ export default function ProjectDetailPage() {
               value={project.commission != null ? formatCommission(project.commission) : '-'}
             />
             <InfoRow label="구분" value={project.category ?? '-'} />
+            <InfoRow label="제품" value={(project as any).product ?? '-'} />
             <div className="border-t border-gray-100 pt-2.5">
               <InfoRow
                 label="인센티브 재원"
@@ -1202,6 +1203,7 @@ const FIELD_LABELS: Record<string, string> = {
   second_payment_skipped: '2차 미지급',
   campaign_end_date: '캠페인 종료예정일',
   category: '구분',
+  product: '제품',
   note: '비고',
   _members_replaced: '멤버 일괄 교체',
 };

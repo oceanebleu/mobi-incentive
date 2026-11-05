@@ -125,6 +125,7 @@ export async function POST(
     second_payment_skipped: false,
     campaign_end_date: null,
     category: a.category ?? null,
+    product: products.length > 0 ? products.join(', ') : null,
     note: a.strategy_note ?? null,
     source_proposal_id: null,
   };

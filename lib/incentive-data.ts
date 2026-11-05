@@ -127,6 +127,8 @@ export interface SupabaseProject {
   second_payment_skipped: boolean;
   campaign_end_date: string | null;
   category: string | null;
+  /** 제품 — 아카이브 승격 시 '수주인센티브 대상' 시트 I열에서 자동 기입 */
+  product: string | null;
   note: string | null;
   fund_rate: number | null; // 0.01 (연장) | 0.02 (신규) — 수정 가능
   /** PL 작성요청 Slack DM 발송 시각 (ISO 8601). null = 아직 발송 안 됨 */

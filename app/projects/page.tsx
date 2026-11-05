@@ -116,7 +116,7 @@ export default function ProjectsPage() {
 
       const q = search.trim().toLowerCase();
       if (q) {
-        const hay = [p.campaign_name, p.pl, p.team, p.id]
+        const hay = [p.campaign_name, p.pl, p.team, p.id, p.product]
           .filter(Boolean)
           .join(' ')
           .toLowerCase();
@@ -205,7 +205,7 @@ export default function ProjectsPage() {
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="캠페인명, PL, 팀 검색..."
+            placeholder="캠페인명, PL, 팀, 제품 검색..."
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20"
@@ -272,6 +272,7 @@ export default function ProjectsPage() {
                   '담당팀',
                   'PL',
                   '구분',
+                  '제품',
                   '수주여부',
                   '지급 단계',
                   '인센티브 재원',
@@ -291,14 +292,14 @@ export default function ProjectsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={canEdit ? 11 : 10} className="text-center py-12 text-sm text-gray-400">
+                  <td colSpan={canEdit ? 12 : 11} className="text-center py-12 text-sm text-gray-400">
                     <Loader2 size={20} className="animate-spin mx-auto mb-2 opacity-50" />
                     데이터 불러오는 중...
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={canEdit ? 11 : 10} className="text-center py-12 text-sm text-gray-400">
+                  <td colSpan={canEdit ? 12 : 11} className="text-center py-12 text-sm text-gray-400">
                     프로젝트가 없습니다
                   </td>
                 </tr>
@@ -402,6 +403,9 @@ function ProjectRow({
       <td className="px-4 py-3 text-gray-700 font-medium">{p.pl ?? '-'}</td>
       <td className="px-4 py-3">
         <CategoryBadge category={p.category} />
+      </td>
+      <td className="px-4 py-3 text-xs text-gray-600 max-w-[140px]">
+        {p.product ?? '-'}
       </td>
       <td className="px-4 py-3">
         <span className={clsx('text-[11px] font-medium px-2 py-0.5 rounded-full', acqCls)}>

@@ -16,6 +16,17 @@ import { ACQUISITION_LABEL, type SupabaseProject } from '@/lib/incentive-data';
 
 const ACQ_OPTIONS = ['WON', 'LOST', 'CANCELLED', 'REVIEWING', 'RESULT_PENDING'] as const;
 
+// 제품 — '수주인센티브 대상' 시트 I열 기준. 자유입력도 허용(datalist 제안용)
+const PRODUCT_OPTIONS = [
+  '퍼포먼스마케팅',
+  'AEO/GEO',
+  '결제대행',
+  '옥외광고',
+  '네이버NOSP',
+  '모비스트',
+  'GPT ads',
+] as const;
+
 const inputCls =
   'w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white';
 
@@ -57,6 +68,7 @@ export default function ProjectEditModal({
     won_date: (project as any)?.won_date ?? '',
     campaign_end_date: project?.campaign_end_date ?? '',
     category: project?.category ?? '',
+    product: (project as any)?.product ?? '',
     note: project?.note ?? '',
     committee_result: (project as any)?.committee_result ?? '',
   });
@@ -108,6 +120,7 @@ export default function ProjectEditModal({
       'team',
       'pl',
       'category',
+      'product',
       'note',
       'committee_result',
     ]) {
@@ -225,6 +238,22 @@ export default function ProjectEditModal({
                   <option value="신규">신규</option>
                   <option value="연장">연장</option>
                 </select>
+              </Field>
+              {/* 제품 — 아카이브 승격 건은 시트 I열에서 자동 기입됨.
+                  직접 생성한 프로젝트용으로 목록 제안 + 자유입력 모두 허용 */}
+              <Field label="제품">
+                <input
+                  value={form.product ?? ''}
+                  onChange={e => set('product', e.target.value)}
+                  list="project-product-options"
+                  placeholder="예: 퍼포먼스마케팅"
+                  className={inputCls}
+                />
+                <datalist id="project-product-options">
+                  {PRODUCT_OPTIONS.map(p => (
+                    <option key={p} value={p} />
+                  ))}
+                </datalist>
               </Field>
             </div>
           </Section>

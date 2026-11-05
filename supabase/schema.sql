@@ -122,6 +122,10 @@ create table if not exists public.projects (
   won_date                    date,
   campaign_end_date           date,                            -- 캠페인 운영종료 예상일 (PL 작성)
   category                    text,                            -- V: 연장/신규
+  -- 제품 (퍼포먼스마케팅 / AEO/GEO / 결제대행 / 옥외광고 / 네이버NOSP / 모비스트 / GPT ads)
+  --   아카이브 승격 시 '수주인센티브 대상' 시트 I열에서 자동 기입.
+  --   같은 광고주가 제품별로 여러 프로젝트를 갖는 경우 구분용.
+  product                     text,
   note                        text,                            -- W: 지급 특이사항
   source_proposal_id          bigint,                          -- proposals.id에서 승격된 경우
   -- 인센티브 재원율 (= R값 × 수수료 × fund_rate 로 incentive_fund 자동 계산)
@@ -147,6 +151,7 @@ create table if not exists public.projects (
 alter table public.projects add column if not exists pl_request_sent_at timestamptz;
 alter table public.projects add column if not exists payment_notify_sent_at timestamptz;
 alter table public.projects add column if not exists committee_result text;
+alter table public.projects add column if not exists product text;
 alter table public.projects add column if not exists won_date date;
 alter table public.projects add column if not exists review_date date;
 alter table public.projects add column if not exists review_synced_at timestamptz;
