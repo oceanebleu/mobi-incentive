@@ -5,8 +5,6 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import {
   Wallet,
-  CreditCard,
-  TrendingUp,
   CheckCircle,
   BarChart3,
   Users,
@@ -328,70 +326,47 @@ export default function DashboardPage() {
     };
   })();
 
-  const kpiCards = [
-    {
-      label: '누적 1차 지급액',
-      value: formatKRW(stats.totalFirstPaid),
-      sub: formatKRWFull(stats.totalFirstPaid),
-      icon: CreditCard,
-      colorCls: 'text-blue-700',
-      bgCls: 'bg-blue-50',
-      iconBg: 'bg-blue-100',
-    },
-    {
-      label: '누적 2차 지급액',
-      value: formatKRW(stats.totalSecondPaid),
-      sub: formatKRWFull(stats.totalSecondPaid),
-      icon: CreditCard,
-      colorCls: 'text-blue-700',
-      bgCls: 'bg-blue-50',
-      iconBg: 'bg-blue-100',
-    },
-    {
-      label: '지급 예정 총액',
-      value: formatKRW(stats.totalPending),
-      sub: formatKRWFull(stats.totalPending),
-      icon: TrendingUp,
-      colorCls: 'text-blue-700',
-      bgCls: 'bg-blue-50',
-      iconBg: 'bg-blue-100',
-    },
-    {
-      label: '1차 지급 완료 비율',
-      value: `${stats.firstPayRatio.toFixed(1)}%`,
-      sub: (() => {
-        const cancelled = stats.firstPaidThenCancelledCount;
-        const cancelledPct =
-          stats.totalProjects > 0
-            ? ((cancelled / stats.totalProjects) * 100).toFixed(1)
-            : '0.0';
-        return (
-          <span className="block">
-            <span className="block">
-              재원확정 {stats.fundConfirmedCount}건 중 {stats.firstPaidCount}건 완료 · 전체{' '}
-              {stats.totalProjects}건
-            </span>
-            <span className="block text-red-600 mt-0.5">
-              1차 지급 후 대행종료 {cancelled}건 ({cancelledPct}%)
-            </span>
-          </span>
-        );
-      })(),
-      icon: TrendingUp,
-      colorCls: 'text-emerald-700',
-      bgCls: 'bg-emerald-50',
-      iconBg: 'bg-emerald-100',
-    },
-    {
-      label: '1~2차 지급 완료 비율',
-      value: `${stats.allPayRatio.toFixed(1)}%`,
-      sub: `재원확정 ${stats.fundConfirmedCount}건 중 ${stats.allPaidCount}건 모두 완료 · 전체 ${stats.totalProjects}건`,
-      icon: CheckCircle,
-      colorCls: 'text-blue-700',
-      bgCls: 'bg-blue-50',
-      iconBg: 'bg-blue-100',
-    },
-  ];
+  // 히어로 오른쪽에 들어갈 보조 지표 — 금액 3종 + 완료 비율 2종
+  const kpiRows = (() => {
+    const cancelled = stats.firstPaidThenCancelledCount;
+    const cancelledPct =
+      stats.totalProjects > 0 ? ((cancelled / stats.totalProjects) * 100).toFixed(1) : '0.0';
+    return {
+      amounts: [
+        {
+          label: '누적 1차 지급액',
+          value: formatKRW(stats.totalFirstPaid),
+          sub: formatKRWFull(stats.totalFirstPaid),
+        },
+        {
+          label: '누적 2차 지급액',
+          value: formatKRW(stats.totalSecondPaid),
+          sub: formatKRWFull(stats.totalSecondPaid),
+        },
+        {
+          label: '지급 예정 총액',
+          value: formatKRW(stats.totalPending),
+          sub: formatKRWFull(stats.totalPending),
+        },
+      ],
+      ratios: [
+        {
+          label: '1차 지급 완료 비율',
+          value: `${stats.firstPayRatio.toFixed(1)}%`,
+          sub: `재원확정 ${stats.fundConfirmedCount}건 중 ${stats.firstPaidCount}건 완료`,
+          warn: cancelled > 0 ? `1차 지급 후 대행종료 ${cancelled}건 (${cancelledPct}%)` : null,
+          done: true,
+        },
+        {
+          label: '1~2차 지급 완료 비율',
+          value: `${stats.allPayRatio.toFixed(1)}%`,
+          sub: `재원확정 ${stats.fundConfirmedCount}건 중 ${stats.allPaidCount}건 모두 완료`,
+          warn: null,
+          done: false,
+        },
+      ],
+    };
+  })();
 
   return (
     <div className="p-8 space-y-7 fade-in">
@@ -413,55 +388,78 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* ① 히어로 — 누적 지급 완료액 */}
+      {/* 요약 — 좌: 누적 지급 완료액 강조 / 우: 보조 지표를 텍스트로 */}
       <div className="rounded-2xl border border-blue-100 bg-blue-50 px-7 py-6">
-        <div className="flex items-center gap-2.5">
-          <div className="rounded-lg bg-blue-100 p-2">
-            <Wallet size={16} className="text-blue-700" />
-          </div>
-          <span className="text-sm font-semibold text-gray-600">누적 지급 완료액</span>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-end gap-x-4 gap-y-1">
-          <span className="text-[44px] leading-none font-bold tracking-tight text-blue-700">
-            {formatKRW(stats.totalPaid)}
-          </span>
-          <span className="text-sm text-gray-400 pb-1">{formatKRWFull(stats.totalPaid)}</span>
-        </div>
-
-        {/* 1차 / 2차 구성비 — 아래 카드의 두 금액이 어떻게 나뉘는지 한눈에 */}
-        {stats.totalPaid > 0 && (
-          <div className="mt-5 max-w-xl">
-            <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-blue-100">
-              <div className="bg-blue-600" style={{ width: `${paidSplit.first}%` }} />
-              <div className="bg-blue-300" style={{ width: `${paidSplit.second}%` }} />
+        <div className="flex flex-col gap-7 lg:flex-row lg:items-stretch lg:gap-8">
+          {/* 좌 — 핵심 지표 */}
+          <div className="lg:w-[340px] lg:flex-shrink-0">
+            <div className="flex items-center gap-2.5">
+              <div className="rounded-lg bg-blue-100 p-2">
+                <Wallet size={16} className="text-blue-700" />
+              </div>
+              <span className="text-sm font-semibold text-gray-600">누적 지급 완료액</span>
             </div>
-            <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-gray-500">
-              <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-blue-600" />
-                1차 {paidSplit.first.toFixed(1)}%
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-blue-300" />
-                2차 {paidSplit.second.toFixed(1)}%
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
 
-      <div className="space-y-4">
-        {/* ② 금액 3종 */}
-        <div className="grid grid-cols-3 gap-4">
-          {kpiCards.slice(0, 3).map(card => (
-            <KpiCard key={card.label} card={card} />
-          ))}
-        </div>
-        {/* ③ 완료 비율 2종 — 보조 설명이 길어 2열로 넓게 */}
-        <div className="grid grid-cols-2 gap-4">
-          {kpiCards.slice(3).map(card => (
-            <KpiCard key={card.label} card={card} />
-          ))}
+            <div className="mt-4 flex flex-wrap items-end gap-x-3 gap-y-1">
+              <span className="text-[44px] leading-none font-bold tracking-tight text-blue-700">
+                {formatKRW(stats.totalPaid)}
+              </span>
+              <span className="text-sm text-gray-400 pb-1">{formatKRWFull(stats.totalPaid)}</span>
+            </div>
+
+            {/* 1차 / 2차 구성비 */}
+            {stats.totalPaid > 0 && (
+              <div className="mt-5">
+                <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-blue-100">
+                  <div className="bg-blue-600" style={{ width: `${paidSplit.first}%` }} />
+                  <div className="bg-blue-300" style={{ width: `${paidSplit.second}%` }} />
+                </div>
+                <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-gray-500">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-blue-600" />
+                    1차 {paidSplit.first.toFixed(1)}%
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-blue-300" />
+                    2차 {paidSplit.second.toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 세로 구분선 — 좁은 화면에서는 가로선 */}
+          <div className="border-t border-blue-100 lg:border-l lg:border-t-0" />
+
+          {/* 우 — 보조 지표 */}
+          <div className="flex-1 min-w-0 grid gap-x-8 gap-y-3 sm:grid-cols-2">
+            {kpiRows.amounts.map(r => (
+              <div key={r.label} className="flex items-baseline justify-between gap-3">
+                <span className="text-xs text-gray-500 whitespace-nowrap">{r.label}</span>
+                <span className="flex items-baseline gap-2 min-w-0">
+                  <span className="text-base font-bold text-blue-700">{r.value}</span>
+                  <span className="text-[11px] text-gray-400 truncate">{r.sub}</span>
+                </span>
+              </div>
+            ))}
+            {kpiRows.ratios.map(r => (
+              <div key={r.label} className="flex items-baseline justify-between gap-3">
+                <span className="text-xs text-gray-500 whitespace-nowrap">{r.label}</span>
+                <span className="text-right min-w-0">
+                  <span
+                    className={clsx(
+                      'text-base font-bold',
+                      r.done ? 'text-emerald-700' : 'text-blue-700'
+                    )}
+                  >
+                    {r.value}
+                  </span>
+                  <span className="block text-[11px] text-gray-400">{r.sub}</span>
+                  {r.warn && <span className="block text-[11px] text-red-600">{r.warn}</span>}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -703,35 +701,6 @@ export default function DashboardPage() {
 }
 
 /** ISO timestamp → "yyyy.mm.dd HH:MM" (KST, 24h) */
-// 히어로 아래 보조 KPI 카드 — 금액 3종 / 완료 비율 2종 공통
-function KpiCard({
-  card,
-}: {
-  card: {
-    label: string;
-    value: string;
-    sub: React.ReactNode;
-    icon: typeof Wallet;
-    colorCls: string;
-    bgCls: string;
-    iconBg: string;
-  };
-}) {
-  const Icon = card.icon;
-  return (
-    <div className={clsx('rounded-xl p-5 border border-white/80', card.bgCls)}>
-      <div className="flex items-center gap-2.5 mb-3">
-        <div className={clsx('rounded-lg p-2', card.iconBg)}>
-          <Icon size={15} className={card.colorCls} />
-        </div>
-        <span className="text-xs font-medium text-gray-500">{card.label}</span>
-      </div>
-      <div className={clsx('text-2xl font-bold leading-none', card.colorCls)}>{card.value}</div>
-      <div className="text-[11px] text-gray-400 mt-1.5">{card.sub}</div>
-    </div>
-  );
-}
-
 function formatRequestedAt(iso: string): string {
   const t = new Date(iso);
   // KST 표기 — UTC+9 시프트 후 UTC 메서드로 읽음 (서버/브라우저 timezone 무관하게 일관)
