@@ -12,7 +12,9 @@
       "Bash(git checkout *)",
       "Bash(node /tmp/claude-1000/-home-mobidays-mobi-incentive/5287417f-fe96-41f8-ac79-469961a8ecb7/scratchpad/verify.mjs)",
       "Bash(sed -i \"s|const asMulti = \\(v\\) => { const t = \\(v ?? ''\\).trim\\(\\); if \\(!t\\) return \\\\[\\\\]; return t.split\\(/\\\\[,/;\\\\]/\\).map\\(s => s.trim\\(\\)\\).filter\\(Boolean\\); };|const asMulti = \\(v\\) => { const t = \\(v ?? ''\\).trim\\(\\); if \\(!t\\) return []; return t.split\\(/[,\\\\\\\\/;]/\\).map\\(s => s.trim\\(\\)\\).filter\\(Boolean\\); };\\\\nconst asProducts = \\(v\\) => { const t = \\(v ?? ''\\).trim\\(\\); if \\(!t\\) return []; return t.split\\(/[,;]/\\).map\\(s => s.trim\\(\\)\\).filter\\(Boolean\\); };|\" verify.mjs)",
-      "Bash(sed -i 's|products: asMulti\\(row\\\\[8\\\\]\\)|products: asProducts\\(row[8]\\)|' verify.mjs)"
+      "Bash(sed -i 's|products: asMulti\\(row\\\\[8\\\\]\\)|products: asProducts\\(row[8]\\)|' verify.mjs)",
+      "Bash(node /tmp/claude-1000/-home-mobidays-mobi-incentive/5287417f-fe96-41f8-ac79-469961a8ecb7/scratchpad/product-dryrun.mjs)",
+      "Bash(node /tmp/claude-1000/-home-mobidays-mobi-incentive/5287417f-fe96-41f8-ac79-469961a8ecb7/scratchpad/product-apply.mjs)"
     ],
     "additionalDirectories": [
       "/home/mobidays/mobi-incentive/app/api/projects/[id]",
