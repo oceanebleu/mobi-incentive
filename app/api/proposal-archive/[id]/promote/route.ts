@@ -95,7 +95,7 @@ export async function POST(
     .eq('campaign_name', campaignName)
     .limit(1);
   if ((sameName?.length ?? 0) > 0 && products.length > 0) {
-    campaignName = `${a.client_name} (${products.join('/')})`;
+    campaignName = `${a.client_name} (${products.join(', ')})`;
   }
 
   const projectRow = {

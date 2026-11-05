@@ -478,7 +478,8 @@ export default function ArchivePage() {
                       <CategoryBadge category={r.category} />
                     </td>
                     <td className="px-4 py-3 align-top text-xs text-gray-700">
-                      {(r.proposal_types ?? []).join(' / ') || '-'}
+                      {/* 'AEO/GEO' 가 1개 제품이므로 콤마로 연결 */}
+                      {(r.proposal_types ?? []).join(', ') || '-'}
                     </td>
                     <td className="px-4 py-3 align-top text-xs text-gray-700">
                       {r.pl ?? '-'}

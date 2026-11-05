@@ -281,6 +281,17 @@ function asMulti(v: string | undefined): string[] {
     .filter(Boolean);
 }
 
+// 제품(I열) 전용 — 'AEO/GEO' 처럼 제품명 자체에 슬래시가 들어가므로
+// 슬래시는 구분자로 쓰지 않고 콤마/세미콜론만 사용한다.
+function asProducts(v: string | undefined): string[] {
+  const t = (v ?? '').trim();
+  if (!t) return [];
+  return t
+    .split(/[,;]/)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
 function nullableText(v: string | undefined): string | null {
   const t = (v ?? '').trim();
   return t === '' ? null : t;
@@ -310,7 +321,7 @@ export async function fetchProposalArchive(): Promise<ProposalArchiveRow[]> {
       industry:         nullableText(r[4]),                      // E 산업군
       teams:            asMulti(r[5]),                           // F 담당팀
       pl:               nullableText(r[6]),                      // G PL명
-      proposal_types:   asMulti(r[8]),                           // I 제품
+      proposal_types:   asProducts(r[8]),                        // I 제품 ('AEO/GEO' 는 1개 제품)
       proposal_at:      asDate(r[10]),                           // K 제출일
       r_value:          asMoney(r[11]),                          // L 취급고 (= R값)
       commission:       asPercent(r[12]),                        // M 수수료율
