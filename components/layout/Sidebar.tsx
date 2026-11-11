@@ -14,6 +14,8 @@ import {
   Upload,
   Archive,
   Wallet,
+  ExternalLink,
+  Contact,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { ROLE_LABELS } from '@/lib/roles';
@@ -40,6 +42,11 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/payroll', label: '월별 인센티브 실지급액', icon: Wallet, roles: ['ADMIN', 'PAYROLL'] },
   { href: '/users', label: '사용자관리', icon: ShieldCheck, roles: ['ADMIN'] },
   { href: '/admin/import', label: '데이터 Import', icon: Upload, roles: ['ADMIN'] },
+];
+
+// 외부 서비스 바로가기 — 새 탭으로 열리며 역할 제한 없음 (로그인 사용자 전원)
+const EXTERNAL_LINKS = [
+  { href: 'https://mobidays-crm.netlify.app/', label: '모비데이즈 CRM', icon: Contact },
 ];
 
 export default function Sidebar() {
@@ -97,6 +104,31 @@ export default function Sidebar() {
             </Link>
           );
         })}
+
+        {/* 외부 서비스 — 내부 메뉴와 섞이지 않도록 구분선 + 라벨로 분리 */}
+        {user && (
+          <div className="pt-4 mt-4 border-t border-gray-100">
+            <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+              바로가기
+            </p>
+            {EXTERNAL_LINKS.map(({ href, label, icon: Icon }) => (
+              <a
+                key={href}
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-800 transition-all group"
+              >
+                <Icon
+                  size={16}
+                  className="flex-shrink-0 text-gray-400 group-hover:text-gray-600"
+                />
+                <span className="flex-1">{label}</span>
+                <ExternalLink size={12} className="text-gray-300 group-hover:text-gray-500" />
+              </a>
+            ))}
+          </div>
+        )}
       </nav>
 
       {/* 로그인 사용자 정보 + 로그아웃 */}
