@@ -11,7 +11,6 @@ import {
   TrendingUp,
   LogOut,
   ShieldCheck,
-  Upload,
   Archive,
   Wallet,
   ExternalLink,
@@ -31,7 +30,7 @@ interface NavItem {
 
 // 메뉴별 노출 정책
 //   · 기본 메뉴(대시보드/프로젝트/개인별 지급): EXEC + ADMIN
-//   · 운영 도구(아카이브·사용자관리·데이터 import): ADMIN 만
+//   · 운영 도구(아카이브·사용자관리): ADMIN 만
 //   · 월별 인센티브 실지급액: PAYROLL + ADMIN
 //   · PAYROLL 사용자는 '월별 인센티브 실지급액' 외 메뉴 모두 가려짐
 const NAV_ITEMS: NavItem[] = [
@@ -41,7 +40,6 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/archive', label: '제안 자료 아카이브', icon: Archive, roles: ['ADMIN'] },
   { href: '/payroll', label: '월별 인센티브 실지급액', icon: Wallet, roles: ['ADMIN', 'PAYROLL'] },
   { href: '/users', label: '사용자관리', icon: ShieldCheck, roles: ['ADMIN'] },
-  { href: '/admin/import', label: '데이터 Import', icon: Upload, roles: ['ADMIN'] },
 ];
 
 // 외부 서비스 바로가기 — 새 탭으로 열리며 역할 제한 없음 (로그인 사용자 전원)
