@@ -8,7 +8,7 @@ import {
   FolderKanban,
   Users,
   ChevronRight,
-  TrendingUp,
+  Trophy,
   LogOut,
   ShieldCheck,
   Archive,
@@ -65,7 +65,7 @@ export default function Sidebar() {
       >
         <div className="flex items-center gap-2 mb-1">
           <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center">
-            <TrendingUp size={14} className="text-white" />
+            <Trophy size={14} className="text-white" />
           </div>
           <span className="text-sm font-bold text-gray-900">인센티브 관리</span>
         </div>
