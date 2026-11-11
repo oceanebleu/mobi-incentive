@@ -43,7 +43,19 @@
       "Bash(grep -rhoE \"\\(bg|text|border|ring|from|to\\)-\\(gray|blue|emerald|red|brand\\)-[0-9]{2,3}\" app components --include=\"*.tsx\")",
       "Bash(python3 -)",
       "Bash(grep -rhoE \"\\(bg|text|border|ring|from|to\\)-[a-z]+-[0-9]{2,3}\" app components --include=\"*.tsx\")",
-      "Bash(grep -n \"^function \\\\|^}$\" app/page.tsx)"
+      "Bash(grep -n \"^function \\\\|^}$\" app/page.tsx)",
+      "Bash(node /tmp/claude-1000/-home-mobidays-mobi-incentive/5287417f-fe96-41f8-ac79-469961a8ecb7/scratchpad/check-aeo.mjs)",
+      "Bash(sed 's/: Set<string>//; s/: Date\\)/\\)/g; s/: Date\\\\b//g; s/: string\\\\[\\\\]//g; s/: number\\\\b//g; s/: string\\\\b//g; s/: boolean\\\\b//g; s/: { year; month } | null//; s/: { year; month }//g; s/Array<{ year; month }>/Array/; s/ | null | undefined//')",
+      "Bash(node -e \"import\\('/tmp/payroll-date-strip.mjs'\\).then\\(\\(\\)=>console.log\\('ok'\\)\\).catch\\(e=>console.log\\('ERR',e.message\\)\\)\")",
+      "Bash(node -e \"import\\('/home/mobidays/mobi-incentive/scratch-payroll-date.mjs'\\).then\\(m=>console.log\\('ok', m.payrollMonthFor\\('2026-12-10'\\)\\)\\).catch\\(e=>console.log\\('ERR',e.message\\)\\)\")",
+      "Bash(node /tmp/claude-1000/-home-mobidays-mobi-incentive/5287417f-fe96-41f8-ac79-469961a8ecb7/scratchpad/sim-payroll.mjs)",
+      "Bash(node /tmp/claude-1000/-home-mobidays-mobi-incentive/5287417f-fe96-41f8-ac79-469961a8ecb7/scratchpad/check-members.mjs)",
+      "Bash(sed -i 's/^  Upload,\\\\n//' components/layout/Sidebar.tsx)",
+      "Bash(python3 -c ' *)",
+      "Bash(git commit -q -m ' *)",
+      "Bash(git rm *)",
+      "Bash(git restore *)",
+      "Bash(node -e ' *)"
     ],
     "additionalDirectories": [
       "/home/mobidays/mobi-incentive/app/api/projects/[id]",
