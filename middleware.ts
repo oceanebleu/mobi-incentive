@@ -34,12 +34,10 @@ export default withAuth(
       return NextResponse.redirect(new URL('/unauthorized', req.url));
     }
 
-    // 사용자관리/Import 페이지 + API는 관리자/경영진만 접근
+    // 사용자관리 페이지 + API는 관리자/경영진만 접근
     const isAdminPath =
       pathname.startsWith('/users') ||
       pathname.startsWith('/api/users') ||
-      pathname.startsWith('/admin') ||
-      pathname.startsWith('/api/import') ||
       pathname.startsWith('/archive') ||
       pathname.startsWith('/api/proposal-archive');
     if (isAdminPath) {
