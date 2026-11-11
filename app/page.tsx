@@ -85,6 +85,12 @@ export default function DashboardPage() {
       calcYearlyPayoutsV2(projects, { lastWorkDateByName, statusByName }, creativeLabRows),
     [projects, lastWorkDateByName, statusByName, creativeLabRows]
   );
+  // 화면에는 '지급 완료액' 만 노출 — 지급 예정만 있는 연도(아직 한 푼도 안 나간 해)는 제외.
+  //   Σ(paid) === stats.totalPaid (누적 지급 완료액) 가 그대로 유지된다.
+  const paidByYear = useMemo(
+    () => yearlyPayouts.filter(y => y.paid > 0),
+    [yearlyPayouts]
+  );
 
   const memberSummaries = useMemo(
     () =>
@@ -496,13 +502,13 @@ export default function DashboardPage() {
             <h2 className="text-sm font-semibold text-gray-800">연도별 지급 총액</h2>
           </div>
           <p className="text-[11px] text-gray-400 mb-4">
-            지급 완료액 (괄호 = 지급 예정액)
+            실제 지급일 기준 지급 완료액 (지급 예정액 제외)
           </p>
-          {yearlyPayouts.length === 0 ? (
-            <p className="text-sm text-gray-400 py-6 text-center">집계할 지급 내역이 없습니다</p>
+          {paidByYear.length === 0 ? (
+            <p className="text-sm text-gray-400 py-6 text-center">지급 완료된 내역이 없습니다</p>
           ) : (
             <ul className="space-y-2">
-              {yearlyPayouts.map(y => (
+              {paidByYear.map(y => (
                 <li
                   key={y.year ?? 'unknown'}
                   className="flex items-baseline justify-between gap-3 rounded-lg bg-gray-50/70 px-3 py-2"
@@ -511,10 +517,7 @@ export default function DashboardPage() {
                     {y.year == null ? '지급일 미정' : `${y.year}년`}
                   </span>
                   <span className="text-sm font-bold text-gray-900 tabular-nums whitespace-nowrap">
-                    {formatKRW(y.paid)}
-                    <span className="ml-1 font-semibold text-gray-400">
-                      ({formatKRW(y.pending)})
-                    </span>
+                    {formatKRWFull(y.paid)}
                   </span>
                 </li>
               ))}
