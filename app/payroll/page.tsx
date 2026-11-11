@@ -22,7 +22,7 @@ import {
   Send,
 } from 'lucide-react';
 import clsx from 'clsx';
-import { formatKRWFull } from '@/lib/utils';
+import { formatKRW, formatKRWFull } from '@/lib/utils';
 
 interface MemberLine {
   name: string;
@@ -276,10 +276,14 @@ export default function PayrollPage() {
             {shownYear != null && yearTotals.has(shownYear) && (
               <div className="px-3 py-2 mb-1 rounded-lg bg-blue-50/70">
                 <p className="text-[10px] text-gray-500">{shownYear}년 지급 총액</p>
-                <p className="text-sm font-bold text-blue-700 tabular-nums mt-0.5 break-all">
-                  {formatKRWFull(yearTotals.get(shownYear)!.paid)}
+                {/* 좌측 폭(200px)에 한 줄로 들어가도록 억/만 축약 — 전체 금액은 title 로 */}
+                <p
+                  className="text-sm font-bold text-blue-700 tabular-nums mt-0.5 whitespace-nowrap"
+                  title={`지급완료 ${formatKRWFull(yearTotals.get(shownYear)!.paid)} · 지급예정 ${formatKRWFull(yearTotals.get(shownYear)!.pending)}`}
+                >
+                  {formatKRW(yearTotals.get(shownYear)!.paid)}
                   <span className="ml-1 font-semibold text-blue-400">
-                    ({formatKRWFull(yearTotals.get(shownYear)!.pending)})
+                    ({formatKRW(yearTotals.get(shownYear)!.pending)})
                   </span>
                 </p>
               </div>

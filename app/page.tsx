@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { effectivePhaseAmount, isRetiredMember, type SupabaseProject } from '@/lib/incentive-data';
 import clsx from 'clsx';
-import { formatKRW, formatKRWFull, withCommas } from '@/lib/utils';
+import { formatKRW, formatKRWFull } from '@/lib/utils';
 import {
   useIncentiveData,
   useUserDirectory,
@@ -486,48 +486,51 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 연도별 지급 총액 — 지급완료(지급예정) */}
-      {yearlyPayouts.length > 0 && (
+      {/* 연도별 지급 총액 · 단계별 현황 · 수주여부 분포 — 3열 한 줄 */}
+      <div className="grid grid-cols-3 gap-5 items-start">
+        {/* ① 연도별 지급 총액 — 지급완료(지급예정) */}
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex items-center gap-2 mb-1">
             <CalendarClock size={16} className="text-blue-600" />
             <h2 className="text-sm font-semibold text-gray-800">연도별 지급 총액</h2>
           </div>
           <p className="text-[11px] text-gray-400 mb-4">
-            지급 완료액 (괄호 = 지급 예정액) · 완료는 실제 지급일, 예정은 지급 예정일 기준
+            지급 완료액 (괄호 = 지급 예정액)
           </p>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {yearlyPayouts.map(y => (
-              <div
-                key={y.year ?? 'unknown'}
-                className="rounded-lg border border-gray-100 bg-gray-50/60 px-4 py-3"
-              >
-                <p className="text-xs font-medium text-gray-500">
-                  {y.year == null ? '지급일 미정' : `${y.year}년`}
-                </p>
-                <p className="mt-1.5 text-lg font-bold text-gray-900 tabular-nums leading-none">
-                  {withCommas(y.paid)}
-                  <span className="ml-1 text-sm font-semibold text-gray-400">
-                    ({withCommas(y.pending)})
+          {yearlyPayouts.length === 0 ? (
+            <p className="text-sm text-gray-400 py-6 text-center">집계할 지급 내역이 없습니다</p>
+          ) : (
+            <ul className="space-y-2">
+              {yearlyPayouts.map(y => (
+                <li
+                  key={y.year ?? 'unknown'}
+                  className="flex items-baseline justify-between gap-3 rounded-lg bg-gray-50/70 px-3 py-2"
+                >
+                  <span className="text-xs font-medium text-gray-500 whitespace-nowrap">
+                    {y.year == null ? '지급일 미정' : `${y.year}년`}
                   </span>
-                </p>
-              </div>
-            ))}
-          </div>
+                  <span className="text-sm font-bold text-gray-900 tabular-nums whitespace-nowrap">
+                    {formatKRW(y.paid)}
+                    <span className="ml-1 font-semibold text-gray-400">
+                      ({formatKRW(y.pending)})
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
-      )}
 
-      {/* 진행 단계 + 수주여부 분포 */}
-      <div className="grid grid-cols-3 gap-5">
-        <div className="col-span-2 bg-white rounded-xl border border-gray-200 p-6">
+        {/* ② 단계별 현황 */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex items-center gap-2 mb-5">
             <BarChart3 size={16} className="text-blue-600" />
             <h2 className="text-sm font-semibold text-gray-800">단계별 현황</h2>
           </div>
 
-          {/* 3 × 2 — 전체(활성) / PL작성대기 / PL작성완료 / 재원확정완료 / 1차 지급완료 / 전체 지급완료
+          {/* 2 × 3 — 전체(활성) / PL작성대기 / PL작성완료 / 재원확정완료 / 1차 지급완료 / 전체 지급완료
              수주실패·대행종료 제외한 활성 운영 진행 보드 */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <StageTile
               label="전체"
               value={stageGroups.activeTotal}
@@ -545,6 +548,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* ③ 수주여부 분포 */}
         <div className="bg-white rounded-xl border border-gray-200 p-6 flex flex-col">
           <div className="flex items-center gap-2 mb-4">
             <CheckCircle size={16} className="text-blue-600" />
