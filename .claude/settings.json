@@ -55,7 +55,9 @@
       "Bash(git commit -q -m ' *)",
       "Bash(git rm *)",
       "Bash(git restore *)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(git fetch *)",
+      "Bash(grep -o 'icon[^>]\\\\{0,80\\\\}' .next/server/app/login.html)"
     ],
     "additionalDirectories": [
       "/home/mobidays/mobi-incentive/app/api/projects/[id]",
