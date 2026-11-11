@@ -18,12 +18,13 @@ import {
 } from 'lucide-react';
 import { effectivePhaseAmount, isRetiredMember, type SupabaseProject } from '@/lib/incentive-data';
 import clsx from 'clsx';
-import { formatKRW, formatKRWFull } from '@/lib/utils';
+import { formatKRW, formatKRWFull, withCommas } from '@/lib/utils';
 import {
   useIncentiveData,
   useUserDirectory,
   calcMemberSummariesV2,
   getDashboardStatsV2,
+  calcYearlyPayoutsV2,
   paymentStageOf,
   PAYMENT_STAGE_LABEL,
   ACQUISITION_LABEL,
@@ -40,8 +41,11 @@ export default function DashboardPage() {
   // 경영진(EXEC) 은 대시보드를 열람할 수 있지만 'PL 작성요청' 같은 운영 액션은 ADMIN 전용
   const canTakeAction = canManageProjects(role);
 
-  // Creative.Lab 실지급 합계 — 월별 인센티브 실지급액 페이지에 입력된 금액
-  const [creativeLabPaidTotal, setCreativeLabPaidTotal] = useState(0);
+  // Creative.Lab 실지급 내역 — 월별 인센티브 실지급액 페이지에 입력된 금액.
+  //   합계는 대시보드 KPI 에, pay_date 는 연도별 집계에 쓰이므로 행 단위로 보관.
+  const [creativeLabRows, setCreativeLabRows] = useState<
+    Array<{ pay_date: string | null; amount: number }>
+  >([]);
   useEffect(() => {
     fetch(`/api/payroll/creative-lab?_=${Date.now()}`, {
       cache: 'no-store',
@@ -50,11 +54,19 @@ export default function DashboardPage() {
       .then(r => (r.ok ? r.json() : null))
       .then(j => {
         if (!j || !Array.isArray(j.items)) return;
-        const sum = j.items.reduce((s: number, r: any) => s + Number(r.amount ?? 0), 0);
-        setCreativeLabPaidTotal(sum);
+        setCreativeLabRows(
+          j.items.map((r: any) => ({
+            pay_date: r.pay_date ?? null,
+            amount: Number(r.amount ?? 0),
+          }))
+        );
       })
       .catch(() => {});
   }, []);
+  const creativeLabPaidTotal = useMemo(
+    () => creativeLabRows.reduce((s, r) => s + r.amount, 0),
+    [creativeLabRows]
+  );
 
   // 개인별 지급 관리 페이지와 동일 정책으로 합산 (퇴사자 제외 + 마지막 근무일 이후 excluded)
   // + Creative.Lab 실지급 분리 정책 적용
@@ -67,6 +79,13 @@ export default function DashboardPage() {
       ),
     [projects, lastWorkDateByName, statusByName, creativeLabPaidTotal]
   );
+  // 연도별 지급 총액 — stats 와 동일 규칙으로 집계되므로 합이 히어로 숫자와 일치
+  const yearlyPayouts = useMemo(
+    () =>
+      calcYearlyPayoutsV2(projects, { lastWorkDateByName, statusByName }, creativeLabRows),
+    [projects, lastWorkDateByName, statusByName, creativeLabRows]
+  );
+
   const memberSummaries = useMemo(
     () =>
       calcMemberSummariesV2(projects, {
@@ -466,6 +485,37 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* 연도별 지급 총액 — 지급완료(지급예정) */}
+      {yearlyPayouts.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <CalendarClock size={16} className="text-blue-600" />
+            <h2 className="text-sm font-semibold text-gray-800">연도별 지급 총액</h2>
+          </div>
+          <p className="text-[11px] text-gray-400 mb-4">
+            지급 완료액 (괄호 = 지급 예정액) · 완료는 실제 지급일, 예정은 지급 예정일 기준
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {yearlyPayouts.map(y => (
+              <div
+                key={y.year ?? 'unknown'}
+                className="rounded-lg border border-gray-100 bg-gray-50/60 px-4 py-3"
+              >
+                <p className="text-xs font-medium text-gray-500">
+                  {y.year == null ? '지급일 미정' : `${y.year}년`}
+                </p>
+                <p className="mt-1.5 text-lg font-bold text-gray-900 tabular-nums leading-none">
+                  {withCommas(y.paid)}
+                  <span className="ml-1 text-sm font-semibold text-gray-400">
+                    ({withCommas(y.pending)})
+                  </span>
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 진행 단계 + 수주여부 분포 */}
       <div className="grid grid-cols-3 gap-5">

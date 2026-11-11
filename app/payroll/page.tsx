@@ -177,6 +177,22 @@ export default function PayrollPage() {
     return months.filter(m => m.year === shownYear).sort((a, b) => a.month - b.month);
   }, [months, shownYear]);
 
+  // 연도별 지급 총액 — 이 화면의 월 버킷을 그대로 합산하므로
+  // 좌측 월 리스트의 합과 항상 일치한다.
+  //   완료 = phase_completed 인 캠페인 소계 / 예정 = 나머지
+  const yearTotals = useMemo(() => {
+    const map = new Map<number, { year: number; paid: number; pending: number }>();
+    for (const m of months) {
+      if (!map.has(m.year)) map.set(m.year, { year: m.year, paid: 0, pending: 0 });
+      const e = map.get(m.year)!;
+      for (const c of m.campaigns) {
+        if (c.phase_completed) e.paid += c.subtotal;
+        else e.pending += c.subtotal;
+      }
+    }
+    return map;
+  }, [months]);
+
   // 연도 탭 클릭 — 그 해에서 오늘과 가장 가까운 월을 자동 선택.
   // (리스트만 바뀌고 우측이 다른 연도로 남아있으면 혼란스러우므로)
   function selectYear(y: number) {
@@ -255,6 +271,20 @@ export default function PayrollPage() {
                 ))}
               </div>
             )}
+
+            {/* 선택된 연도의 지급 총액 — 지급완료 (지급예정) */}
+            {shownYear != null && yearTotals.has(shownYear) && (
+              <div className="px-3 py-2 mb-1 rounded-lg bg-blue-50/70">
+                <p className="text-[10px] text-gray-500">{shownYear}년 지급 총액</p>
+                <p className="text-sm font-bold text-blue-700 tabular-nums mt-0.5 break-all">
+                  {formatKRWFull(yearTotals.get(shownYear)!.paid)}
+                  <span className="ml-1 font-semibold text-blue-400">
+                    ({formatKRWFull(yearTotals.get(shownYear)!.pending)})
+                  </span>
+                </p>
+              </div>
+            )}
+
             <ul className="space-y-0.5">
               {monthsOfYear.map(m => {
                 const key = `${m.year}-${String(m.month).padStart(2, '0')}`;

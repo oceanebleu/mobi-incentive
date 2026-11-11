@@ -657,6 +657,138 @@ export function getDashboardStatsV2(
   };
 }
 
+// ─── 연도별 지급 총액 ─────────────────────────────────────────
+//
+// getDashboardStatsV2() 와 **완전히 동일한 포함/제외 규칙**으로 회차를 훑되,
+// paid/pending 을 연도 버킷으로 나눈다. 따라서
+//   Σ(연도별 paid)    === stats.totalPaid
+//   Σ(연도별 pending) === stats.totalPending
+// 이 항상 성립한다 (대시보드 히어로 숫자와 어긋나지 않도록).
+//
+// 연도 기준
+//   · paid    → 실제 지급일(member.first_paid_at / second_paid_at)의 연도
+//   · pending → 예정일(project.first_payment_date / second_payment_date)의 연도
+//               예정일이 없으면 year = null ('미정' 행)
+
+export interface YearlyPayout {
+  /** null = 지급 예정일 미정 */
+  year: number | null;
+  paid: number;
+  pending: number;
+}
+
+export function calcYearlyPayoutsV2(
+  projects: SupabaseProject[],
+  directory?: {
+    lastWorkDateByName: Record<string, string | null | undefined>;
+    statusByName: Record<string, string | null | undefined>;
+  },
+  /** Creative.Lab 실지급 내역 — pay_date 로 연도를 가르기 위해 행 단위로 받는다 */
+  creativeLabRows?: Array<{ pay_date: string | null; amount: number }>
+): YearlyPayout[] {
+  const today = todayIso();
+  const buckets = new Map<number | null, YearlyPayout>();
+  const bucket = (y: number | null): YearlyPayout => {
+    if (!buckets.has(y)) buckets.set(y, { year: y, paid: 0, pending: 0 });
+    return buckets.get(y)!;
+  };
+  const yearOf = (d: string | null | undefined): number | null => {
+    const n = normalizeDate(d);
+    if (!n) return null;
+    const y = Number(n.slice(0, 4));
+    return Number.isFinite(y) ? y : null;
+  };
+
+  for (const p of projects) {
+    const projectLost = p.acquisition_status === 'LOST';
+    for (const m of p.members) {
+      // 팀 계정 — 프로젝트 풀은 전부 pending (예정일 연도로 귀속)
+      if (m.is_team_account) {
+        if (projectLost) continue;
+        if (!p.first_payment_skipped) {
+          bucket(yearOf(p.first_payment_date)).pending += effectivePhaseAmount(m, p, 1);
+        }
+        if (!p.second_payment_skipped) {
+          bucket(yearOf(p.second_payment_date)).pending += effectivePhaseAmount(m, p, 2);
+        }
+        continue;
+      }
+
+      if (directory) {
+        if (
+          isRetiredMember({
+            is_team_account: false,
+            status: directory.statusByName[m.member_name],
+            last_work_date: directory.lastWorkDateByName[m.member_name],
+          })
+        ) {
+          continue;
+        }
+      }
+      const lwdRaw = directory ? directory.lastWorkDateByName[m.member_name] ?? null : null;
+      const lwd = normalizeDate(lwdRaw);
+      const afterLwd = (paidAt: string | null) => {
+        if (!lwd || !paidAt) return false;
+        const pn = normalizeDate(paidAt) ?? paidAt;
+        return pn > lwd;
+      };
+
+      const firstAmt = effectivePhaseAmount(m, p, 1);
+      const secondAmt = effectivePhaseAmount(m, p, 2);
+
+      // 1차
+      if (projectLost || p.first_payment_skipped) {
+        // 제외
+      } else if (afterLwd(m.first_paid_at)) {
+        // 제외
+      } else if (m.first_paid_at && m.first_paid_at <= today) {
+        bucket(yearOf(m.first_paid_at)).paid += firstAmt;
+      } else if (firstAmt > 0) {
+        bucket(yearOf(p.first_payment_date)).pending += firstAmt;
+      }
+      // 2차
+      if (projectLost || p.second_payment_skipped) {
+        // 제외
+      } else if (afterLwd(m.second_paid_at)) {
+        // 제외
+      } else if (m.second_paid_at && m.second_paid_at <= today) {
+        bucket(yearOf(m.second_paid_at)).paid += secondAmt;
+      } else if (secondAmt > 0) {
+        bucket(yearOf(p.second_payment_date)).pending += secondAmt;
+      }
+    }
+  }
+
+  // Creative.Lab 보정 — getDashboardStatsV2 와 동일하게
+  // "실지급액만큼 pending 에서 빼고 paid 로 옮긴다". 연도는 pay_date 기준.
+  //   차감은 pending 이 많은 연도부터 — 전체 합이 음수가 되지 않도록 보호.
+  const clRows = (creativeLabRows ?? []).filter(r => (r.amount ?? 0) > 0);
+  if (clRows.length > 0) {
+    let remaining = clRows.reduce((s, r) => s + Math.max(0, r.amount ?? 0), 0);
+    for (const r of clRows) {
+      bucket(yearOf(r.pay_date)).paid += Math.max(0, r.amount ?? 0);
+    }
+    const pendingDesc = [...buckets.values()]
+      .filter(b => b.pending > 0)
+      .sort((a, b) => b.pending - a.pending);
+    for (const b of pendingDesc) {
+      if (remaining <= 0) break;
+      const off = Math.min(b.pending, remaining);
+      b.pending -= off;
+      remaining -= off;
+    }
+  }
+
+  return [...buckets.values()]
+    .filter(b => b.paid !== 0 || b.pending !== 0)
+    .sort((a, b) => {
+      // 미정(null)은 항상 마지막
+      if (a.year == null) return 1;
+      if (b.year == null) return -1;
+      return b.year - a.year; // 최신 연도부터
+    });
+}
+
 // ─── 프로젝트 진행 상태 라벨 (4개 boolean → 단계명) ────────────
 
 export type PaymentStage =
