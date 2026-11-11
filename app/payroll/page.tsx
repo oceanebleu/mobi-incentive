@@ -71,6 +71,9 @@ export default function PayrollPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeKey, setActiveKey] = useState<string | null>(null);
+  // 좌측 월 리스트에서 보여줄 연도 — 데이터가 누적돼도 리스트가 12개를 넘지 않게 한다.
+  // 표시용 상태일 뿐이며, 실제 선택(activeKey)·HRM 공유 대상(active)과는 무관.
+  const [activeYear, setActiveYear] = useState<number | null>(null);
   const [clModalOpen, setClModalOpen] = useState(false);
   // HRM 공유 버튼 상태 — 'idle' | 'sending' | 'sent' | 'error'
   const [hrmState, setHrmState] = useState<'idle' | 'sending' | 'sent' | 'error'>(
@@ -138,6 +141,7 @@ export default function PayrollPage() {
           });
           const def = sorted[0];
           setActiveKey(`${def.year}-${String(def.month).padStart(2, '0')}`);
+          setActiveYear(def.year);
         }
       })
       .catch(e => setError(e?.message ?? '오류'))
@@ -156,6 +160,40 @@ export default function PayrollPage() {
       ) ?? null
     );
   }, [months, activeKey]);
+
+  // ── 좌측 리스트 표시용 (화면 분할만 담당) ──
+  // 연도 목록 — 최신 연도부터
+  const years = useMemo(() => {
+    const set = new Set<number>();
+    for (const m of months) set.add(m.year);
+    return [...set].sort((a, b) => b - a);
+  }, [months]);
+
+  // 현재 연도의 월만 — 1월 → 12월 순.
+  // activeYear 가 비었거나 데이터에서 사라진 연도면 최신 연도로 폴백.
+  const shownYear = activeYear != null && years.includes(activeYear) ? activeYear : years[0];
+  const monthsOfYear = useMemo(() => {
+    if (shownYear == null) return months;
+    return months.filter(m => m.year === shownYear).sort((a, b) => a.month - b.month);
+  }, [months, shownYear]);
+
+  // 연도 탭 클릭 — 그 해에서 오늘과 가장 가까운 월을 자동 선택.
+  // (리스트만 바뀌고 우측이 다른 연도로 남아있으면 혼란스러우므로)
+  function selectYear(y: number) {
+    setActiveYear(y);
+    const inYear = months.filter(m => m.year === y);
+    if (inYear.length === 0) return;
+    const todayYM = new Date().toISOString().slice(0, 7);
+    const sorted = [...inYear].sort((a, b) => {
+      const ak = `${a.year}-${String(a.month).padStart(2, '0')}`;
+      const bk = `${b.year}-${String(b.month).padStart(2, '0')}`;
+      const aDist = ak >= todayYM ? `0-${ak}` : `1-${ak}`;
+      const bDist = bk >= todayYM ? `0-${bk}` : `1-${bk}`;
+      return aDist.localeCompare(bDist);
+    });
+    const def = sorted[0];
+    setActiveKey(`${def.year}-${String(def.month).padStart(2, '0')}`);
+  }
 
   return (
     <div className="p-8 space-y-6 fade-in">
@@ -197,10 +235,28 @@ export default function PayrollPage() {
         </div>
       ) : (
         <div className="grid grid-cols-[200px_1fr] gap-6 items-start">
-          {/* 좌측 세로 월 리스트 — 상하 스크롤 */}
+          {/* 좌측 세로 월 리스트 — 연도 탭으로 나눠 한 번에 최대 12개만 노출 */}
           <nav className="bg-white border border-gray-200 rounded-xl p-2 max-h-[calc(100vh-180px)] overflow-y-auto sticky top-4">
+            {years.length > 1 && (
+              <div className="flex flex-wrap gap-1 px-1 pt-1 pb-2 mb-1 border-b border-gray-100">
+                {years.map(y => (
+                  <button
+                    key={y}
+                    onClick={() => selectYear(y)}
+                    className={clsx(
+                      'px-2.5 py-1 rounded-md text-xs font-semibold transition-colors',
+                      shownYear === y
+                        ? 'bg-red-600 text-white'
+                        : 'text-gray-500 hover:bg-gray-100'
+                    )}
+                  >
+                    {y}
+                  </button>
+                ))}
+              </div>
+            )}
             <ul className="space-y-0.5">
-              {months.map(m => {
+              {monthsOfYear.map(m => {
                 const key = `${m.year}-${String(m.month).padStart(2, '0')}`;
                 const isActive = activeKey === key;
                 return (
@@ -216,7 +272,8 @@ export default function PayrollPage() {
                     >
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold whitespace-nowrap">
-                          {m.year}년 {m.month}월
+                          {/* 연도 탭이 있으면 월만 — 같은 정보를 두 번 읽지 않도록 */}
+                          {years.length > 1 ? `${m.month}월` : `${m.year}년 ${m.month}월`}
                         </p>
                         <p className="text-[10px] text-gray-400 mt-0.5 truncate">
                           지급 {m.pay_date}
