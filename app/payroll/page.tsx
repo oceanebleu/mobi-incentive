@@ -200,7 +200,7 @@ export default function PayrollPage() {
       {/* 헤더 */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Wallet size={20} className="text-red-500" />
+          <Wallet size={20} className="text-blue-500" />
           <div>
             <h1 className="text-xl font-bold text-gray-900">월별 인센티브 실지급액</h1>
             <p className="text-sm text-gray-400 mt-0.5">
@@ -210,7 +210,7 @@ export default function PayrollPage() {
         </div>
         <button
           onClick={() => setClModalOpen(true)}
-          className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 border border-red-100 rounded-lg transition-colors"
+          className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-100 rounded-lg transition-colors"
         >
           <Plus size={14} />
           Creative.Lab 지급액 입력
@@ -246,7 +246,7 @@ export default function PayrollPage() {
                     className={clsx(
                       'px-2.5 py-1 rounded-md text-xs font-semibold transition-colors',
                       shownYear === y
-                        ? 'bg-red-600 text-white'
+                        ? 'bg-blue-600 text-white'
                         : 'text-gray-500 hover:bg-gray-100'
                     )}
                   >
@@ -266,7 +266,7 @@ export default function PayrollPage() {
                       className={clsx(
                         'w-full text-left px-3 py-2 rounded-lg transition-colors flex items-center justify-between gap-2',
                         isActive
-                          ? 'bg-red-50 text-red-700'
+                          ? 'bg-blue-50 text-blue-700'
                           : 'text-gray-600 hover:bg-gray-50'
                       )}
                     >
@@ -283,7 +283,7 @@ export default function PayrollPage() {
                         className={clsx(
                           'text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap',
                           isActive
-                            ? 'bg-red-100 text-red-700'
+                            ? 'bg-blue-100 text-blue-700'
                             : 'bg-gray-100 text-gray-500'
                         )}
                       >
@@ -300,14 +300,14 @@ export default function PayrollPage() {
           {active && (
             <div className="space-y-6 min-w-0">
               {/* 월 요약 + HRM 공유 버튼 */}
-              <div className="bg-red-50/40 border border-red-100 rounded-xl px-5 py-4 flex items-center gap-4">
-                <Calendar size={18} className="text-red-500" />
+              <div className="bg-blue-50/40 border border-blue-100 rounded-xl px-5 py-4 flex items-center gap-4">
+                <Calendar size={18} className="text-blue-500" />
                 <div className="flex-1">
-                  <p className="text-xs text-red-600">
+                  <p className="text-xs text-blue-600">
                     {active.year}년 {active.month}월 지급분 · 실제 지급일{' '}
                     <b>{active.pay_date}</b>
                   </p>
-                  <p className="text-2xl font-bold text-red-700 mt-0.5 tabular-nums">
+                  <p className="text-2xl font-bold text-blue-700 mt-0.5 tabular-nums">
                     {formatKRWFull(active.total)}
                   </p>
                 </div>
@@ -323,7 +323,7 @@ export default function PayrollPage() {
                       ? 'bg-red-50 text-red-700 border-red-200'
                       : hrmState === 'sending'
                       ? 'bg-gray-100 text-gray-500 border-gray-200 cursor-not-allowed'
-                      : 'bg-white text-red-700 hover:bg-red-100 border-red-200'
+                      : 'bg-white text-blue-700 hover:bg-blue-100 border-blue-200'
                   )}
                 >
                   {hrmState === 'sending' ? (
@@ -503,7 +503,7 @@ function CreativeLabModal({
             type="date"
             value={payDate}
             onChange={e => setPayDate(e.target.value)}
-            className="w-full max-w-xs px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500/30"
+            className="w-full max-w-xs px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/30"
           />
         </div>
 
@@ -515,7 +515,7 @@ function CreativeLabModal({
           </div>
           <div>
             <p className="text-[11px] text-gray-400">지급액 합계</p>
-            <p className="font-semibold text-red-700 tabular-nums">
+            <p className="font-semibold text-blue-700 tabular-nums">
               {formatKRWFull(totalAmount)}
             </p>
           </div>
@@ -567,7 +567,7 @@ function CreativeLabModal({
           </table>
           <button
             onClick={addRow}
-            className="mt-3 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-700 bg-red-50 hover:bg-red-100 rounded-md"
+            className="mt-3 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md"
           >
             <Plus size={13} />
             멤버 추가
@@ -592,7 +592,7 @@ function CreativeLabModal({
           <button
             onClick={save}
             disabled={saving}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-60"
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60"
           >
             <Save size={14} />
             {saving ? '저장 중...' : '저장'}
@@ -682,7 +682,7 @@ function CampaignCardView({ c }: { c: CampaignCard }) {
             'p-1 rounded transition-colors flex-shrink-0',
             copied
               ? 'text-emerald-600 bg-emerald-50'
-              : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+              : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'
           )}
         >
           {copied ? <Check size={12} /> : <Copy size={12} />}
@@ -750,7 +750,7 @@ function CampaignCardView({ c }: { c: CampaignCard }) {
               >
                 소계
               </td>
-              <td className="px-3 py-2 text-right font-bold text-red-700 tabular-nums">
+              <td className="px-3 py-2 text-right font-bold text-blue-700 tabular-nums">
                 {formatKRWFull(c.subtotal)}
               </td>
             </tr>
