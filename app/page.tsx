@@ -486,8 +486,9 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 연도별 지급 총액 · 단계별 현황 · 수주여부 분포 — 3열 한 줄 */}
-      <div className="grid grid-cols-3 gap-5 items-start">
+      {/* 연도별 지급 총액 · 단계별 현황 · 수주여부 분포 — 3열 한 줄.
+          items-start 를 주지 않아 세 박스가 가장 긴 것에 맞춰 같은 높이로 늘어난다. */}
+      <div className="grid grid-cols-3 gap-5">
         {/* ① 연도별 지급 총액 — 지급완료(지급예정) */}
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex items-center gap-2 mb-1">
