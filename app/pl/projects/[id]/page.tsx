@@ -842,7 +842,7 @@ function PLProjectFormPageInner() {
                             type="text"
                             value={r.duty}
                             onChange={e => updateRow(i, { duty: e.target.value })}
-                            placeholder="특이사항이 있을 경우 내용 상세히 작성해주시기 바랍니다."
+                            placeholder="예: 전략 수립, RFP 분석"
                             className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-md"
                           />
                         </td>
