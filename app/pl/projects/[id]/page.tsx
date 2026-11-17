@@ -842,7 +842,7 @@ function PLProjectFormPageInner() {
                             type="text"
                             value={r.duty}
                             onChange={e => updateRow(i, { duty: e.target.value })}
-                            placeholder="예: 전략 수립, RFP 분석"
+                            placeholder="특이사항이 있을 경우 내용 상세히 작성해주시기 바랍니다."
                             className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-md"
                           />
                         </td>
@@ -1249,7 +1249,7 @@ function CaseField({
         <textarea
           value={noteValue}
           onChange={e => onNoteChange(e.target.value)}
-          placeholder="정성적 의견 (선택사항)"
+          placeholder="특이사항이 있을 경우 내용 상세히 작성해주시기 바랍니다."
           rows={3}
           className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
         />
