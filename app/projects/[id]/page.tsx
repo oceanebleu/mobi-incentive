@@ -187,6 +187,20 @@ export default function ProjectDetailPage() {
               </button>
             )}
             {canEdit && <PLLinkCopyButton projectId={project.id} />}
+            {/* 수주인센티브 채널의 운영위원회 스레드 — 프로젝트 생성 시 자동 생성 */}
+            {(project as any).committee_thread_url && (
+              <a
+                href={(project as any).committee_thread_url}
+                target="_blank"
+                rel="noreferrer"
+                title="수주인센티브 채널의 운영위원회 스레드로 이동"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+              >
+                <span aria-hidden>💰</span>
+                위원회 스레드
+                <ExternalLink size={12} />
+              </a>
+            )}
             {biddingSheetLink && (
               <a
                 href={biddingSheetLink}

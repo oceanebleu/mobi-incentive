@@ -143,6 +143,9 @@ export interface SupabaseProject {
   review_sync_error: string | null;
   /** 운영위원회 결과 메모 — 관리자가 작성, PL 위원회결과 화면에서 열람 */
   committee_result: string | null;
+  /** 수주인센티브 Slack 채널의 운영위원회 스레드 — 루트 메시지 ts / permalink */
+  committee_thread_ts: string | null;
+  committee_thread_url: string | null;
   /** 수주확정일자 — PL 양식에서 작성. first_payment_date 와는 별개. */
   won_date: string | null;
   members: SupabaseProjectMember[];

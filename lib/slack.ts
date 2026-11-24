@@ -94,3 +94,62 @@ export async function sendSlackChannelMessage(channel: string, text: string): Pr
     unfurl_media: 'false',
   });
 }
+
+// ─── 스레드 관련 ──────────────────────────────────────────────
+//
+// 운영위원회 스레드: 수주인센티브 채널에 프로젝트당 루트 메시지 1개를 만들고,
+// 이후 알럿(작성요청/작성완료/위원회완료)은 그 스레드의 답글로 달린다.
+
+/**
+ * 채널에 메시지를 올리고 ts(스레드 식별자)를 돌려준다.
+ *  - sendSlackChannelMessage 와 달리 반환값이 있음 (스레드 루트 생성용)
+ *  - 봇이 해당 채널 멤버여야 함 (not_in_channel 이면 채널에 /invite 필요)
+ */
+export async function postSlackChannelMessage(
+  channel: string,
+  text: string
+): Promise<{ ts: string; channel: string }> {
+  const r = await slackCall<{ ts: string; channel: string }>('chat.postMessage', {
+    channel,
+    text,
+    mrkdwn: 'true',
+    unfurl_links: 'false',
+    unfurl_media: 'false',
+  });
+  return { ts: r.ts, channel: r.channel };
+}
+
+/** 기존 스레드에 답글 — thread_ts 는 루트 메시지의 ts */
+export async function postSlackThreadReply(
+  channel: string,
+  threadTs: string,
+  text: string
+): Promise<void> {
+  await slackCall('chat.postMessage', {
+    channel,
+    thread_ts: threadTs,
+    text,
+    mrkdwn: 'true',
+    unfurl_links: 'false',
+    unfurl_media: 'false',
+  });
+}
+
+/**
+ * 메시지 permalink 조회. 실패해도 스레드 생성 자체는 유효하므로 null 반환.
+ *  - 봇 권한: 별도 scope 불필요 (채널 접근 권한만 있으면 됨)
+ */
+export async function getSlackPermalink(
+  channel: string,
+  messageTs: string
+): Promise<string | null> {
+  try {
+    const r = await slackCall<{ permalink: string }>('chat.getPermalink', {
+      channel,
+      message_ts: messageTs,
+    });
+    return r.permalink ?? null;
+  } catch {
+    return null;
+  }
+}

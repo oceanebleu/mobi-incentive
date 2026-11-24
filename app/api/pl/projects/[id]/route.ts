@@ -8,6 +8,8 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { logProjectChange } from '@/lib/audit';
+import { replyToCommitteeThread } from '@/lib/committee-thread';
+import { buildCommitteeCompletedReply } from '@/lib/committee-thread-message';
 
 // Vercel CDN / Next.js fetch cache 우회 — 매 요청 fresh
 export const dynamic = 'force-dynamic';
@@ -482,10 +484,21 @@ export async function PUT(
     last_saved_by_name: user.name,
   };
 
+  // PL 작성 완료 — 운영위원회 스레드에 알럿 (보조, 실패해도 저장 결과는 유지)
+  const thread = await replyToCommitteeThread(
+    supabase,
+    params.id,
+    buildCommitteeCompletedReply({
+      projectId: params.id,
+      campaignName: (projAfter.data?.campaign_name ?? project.campaign_name ?? params.id) as string,
+    })
+  );
+
   return json({
     ok: true,
     project: projAfter.data ?? { id: params.id, pl_completed: true, ...projectsPatch },
     members: finalMembers,
     form: finalForm,
+    committee_thread: thread.ok ? { url: thread.url ?? null } : { error: thread.error },
   });
 }

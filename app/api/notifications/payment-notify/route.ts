@@ -14,6 +14,8 @@ import { canManageProjects, type UserRole } from '@/lib/roles';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { sendSlackDmByEmail, lookupSlackUserIdByEmail } from '@/lib/slack';
 import { buildPaymentNotifyMessage } from '@/lib/payment-notification-message';
+import { replyToCommitteeThread, resolvePlMention } from '@/lib/committee-thread';
+import { buildCommitteeFinishedReply } from '@/lib/committee-thread-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -146,5 +148,18 @@ export async function POST(req: Request) {
     console.warn('[payment-notify] payment_notify_sent_at 기록 예외:', e?.message ?? e);
   }
 
-  return NextResponse.json({ ok: true, sentTo: email, sentAt });
+  // DM 발송 성공 후 — 운영위원회 스레드에도 완료 알럿 (보조, 실패해도 DM 결과는 유지)
+  const plMention = await resolvePlMention(supabase, plName);
+  const thread = await replyToCommitteeThread(
+    supabase,
+    projectId,
+    buildCommitteeFinishedReply(plMention, project.campaign_name)
+  );
+
+  return NextResponse.json({
+    ok: true,
+    sentTo: email,
+    sentAt,
+    committee_thread: thread.ok ? { url: thread.url ?? null } : { error: thread.error },
+  });
 }

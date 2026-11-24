@@ -10,6 +10,7 @@ import { authOptions } from '@/lib/authOptions';
 import { canAccessApp, canManageProjects, type UserRole } from '@/lib/roles';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { logProjectChange } from '@/lib/audit';
+import { ensureCommitteeThread } from '@/lib/committee-thread';
 
 // Vercel CDN / Next.js fetch cache 우회 — 매 요청 fresh
 export const dynamic = 'force-dynamic';
@@ -150,5 +151,12 @@ export async function POST(req: Request) {
     }
   );
 
-  return NextResponse.json({ ok: true, id });
+  // 수주인센티브 채널에 운영위원회 스레드 생성 (보조 — 실패해도 생성은 성공 처리)
+  const thread = await ensureCommitteeThread(supabase, id);
+
+  return NextResponse.json({
+    ok: true,
+    id,
+    committee_thread: thread.ok ? { url: thread.url ?? null } : { error: thread.error },
+  });
 }

@@ -143,6 +143,11 @@ create table if not exists public.projects (
   review_sync_error           text,          -- 마지막 sync 시 발생한 에러 (링크 접근 실패 등)
   -- 운영위원회 결과 메모 — 관리자가 프로젝트 편집에서 작성, PL 위원회결과 화면에 노출
   committee_result            text,
+  -- 수주인센티브 Slack 채널에 생성된 운영위원회 스레드
+  --   · committee_thread_ts  = 스레드 루트 메시지의 ts (답글 달 때 thread_ts 로 사용)
+  --   · committee_thread_url = 해당 메시지 permalink (프로젝트 상세에 '💰 위원회 스레드' 링크)
+  committee_thread_ts         text,
+  committee_thread_url        text,
   created_at                  timestamptz not null default now(),
   updated_at                  timestamptz not null default now()
 );
@@ -152,6 +157,8 @@ alter table public.projects add column if not exists pl_request_sent_at timestam
 alter table public.projects add column if not exists payment_notify_sent_at timestamptz;
 alter table public.projects add column if not exists committee_result text;
 alter table public.projects add column if not exists product text;
+alter table public.projects add column if not exists committee_thread_ts text;
+alter table public.projects add column if not exists committee_thread_url text;
 alter table public.projects add column if not exists won_date date;
 alter table public.projects add column if not exists review_date date;
 alter table public.projects add column if not exists review_synced_at timestamptz;

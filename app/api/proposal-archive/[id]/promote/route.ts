@@ -17,6 +17,7 @@ import { authOptions } from '@/lib/authOptions';
 import { canManageUsers, type UserRole } from '@/lib/roles';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { logProjectChange } from '@/lib/audit';
+import { ensureCommitteeThread } from '@/lib/committee-thread';
 
 export const dynamic = 'force-dynamic';
 
@@ -166,9 +167,13 @@ export async function POST(
     changer
   );
 
+  // 6) 수주인센티브 채널에 운영위원회 스레드 생성 (보조 — 실패해도 승격은 성공 처리)
+  const thread = await ensureCommitteeThread(supabase, newProjectId);
+
   return NextResponse.json({
     ok: true,
     project_id: newProjectId,
     campaign_name: projectRow.campaign_name,
+    committee_thread: thread.ok ? { url: thread.url ?? null } : { error: thread.error },
   });
 }

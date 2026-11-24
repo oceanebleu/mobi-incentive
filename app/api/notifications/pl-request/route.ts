@@ -15,6 +15,8 @@ import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { sendSlackDmByEmail, lookupSlackUserIdByEmail } from '@/lib/slack';
 import { buildPLRequestMessage } from '@/lib/pl-request-message';
 import { addWorkingDays } from '@/lib/payroll-date';
+import { replyToCommitteeThread, resolvePlMention } from '@/lib/committee-thread';
+import { buildCommitteeRequestReply } from '@/lib/committee-thread-message';
 
 export const dynamic = 'force-dynamic';
 
@@ -153,5 +155,18 @@ export async function POST(req: Request) {
     console.warn('[pl-request] pl_request_sent_at 기록 예외:', e?.message ?? e);
   }
 
-  return NextResponse.json({ ok: true, sentTo: email, sentAt });
+  // DM 발송 성공 후 — 운영위원회 스레드에도 동일 알럿 (보조, 실패해도 DM 결과는 유지)
+  const plMention = await resolvePlMention(supabase, plName);
+  const thread = await replyToCommitteeThread(
+    supabase,
+    projectId,
+    buildCommitteeRequestReply(plMention)
+  );
+
+  return NextResponse.json({
+    ok: true,
+    sentTo: email,
+    sentAt,
+    committee_thread: thread.ok ? { url: thread.url ?? null } : { error: thread.error },
+  });
 }
