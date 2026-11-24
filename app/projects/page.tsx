@@ -14,6 +14,7 @@ import {
   Trash2,
   BellRing,
   CheckCircle2,
+  MessagesSquare,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { formatKRWFull, formatCommission, formatDate } from '@/lib/utils';
@@ -59,6 +60,53 @@ export default function ProjectsPage() {
 
   // 편집 모달 상태: null = 닫힘, {} = 신규, {...project} = 편집
   const [editing, setEditing] = useState<SupabaseProject | null | 'new'>(null);
+
+  // 위원회 스레드 백필 — 수주성공 + 재원확정 전 + 스레드 없음
+  const [threadState, setThreadState] = useState<'idle' | 'running'>('idle');
+  const [threadResult, setThreadResult] = useState<string | null>(null);
+  const threadTargets = useMemo(
+    () =>
+      projects.filter(
+        p =>
+          p.acquisition_status === 'WON' &&
+          !p.fund_confirmed &&
+          !(p as any).committee_thread_ts
+      ),
+    [projects]
+  );
+
+  async function createCommitteeThreads() {
+    if (threadState === 'running' || threadTargets.length === 0) return;
+    if (
+      !confirm(
+        `위원회 스레드가 없는 ${threadTargets.length}건에 대해 수주인센티브 채널에 스레드를 생성합니다.\n\n` +
+          threadTargets.map(p => `· ${p.id} ${p.campaign_name}`).join('\n') +
+          `\n\n채널에 ${threadTargets.length}개의 메시지가 올라갑니다. 계속할까요?`
+      )
+    )
+      return;
+    setThreadState('running');
+    setThreadResult(null);
+    try {
+      const res = await fetch('/api/projects/committee-threads', { method: 'POST' });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j?.error ?? `HTTP ${res.status}`);
+      const parts = [`${j.created}건 생성 완료`];
+      if (j.failed > 0) {
+        parts.push(
+          `실패 ${j.failed}건 — ${(j.failedList ?? [])
+            .map((f: any) => `${f.campaign_name}(${f.error})`)
+            .join(', ')}`
+        );
+      }
+      setThreadResult(parts.join(' · '));
+      refresh();
+    } catch (e: any) {
+      setThreadResult(`실패: ${e?.message ?? '알 수 없는 오류'}`);
+    } finally {
+      setThreadState('idle');
+    }
+  }
 
   // 지급알림 발송 상태 — 행별 'sending' | 'sent' | 'error'
   const [notifyState, setNotifyState] = useState<Record<string, 'sending' | 'sent' | 'error'>>({});
@@ -195,21 +243,44 @@ export default function ProjectsPage() {
           <h1 className="text-xl font-bold text-gray-900">프로젝트 관리</h1>
           <p className="text-sm text-gray-400 mt-0.5">수주인센티브 프로젝트 관리</p>
         </div>
-        {canEdit && (
-          <button
-            onClick={() => setEditing('new')}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
-          >
-            <Plus size={15} />
-            프로젝트 추가
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {/* 스레드가 없는 건이 남아있을 때만 노출 — 전부 생성되면 자동으로 사라짐 */}
+          {canEdit && threadTargets.length > 0 && (
+            <button
+              onClick={createCommitteeThreads}
+              disabled={threadState === 'running'}
+              title="수주성공 · 재원확정 전 건 중 위원회 스레드가 없는 프로젝트에 스레드를 생성합니다"
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-100 rounded-lg hover:bg-blue-100 disabled:opacity-60"
+            >
+              <MessagesSquare size={15} />
+              {threadState === 'running'
+                ? '생성 중...'
+                : `위원회 스레드 생성 (${threadTargets.length}건)`}
+            </button>
+          )}
+          {canEdit && (
+            <button
+              onClick={() => setEditing('new')}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+            >
+              <Plus size={15} />
+              프로젝트 추가
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
         <div className="flex items-start gap-2 px-4 py-3 bg-red-50 border border-red-100 rounded-lg text-sm text-red-700">
           <AlertCircle size={15} className="mt-0.5" />
           <span>조회 실패: {error}</span>
+        </div>
+      )}
+
+      {threadResult && (
+        <div className="flex items-start gap-2 px-4 py-3 bg-blue-50 border border-blue-100 rounded-lg text-sm text-blue-700">
+          <MessagesSquare size={15} className="mt-0.5" />
+          <span className="break-all">위원회 스레드 — {threadResult}</span>
         </div>
       )}
 
