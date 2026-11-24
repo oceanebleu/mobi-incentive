@@ -164,3 +164,21 @@ export async function getSlackPermalink(
 export async function deleteSlackMessage(channel: string, ts: string): Promise<void> {
   await slackCall('chat.delete', { channel, ts });
 }
+
+/**
+ * Slack 메시지 permalink → { channel, ts }
+ *   https://<workspace>.slack.com/archives/C0CM7MD8MC0/p1763451234567890
+ *     → channel = C0CM7MD8MC0
+ *       ts      = 1763451234.567890   (p 뒤 숫자에서 뒤 6자리가 마이크로초)
+ *   쿼리스트링(?thread_ts=...&cid=...)이 붙어 있어도 무시한다.
+ *   형식이 아니면 null.
+ */
+export function parseSlackLink(raw: string): { channel: string; ts: string } | null {
+  const link = (raw ?? '').trim();
+  if (!link) return null;
+  const m = link.match(/\/archives\/([A-Z0-9]+)\/p(\d{10,})/i);
+  if (!m) return null;
+  const digits = m[2];
+  if (digits.length < 7) return null;
+  return { channel: m[1], ts: `${digits.slice(0, digits.length - 6)}.${digits.slice(-6)}` };
+}

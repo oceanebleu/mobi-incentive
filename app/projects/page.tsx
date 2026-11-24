@@ -61,6 +61,9 @@ export default function ProjectsPage() {
   // 편집 모달 상태: null = 닫힘, {} = 신규, {...project} = 편집
   const [editing, setEditing] = useState<SupabaseProject | null | 'new'>(null);
 
+  // Slack 메시지 정리 모달 (봇이 잘못 올린 메시지 삭제)
+  const [cleanupOpen, setCleanupOpen] = useState(false);
+
   // 위원회 스레드 백필 — 수주성공 + 아직 위원회 전 단계 + 스레드 없음
   //   paymentStageOf 가 PL_PENDING / PL_COMPLETED 인 건만.
   //   1·2차가 미지급(skipped)으로 종결돼 '전체지급완료' 가 된 건은 제외된다.
@@ -246,6 +249,16 @@ export default function ProjectsPage() {
           <p className="text-sm text-gray-400 mt-0.5">수주인센티브 프로젝트 관리</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* 봇이 채널에 잘못 올린 메시지 정리 — 자주 쓰진 않으므로 텍스트 버튼 */}
+          {canEdit && (
+            <button
+              onClick={() => setCleanupOpen(true)}
+              title="봇이 올린 Slack 메시지를 링크로 지정해 삭제합니다"
+              className="px-2 py-2 text-xs text-gray-400 hover:text-gray-700 underline-offset-2 hover:underline"
+            >
+              채널 메시지 정리
+            </button>
+          )}
           {/* 스레드가 없는 건이 남아있을 때만 노출 — 전부 생성되면 자동으로 사라짐 */}
           {canEdit && threadTargets.length > 0 && (
             <button
@@ -459,6 +472,143 @@ export default function ProjectsPage() {
           }}
         />
       )}
+
+      {cleanupOpen && <SlackCleanupModal onClose={() => setCleanupOpen(false)} />}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Slack 채널 메시지 정리 — 봇이 올린 메시지를 링크로 지정해 삭제
+//   봇 토큰은 자기가 올린 메시지만 지울 수 있어, 남의 메시지를 붙여넣어도
+//   Slack 이 거절한다 (cant_delete_message).
+// ─────────────────────────────────────────────
+function SlackCleanupModal({ onClose }: { onClose: () => void }) {
+  const [raw, setRaw] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  const [failed, setFailed] = useState<Array<{ link: string; error: string }>>([]);
+
+  const links = raw
+    .split(/[\s,]+/)
+    .map(v => v.trim())
+    .filter(Boolean);
+
+  async function run() {
+    if (busy || links.length === 0) return;
+    if (
+      !confirm(
+        `Slack 메시지 ${links.length}건을 삭제합니다.\n\n` +
+          `· 스레드 루트를 지우면 그 스레드의 답글도 함께 사라집니다\n` +
+          `· 되돌릴 수 없습니다\n\n계속할까요?`
+      )
+    )
+      return;
+    setBusy(true);
+    setResult(null);
+    setFailed([]);
+    try {
+      const res = await fetch('/api/slack/delete-messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ links }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j?.error ?? `HTTP ${res.status}`);
+      setResult(`${j.deleted}건 삭제 완료${j.failed > 0 ? ` · 실패 ${j.failed}건` : ''}`);
+      setFailed(j.failedList ?? []);
+      if (j.failed === 0) setRaw('');
+    } catch (e: any) {
+      setResult(`실패: ${e?.message ?? '알 수 없는 오류'}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-[620px] max-h-[88vh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+          <div>
+            <h3 className="text-base font-bold text-gray-900">채널 메시지 정리</h3>
+            <p className="text-[11px] text-gray-400 mt-0.5">
+              봇이 올린 Slack 메시지를 링크로 지정해 삭제합니다
+            </p>
+          </div>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100" disabled={busy}>
+            <X size={18} className="text-gray-500" />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          <div className="rounded-lg bg-gray-50 px-4 py-3 text-[11px] text-gray-500 space-y-1">
+            <p>
+              Slack 메시지에서 <b>⋮ → 링크 복사</b> 로 복사한 주소를 붙여넣으세요. 여러 건은
+              줄바꿈으로 구분합니다 (최대 50건).
+            </p>
+            <p className="text-gray-400">
+              예: https://mobidays.slack.com/archives/C0CM7MD8MC0/p1763451234567890
+            </p>
+            <p className="text-gray-400">
+              봇이 올린 메시지만 지워집니다. 사람이 쓴 메시지는 Slack 이 거절합니다.
+            </p>
+          </div>
+
+          <textarea
+            value={raw}
+            onChange={e => setRaw(e.target.value)}
+            rows={7}
+            placeholder={'https://mobidays.slack.com/archives/.../p...\nhttps://mobidays.slack.com/archives/.../p...'}
+            className="w-full px-3 py-2 text-xs font-mono border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+          />
+
+          {result && (
+            <div
+              className={clsx(
+                'px-3 py-2 rounded-md text-xs',
+                result.startsWith('실패') || failed.length > 0
+                  ? 'bg-red-50 text-red-700 border border-red-100'
+                  : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+              )}
+            >
+              {result}
+              {failed.length > 0 && (
+                <ul className="mt-1.5 space-y-0.5">
+                  {failed.map((f, i) => (
+                    <li key={i} className="break-all">
+                      · {f.link} — {f.error}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100">
+          <span className="text-[11px] text-gray-400">{links.length}건 인식됨</span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              disabled={busy}
+              className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 rounded-lg disabled:opacity-60"
+            >
+              닫기
+            </button>
+            <button
+              onClick={run}
+              disabled={busy || links.length === 0}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-60"
+            >
+              <Trash2 size={14} />
+              {busy ? '삭제 중...' : '삭제'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
