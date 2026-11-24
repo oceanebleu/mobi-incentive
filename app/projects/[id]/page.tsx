@@ -187,7 +187,8 @@ export default function ProjectDetailPage() {
               </button>
             )}
             {canEdit && <PLLinkCopyButton projectId={project.id} />}
-            {/* 수주인센티브 채널의 운영위원회 스레드 — 프로젝트 생성 시 자동 생성 */}
+            {/* 수주인센티브 채널의 운영위원회 스레드 — 프로젝트 생성 시 자동 생성.
+                Slack 에서 실수로 삭제한 경우 재생성 버튼으로 새 스레드를 연다. */}
             {(project as any).committee_thread_url && (
               <a
                 href={(project as any).committee_thread_url}
@@ -200,6 +201,14 @@ export default function ProjectDetailPage() {
                 위원회 스레드
                 <ExternalLink size={12} />
               </a>
+            )}
+            {canEdit && (
+              <CommitteeThreadButton
+                projectId={project.id}
+                campaignName={project.campaign_name}
+                hasThread={!!(project as any).committee_thread_ts}
+                onDone={refresh}
+              />
             )}
             {biddingSheetLink && (
               <a
@@ -966,6 +975,81 @@ function PLLinkCopyButton({ projectId }: { projectId: string }) {
       {copied ? <CheckCircle2 size={11} /> : <Link2 size={11} />}
       {copied ? '복사됨' : 'PJ 링크 복사'}
     </button>
+  );
+}
+
+// ─────────────────────────────────────────────
+// 운영위원회 스레드 생성 / 재생성
+//   · 스레드 없음 → '위원회 스레드 생성'
+//   · 스레드 있음 → '재생성' (Slack 에서 삭제된 경우 복구용)
+//     재생성은 새 스레드를 여는 것이라 기존 답글은 따라오지 않으므로 confirm 으로 경고
+// ─────────────────────────────────────────────
+function CommitteeThreadButton({
+  projectId,
+  campaignName,
+  hasThread,
+  onDone,
+}: {
+  projectId: string;
+  campaignName: string;
+  hasThread: boolean;
+  onDone: () => void;
+}) {
+  const [state, setState] = useState<'idle' | 'running'>('idle');
+  const [err, setErr] = useState<string | null>(null);
+
+  async function run() {
+    if (state === 'running') return;
+    const msg = hasThread
+      ? `"${campaignName}" 의 위원회 스레드를 다시 생성합니다.\n\n` +
+        `· 수주인센티브 채널에 새 스레드가 올라갑니다\n` +
+        `· 기존 스레드에 달려 있던 답글은 새 스레드로 옮겨지지 않습니다\n` +
+        `· Slack 에서 스레드를 실수로 삭제한 경우에만 사용해 주세요\n\n계속할까요?`
+      : `"${campaignName}" 의 위원회 스레드를 수주인센티브 채널에 생성합니다. 계속할까요?`;
+    if (!confirm(msg)) return;
+    setState('running');
+    setErr(null);
+    try {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/committee-thread`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ force: hasThread }),
+        }
+      );
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error([j?.error, j?.hint].filter(Boolean).join(' — ') || `HTTP ${res.status}`);
+      onDone();
+    } catch (e: any) {
+      setErr(e?.message ?? '실패');
+    } finally {
+      setState('idle');
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <button
+        onClick={run}
+        disabled={state === 'running'}
+        title={
+          hasThread
+            ? '스레드가 삭제된 경우 새로 생성합니다 (기존 답글은 복구되지 않음)'
+            : '수주인센티브 채널에 운영위원회 스레드를 생성합니다'
+        }
+        className={clsx(
+          'flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition-colors disabled:opacity-60',
+          hasThread
+            ? 'text-gray-500 border-gray-200 hover:bg-gray-50'
+            : 'text-blue-700 border-blue-200 hover:bg-blue-50'
+        )}
+      >
+        <RefreshCw size={12} className={state === 'running' ? 'animate-spin' : ''} />
+        {state === 'running' ? '생성 중...' : hasThread ? '스레드 재생성' : '위원회 스레드 생성'}
+      </button>
+      {err && <span className="text-[11px] text-red-600 max-w-[280px] truncate" title={err}>{err}</span>}
+    </div>
   );
 }
 

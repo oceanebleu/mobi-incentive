@@ -116,9 +116,16 @@ export async function ensureCommitteeThread(
   }
 }
 
+/** 스레드 루트가 사라졌을 때 Slack 이 돌려주는 에러들 */
+const THREAD_GONE = /thread_not_found|message_not_found|invalid_thread_ts/;
+
 /**
  * 스레드에 답글. 스레드가 아직 없으면 먼저 만들어서 붙인다
  * (기존 프로젝트처럼 스레드 없이 생성된 건도 알럿을 놓치지 않도록).
+ *
+ * 루트 메시지가 Slack 에서 삭제된 경우 — 저장된 ts 는 남아 있지만 답글이 실패한다.
+ * 이때는 ts 를 비우고 스레드를 새로 만든 뒤 한 번만 재시도한다.
+ * (알럿이 조용히 사라지는 것보다, 새 스레드에라도 남는 편이 낫다)
  */
 export async function replyToCommitteeThread(
   supabase: any,
@@ -128,8 +135,23 @@ export async function replyToCommitteeThread(
   try {
     const thread = await ensureCommitteeThread(supabase, projectId);
     if (!thread.ok || !thread.ts) return thread;
-    await postSlackThreadReply(committeeChannelId(), thread.ts, text);
-    return thread;
+    try {
+      await postSlackThreadReply(committeeChannelId(), thread.ts, text);
+      return thread;
+    } catch (e: any) {
+      const msg = e?.message ?? String(e);
+      if (!THREAD_GONE.test(msg)) throw e;
+      // 루트가 삭제됨 — 새 스레드를 만들어 다시 시도
+      console.warn('[committee-thread] 스레드 루트 없음 → 재생성:', msg);
+      await supabase
+        .from('projects')
+        .update({ committee_thread_ts: null, committee_thread_url: null })
+        .eq('id', projectId);
+      const fresh = await ensureCommitteeThread(supabase, projectId);
+      if (!fresh.ok || !fresh.ts) return fresh;
+      await postSlackThreadReply(committeeChannelId(), fresh.ts, text);
+      return fresh;
+    }
   } catch (e: any) {
     const msg = e?.message ?? String(e);
     console.warn('[committee-thread] 답글 실패:', msg);
