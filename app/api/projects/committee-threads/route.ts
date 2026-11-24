@@ -2,8 +2,11 @@
 // POST /api/projects/committee-threads
 //   운영위원회 스레드 일괄 생성 (백필)
 //
-//   대상: 수주성공(WON) + 재원확정 전(fund_confirmed=false) + 스레드 없음
-//     · 이미 재원이 확정된 건은 위원회가 끝난 건이라 스레드를 새로 열 의미가 없음
+//   대상: 수주성공(WON) + 지급 단계가 'PL 작성대기' 또는 'PL 작성완료' + 스레드 없음
+//     · 재원확정 이후 단계는 위원회가 끝난 건이라 스레드를 새로 열 의미가 없음
+//     · 지급 회차가 하나라도 완료/미지급(skipped)으로 종결된 건도 제외.
+//       skipped 는 '그 회차는 영영 지급되지 않음' 이라 단계상 지급이 끝난 것으로 본다
+//       (예: 1·2차 모두 미지급 → 전체지급완료)
 //     · committee_thread_ts 가 있는 건은 건너뜀 (중복 생성 방지)
 //
 //   권한: canManageProjects (ADMIN)
@@ -38,6 +41,10 @@ export async function POST() {
     .select('id, campaign_name')
     .eq('acquisition_status', 'WON')
     .eq('fund_confirmed', false)
+    .eq('first_payment_completed', false)
+    .eq('first_payment_skipped', false)
+    .eq('second_payment_completed', false)
+    .eq('second_payment_skipped', false)
     .is('committee_thread_ts', null)
     .order('id');
   if (error) {

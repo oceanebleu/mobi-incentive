@@ -61,17 +61,19 @@ export default function ProjectsPage() {
   // 편집 모달 상태: null = 닫힘, {} = 신규, {...project} = 편집
   const [editing, setEditing] = useState<SupabaseProject | null | 'new'>(null);
 
-  // 위원회 스레드 백필 — 수주성공 + 재원확정 전 + 스레드 없음
+  // 위원회 스레드 백필 — 수주성공 + 아직 위원회 전 단계 + 스레드 없음
+  //   paymentStageOf 가 PL_PENDING / PL_COMPLETED 인 건만.
+  //   1·2차가 미지급(skipped)으로 종결돼 '전체지급완료' 가 된 건은 제외된다.
   const [threadState, setThreadState] = useState<'idle' | 'running'>('idle');
   const [threadResult, setThreadResult] = useState<string | null>(null);
   const threadTargets = useMemo(
     () =>
-      projects.filter(
-        p =>
-          p.acquisition_status === 'WON' &&
-          !p.fund_confirmed &&
-          !(p as any).committee_thread_ts
-      ),
+      projects.filter(p => {
+        if (p.acquisition_status !== 'WON') return false;
+        if ((p as any).committee_thread_ts) return false;
+        const stage = paymentStageOf(p);
+        return stage === 'PL_PENDING' || stage === 'PL_COMPLETED';
+      }),
     [projects]
   );
 
