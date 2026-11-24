@@ -51,13 +51,16 @@ export function buildCommitteeThreadRoot(i: ThreadRootInput): string {
   const url = projectUrl(i.projectId, i.baseUrl);
   // '구분' 은 신규/연장 과 제품을 ' / ' 로 이어 붙인다. 한쪽이 비면 있는 것만.
   const division = [i.category, i.product].map(v => (v ?? '').trim()).filter(Boolean).join(' / ');
+  // 항목은 불릿 리스트로 — Slack 메시지 본문에서는 공백 들여쓰기만으로는
+  // 계층이 잘 드러나지 않으므로 '  • ' 로 리스트 모양을 만든다.
+  const item = (label: string, value: string) => `  \u2022 *${label}* : ${value}`;
   return [
     `:moneybag: *${i.campaignName} 수주인센티브 운영위원회*`,
     '',
-    `*프로젝트번호* : <${url}|${i.projectId}>`,
-    `*광고주명* : ${i.campaignName}`,
-    `*PL* : ${i.plMention}`,
-    `*구분* : ${division || '-'}`,
+    item('프로젝트번호', `<${url}|${i.projectId}>`),
+    item('광고주명', i.campaignName),
+    item('PL', i.plMention),
+    item('구분', division || '-'),
   ].join('\n');
 }
 
