@@ -998,25 +998,19 @@ function CommitteeThreadButton({
   const [state, setState] = useState<'idle' | 'running'>('idle');
   const [err, setErr] = useState<string | null>(null);
 
-  async function run() {
-    if (state === 'running') return;
-    const msg = hasThread
-      ? `"${campaignName}" 의 위원회 스레드를 다시 생성합니다.\n\n` +
-        `· 수주인센티브 채널에 새 스레드가 올라갑니다\n` +
-        `· 기존 스레드에 달려 있던 답글은 새 스레드로 옮겨지지 않습니다\n` +
-        `· Slack 에서 스레드를 실수로 삭제한 경우에만 사용해 주세요\n\n계속할까요?`
-      : `"${campaignName}" 의 위원회 스레드를 수주인센티브 채널에 생성합니다. 계속할까요?`;
-    if (!confirm(msg)) return;
+  async function call(method: 'POST' | 'DELETE', force: boolean) {
     setState('running');
     setErr(null);
     try {
       const res = await fetch(
         `/api/projects/${encodeURIComponent(projectId)}/committee-thread`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ force: hasThread }),
-        }
+        method === 'POST'
+          ? {
+              method,
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ force }),
+            }
+          : { method }
       );
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error([j?.error, j?.hint].filter(Boolean).join(' — ') || `HTTP ${res.status}`);
@@ -1026,6 +1020,30 @@ function CommitteeThreadButton({
     } finally {
       setState('idle');
     }
+  }
+
+  async function run() {
+    if (state === 'running') return;
+    const msg = hasThread
+      ? `"${campaignName}" 의 위원회 스레드를 다시 생성합니다.\n\n` +
+        `· 기존 스레드는 채널에서 삭제되고 새 스레드가 올라갑니다\n` +
+        `· 기존 스레드의 답글도 함께 사라집니다\n\n계속할까요?`
+      : `"${campaignName}" 의 위원회 스레드를 수주인센티브 채널에 생성합니다. 계속할까요?`;
+    if (!confirm(msg)) return;
+    await call('POST', hasThread);
+  }
+
+  async function remove() {
+    if (state === 'running') return;
+    if (
+      !confirm(
+        `"${campaignName}" 의 위원회 스레드를 채널에서 삭제합니다.\n\n` +
+          `· 스레드에 달린 답글도 함께 사라집니다\n` +
+          `· 삭제 후에는 '위원회 스레드 생성' 으로 다시 만들 수 있습니다\n\n계속할까요?`
+      )
+    )
+      return;
+    await call('DELETE', false);
   }
 
   return (
@@ -1046,8 +1064,19 @@ function CommitteeThreadButton({
         )}
       >
         <RefreshCw size={12} className={state === 'running' ? 'animate-spin' : ''} />
-        {state === 'running' ? '생성 중...' : hasThread ? '스레드 재생성' : '위원회 스레드 생성'}
+        {state === 'running' ? '처리 중...' : hasThread ? '스레드 재생성' : '위원회 스레드 생성'}
       </button>
+      {hasThread && (
+        <button
+          onClick={remove}
+          disabled={state === 'running'}
+          title="채널에서 스레드를 삭제합니다 (봇이 올린 메시지라 Slack 에서는 직접 지울 수 없음)"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-600 border border-red-100 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-60"
+        >
+          <Trash2 size={12} />
+          스레드 삭제
+        </button>
+      )}
       {err && <span className="text-[11px] text-red-600 max-w-[280px] truncate" title={err}>{err}</span>}
     </div>
   );

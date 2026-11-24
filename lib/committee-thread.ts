@@ -15,6 +15,7 @@ import {
   postSlackThreadReply,
   getSlackPermalink,
   lookupSlackUserIdByEmail,
+  deleteSlackMessage,
 } from './slack';
 import {
   buildCommitteeThreadRoot,
@@ -155,6 +156,53 @@ export async function replyToCommitteeThread(
   } catch (e: any) {
     const msg = e?.message ?? String(e);
     console.warn('[committee-thread] 답글 실패:', msg);
+    return { ok: false, error: msg };
+  }
+}
+
+/**
+ * 운영위원회 스레드 삭제 — Slack 루트 메시지를 지우고 DB 의 ts/url 을 비운다.
+ *   · 루트를 지우면 스레드의 답글도 함께 사라진다 (Slack 동작)
+ *   · 이미 삭제된 메시지(message_not_found)는 성공으로 간주 — 결과 상태가 같으므로
+ *   · DB 정리는 Slack 삭제 성공 여부와 무관하게 수행한다.
+ *     (Slack 쪽이 이미 없는데 ts 만 남아 알럿이 막히는 상황을 피하기 위함)
+ */
+export async function deleteCommitteeThread(
+  supabase: any,
+  projectId: string
+): Promise<ThreadResult> {
+  try {
+    const { data: project, error } = await supabase
+      .from('projects')
+      .select('id, committee_thread_ts')
+      .eq('id', projectId)
+      .maybeSingle();
+    if (error) return { ok: false, error: error.message };
+    if (!project) return { ok: false, error: 'project not found' };
+
+    const ts = (project as any).committee_thread_ts as string | null;
+    let slackError: string | undefined;
+    if (ts) {
+      try {
+        await deleteSlackMessage(committeeChannelId(), ts);
+      } catch (e: any) {
+        const msg = e?.message ?? String(e);
+        // 이미 없는 메시지면 삭제된 것과 동일한 상태
+        if (!/message_not_found/.test(msg)) slackError = msg;
+      }
+    }
+
+    const { error: updErr } = await supabase
+      .from('projects')
+      .update({ committee_thread_ts: null, committee_thread_url: null })
+      .eq('id', projectId);
+    if (updErr) return { ok: false, error: `DB 정리 실패: ${updErr.message}` };
+
+    if (slackError) return { ok: false, error: slackError };
+    return { ok: true };
+  } catch (e: any) {
+    const msg = e?.message ?? String(e);
+    console.warn('[committee-thread] 삭제 실패:', msg);
     return { ok: false, error: msg };
   }
 }

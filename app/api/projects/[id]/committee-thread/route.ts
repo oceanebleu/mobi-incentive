@@ -4,10 +4,12 @@
 //   프로젝트 1건의 운영위원회 스레드를 생성 / 재생성한다.
 //
 //   · force 미지정 — 스레드가 없을 때만 생성 (이미 있으면 그대로 반환)
-//   · force: true  — 기존 ts 를 비우고 채널에 새 스레드를 만든다.
-//                    Slack 에서 스레드를 실수로 삭제한 경우의 복구 경로.
-//                    ※ 삭제된 메시지를 되살리는 게 아니라 '새 스레드'를 여는 것이므로
-//                      기존 스레드에 달려 있던 답글은 복구되지 않는다.
+//   · force: true  — 기존 스레드를 Slack 에서 지우고 채널에 새 스레드를 만든다.
+//                    ※ 새 스레드를 여는 것이므로 기존 답글은 복구되지 않는다.
+//
+// DELETE /api/projects/[id]/committee-thread
+//   스레드를 Slack 에서 삭제하고 DB 기록도 비운다 (잘못 올라간 스레드 정리용).
+//   봇이 올린 메시지라 Slack UI 에서는 일반 멤버가 지울 수 없으므로 여기서 처리한다.
 //
 //   권한: canManageProjects (ADMIN)
 // ─────────────────────────────────────────────────────────────
@@ -17,7 +19,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/authOptions';
 import { canManageProjects, type UserRole } from '@/lib/roles';
 import { getSupabaseAdmin } from '@/lib/supabase-server';
-import { ensureCommitteeThread } from '@/lib/committee-thread';
+import { ensureCommitteeThread, deleteCommitteeThread } from '@/lib/committee-thread';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,16 +51,11 @@ export async function POST(
   const had = !!(project as any).committee_thread_ts;
 
   if (force && had) {
-    // 기존 ts 제거 — ensureCommitteeThread 가 새로 만들도록
-    const { error: clrErr } = await supabase
-      .from('projects')
-      .update({ committee_thread_ts: null, committee_thread_url: null })
-      .eq('id', params.id);
-    if (clrErr) {
-      return NextResponse.json(
-        { error: `기존 스레드 정보 초기화 실패: ${clrErr.message}` },
-        { status: 500 }
-      );
+    // 기존 스레드를 Slack 에서 지우고 DB 도 비운다.
+    //   Slack 삭제가 실패해도(이미 수동 삭제됨 등) DB 는 정리되므로 재생성은 진행한다.
+    const del = await deleteCommitteeThread(supabase, params.id);
+    if (!del.ok) {
+      console.warn('[committee-thread] 재생성 중 기존 스레드 삭제 실패:', del.error);
     }
   }
 
@@ -80,4 +77,30 @@ export async function POST(
     recreated: force && had,
     url: r.url ?? null,
   });
+}
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: { id: string } }
+) {
+  const session = await getServerSession(authOptions);
+  const role = (session?.user as any)?.role as UserRole | undefined;
+  if (!canManageProjects(role)) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
+
+  const supabase = getSupabaseAdmin();
+  const r = await deleteCommitteeThread(supabase, params.id);
+  if (!r.ok) {
+    return NextResponse.json(
+      {
+        error: `스레드 삭제 실패: ${r.error}`,
+        hint: /cant_delete_message|message_not_found/.test(r.error ?? '')
+          ? '봇이 올린 메시지가 아니거나 이미 삭제된 메시지입니다.'
+          : undefined,
+      },
+      { status: 502 }
+    );
+  }
+  return NextResponse.json({ ok: true });
 }

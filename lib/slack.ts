@@ -153,3 +153,14 @@ export async function getSlackPermalink(
     return null;
   }
 }
+
+/**
+ * 봇이 올린 메시지 삭제 — chat.delete
+ *  - 봇 토큰으로는 '봇 자신이 올린 메시지'만 삭제 가능 (추가 scope 불필요, chat:write 로 충분)
+ *  - 스레드 루트를 지우면 그 스레드의 답글도 함께 사라진다
+ *  - 이미 지워진 메시지면 message_not_found 가 돌아오는데, 결과적으로 '없는 상태'는
+ *    같으므로 호출부에서 성공으로 처리해도 된다
+ */
+export async function deleteSlackMessage(channel: string, ts: string): Promise<void> {
+  await slackCall('chat.delete', { channel, ts });
+}
